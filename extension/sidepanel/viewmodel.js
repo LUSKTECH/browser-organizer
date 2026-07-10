@@ -3,6 +3,7 @@ const LABELS = {
   groupTabs: 'Group tabs',
   createBookmark: 'Bookmark tab',
   deleteBookmark: 'Delete bookmark',
+  discardTab: 'Suspend tab',
 };
 
 export function actionLabel(action) { return LABELS[action] || action; }

@@ -4,7 +4,7 @@ export class StaleTabError extends Error {}
 
 function undoId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
-const ACTION_LABELS = { closeTab: 'Close tab', groupTabs: 'Group tabs', createBookmark: 'Bookmark', deleteBookmark: 'Delete bookmark' };
+const ACTION_LABELS = { closeTab: 'Close tab', groupTabs: 'Group tabs', createBookmark: 'Bookmark', deleteBookmark: 'Delete bookmark', discardTab: 'Suspend tab' };
 function labelFor(item) {
   const name = item.data.title || item.data.groupName || item.data.url || '';
   return `${ACTION_LABELS[item.action] || item.action}: ${name}`.trim();
@@ -58,6 +58,10 @@ async function applyItemInner(item, c) {
       const { bookmarkId, parentId, index, title, url } = item.data;
       await c.bookmarks.remove(bookmarkId);
       return { undoId: undoId(), ts: Date.now(), action: 'deleteBookmark', reverse: { parentId, index, title, url } };
+    }
+    case 'discardTab': {
+      await c.tabs.discard(item.data.tabId);
+      return { undoId: undoId(), ts: Date.now(), action: 'discardTab', reverse: {} };
     }
     default:
       throw new Error(`Unknown action: ${item.action}`);

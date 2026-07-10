@@ -27,7 +27,7 @@ export function parseStaleResult(text) {
   if (!obj || !Array.isArray(obj.close)) throw new Error('Expected {"close":[...]}');
   return obj.close
     .filter((c) => Number.isInteger(Number(c.tabId)))
-    .map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark }));
+    .map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark, action: c.action === 'suspend' ? 'suspend' : 'close' }));
 }
 
 export function parseImportantResult(text) {

@@ -34,7 +34,7 @@ test('organize/stale returns parsed close list', async () => {
   const r = await handle(
     { type: 'organize', task: 'stale', payload: { tabs: [{ tabId: 2, idleDays: 40 }], thresholdDays: 14 } },
     { getAdapter: fakeGetAdapter(out) });
-  assert.deepEqual(r.stale, [{ tabId: 2, reason: 'old', suggestBookmark: true }]);
+  assert.deepEqual(r.stale, [{ tabId: 2, reason: 'old', suggestBookmark: true, action: 'close' }]);
 });
 
 test('unknown type rejects', async () => {

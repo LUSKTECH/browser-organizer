@@ -60,3 +60,11 @@ test('mapStaleResult drops tabIds outside the candidate set (injection guard)', 
   assert.equal(items.length, 1);
   assert.equal(items[0].data.tabId, 1);
 });
+
+test('mapStaleResult emits discardTab for suspend disposition', () => {
+  const tabs = [{ tabId: 5, title: 'Docs', url: 'https://d.com', windowId: 1, index: 0, pinned: false, idleDays: 30 }];
+  const byId = indexById(tabs);
+  const items = mapStaleResult([{ tabId: 5, reason: 'keep but idle', action: 'suspend' }], byId, new Set([5]));
+  assert.equal(items[0].action, 'discardTab');
+  assert.equal(items[0].data.tabId, 5);
+});

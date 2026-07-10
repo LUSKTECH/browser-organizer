@@ -105,6 +105,14 @@ test('applyItem stamps runId and a human label on the undo entry', async () => {
   assert.match(undo.label, /Close tab.*A/);
 });
 
+test('discardTab suspends the tab', async () => {
+  const discarded = [];
+  const chrome = { tabs: { async discard(id) { discarded.push(id); } } };
+  const undo = await applyItem({ action: 'discardTab', data: { tabId: 7, url: 'https://d.com', title: 'D' } }, { chrome });
+  assert.deepEqual(discarded, [7]);
+  assert.equal(undo.action, 'discardTab');
+});
+
 test('ensureFolder reuses an existing folder', async () => {
   const chrome = makeChrome();
   await ensureFolder(['Dev'], chrome);

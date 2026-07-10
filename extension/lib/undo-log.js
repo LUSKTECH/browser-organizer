@@ -39,6 +39,8 @@ export async function reverseEntry(entry, chromeApi = chrome) {
       await chromeApi.bookmarks.create({ parentId, index, title, url });
       return;
     }
+    case 'discardTab':
+      return; // discard is transparent; the tab reloads on next focus
     default:
       throw new Error(`Cannot reverse action: ${entry.action}`);
   }

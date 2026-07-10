@@ -29,9 +29,10 @@ export function buildStalePrompt(tabs, thresholdDays) {
     `You decide which forgotten browser tabs are safe to close (candidates are idle more than ${thresholdDays} days); keep ones that look important or hard to find again.`,
     'Each data line is: tabId<TAB>title<TAB>url<TAB>idleDays.',
     'For each tab you recommend closing, set suggestBookmark=true when it is worth saving first.',
+    'Set "action":"suspend" instead of closing when the tab should be kept but freed from memory.',
     'Only reference tabIds present in the data below.',
     'Respond with ONLY this JSON, no prose:',
-    '{"close":[{"tabId":1,"reason":"why","suggestBookmark":true}]}',
+    '{"close":[{"tabId":1,"reason":"why","suggestBookmark":true,"action":"close"}]}',
     '',
     wrap(tabTable(tabs, (t) => `\t${t.idleDays}`)),
   ].join('\n');

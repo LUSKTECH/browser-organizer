@@ -40,3 +40,8 @@ test('reverseEntry dispatches by action', async () => {
   await reverseEntry({ action: 'deleteBookmark', reverse: { parentId: '1', index: 0, title: 'T', url: 'https://a' } }, chrome);
   assert.deepEqual(calls.map((c) => c[0]), ['create', 'ungroup', 'bmRemove', 'bmCreate']);
 });
+
+test('reverseEntry handles discardTab as a no-op', async () => {
+  await reverseEntry({ action: 'discardTab', reverse: {} }, {}); // must not throw
+  assert.ok(true);
+});

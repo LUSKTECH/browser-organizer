@@ -23,14 +23,19 @@ test('parseGroupResult coerces tabIds to ints and drops empty groups', () => {
   assert.deepEqual(g, [{ name: 'A', color: 'blue', tabIds: [1, 2] }]);
 });
 
-test('parseStaleResult defaults suggestBookmark to false', () => {
+test('parseStaleResult defaults suggestBookmark to false and action to close', () => {
   const s = parseStaleResult('{"close":[{"tabId":5,"reason":"old"}]}');
-  assert.deepEqual(s, [{ tabId: 5, reason: 'old', suggestBookmark: false }]);
+  assert.deepEqual(s, [{ tabId: 5, reason: 'old', suggestBookmark: false, action: 'close' }]);
 });
 
 test('parseImportantResult keeps folderPath as string array', () => {
   const i = parseImportantResult('{"important":[{"tabId":9,"folderPath":["Dev","X"],"reason":"ref"}]}');
   assert.deepEqual(i, [{ tabId: 9, folderPath: ['Dev', 'X'], reason: 'ref' }]);
+});
+
+test('parseStaleResult preserves a suspend action', () => {
+  const s = parseStaleResult('{"close":[{"tabId":5,"reason":"idle","action":"suspend"}]}');
+  assert.equal(s[0].action, 'suspend');
 });
 
 test('parseCommandResult returns the three optional action arrays', () => {

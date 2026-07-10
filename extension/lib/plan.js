@@ -1,4 +1,4 @@
-const ACTIONS = new Set(['closeTab', 'groupTabs', 'createBookmark', 'deleteBookmark']);
+const ACTIONS = new Set(['closeTab', 'groupTabs', 'createBookmark', 'deleteBookmark', 'discardTab']);
 
 export function indexById(snapshots) {
   return new Map(snapshots.map((s) => [s.tabId, s]));
@@ -44,6 +44,9 @@ export function mapStaleResult(stale, tabsById, candidateIds = null) {
       if (candidateIds && !candidateIds.has(s.tabId)) return null;
       const t = tabsById.get(s.tabId);
       if (!t) return null;
+      if (s.action === 'suspend') {
+        return { itemId: `discard-${t.tabId}`, action: 'discardTab', status: 'pending', reason: s.reason || 'Idle — suspend to free memory', data: { tabId: t.tabId, url: t.url, title: t.title } };
+      }
       return {
         itemId: `close-${t.tabId}`,
         action: 'closeTab',
