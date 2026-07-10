@@ -11,6 +11,7 @@ function makeChrome() {
     _removed: removed,
     _created: created,
     tabs: {
+      async get(id) { return { id, url: 'https://a.com' }; },
       async remove(id) { removed.push(id); },
       async group({ tabIds }) { this._grouped = tabIds; return 555; },
       async ungroup(ids) { this._ungrouped = ids; },
@@ -71,6 +72,29 @@ test('deleteBookmark removes and returns a recreate entry', async () => {
   const undo = await applyItem(item, { chrome });
   assert.deepEqual(chrome._removed, ['bm:77']);
   assert.equal(undo.reverse.url, 'https://old.com');
+});
+
+test('closeTab refuses to close a tab whose url no longer matches (id reuse guard)', async () => {
+  const removed = [];
+  const chrome = {
+    tabs: { async get(id) { return { id, url: 'https://DIFFERENT.com' }; }, async remove(id) { removed.push(id); } },
+    bookmarks: { async getChildren() { return []; }, async create(n) { return { id: '1', ...n }; } },
+  };
+  const item = { action: 'closeTab', data: { tabId: 3, url: 'https://a.com', title: 'A', windowId: 1, index: 0, pinned: false, bookmarkFirst: false } };
+  await assert.rejects(() => applyItem(item, { chrome }), /stale|no longer matches/i);
+  assert.deepEqual(removed, []); // nothing closed
+});
+
+test('closeTab proceeds when the url still matches', async () => {
+  const removed = [];
+  const chrome = {
+    tabs: { async get(id) { return { id, url: 'https://a.com' }; }, async remove(id) { removed.push(id); } },
+    bookmarks: { async getChildren() { return []; }, async create(n) { return { id: '1', ...n }; } },
+  };
+  const item = { action: 'closeTab', data: { tabId: 3, url: 'https://a.com', title: 'A', windowId: 1, index: 0, pinned: false, bookmarkFirst: false } };
+  const undo = await applyItem(item, { chrome });
+  assert.deepEqual(removed, [3]);
+  assert.equal(undo.reverse.url, 'https://a.com');
 });
 
 test('ensureFolder reuses an existing folder', async () => {

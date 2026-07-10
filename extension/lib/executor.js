@@ -1,5 +1,7 @@
 const COLORS = new Set(['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']);
 
+export class StaleTabError extends Error {}
+
 function undoId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 // Walk/create a folder path under the bookmarks bar (id '1'); returns the leaf folder id.
@@ -19,6 +21,8 @@ export async function applyItem(item, deps = {}) {
   switch (item.action) {
     case 'closeTab': {
       const { tabId, url, title, windowId, index, pinned, bookmarkFirst } = item.data;
+      const live = await c.tabs.get(tabId).catch(() => null);
+      if (!live || live.url !== url) throw new StaleTabError(`Tab ${tabId} no longer matches ${url}`);
       if (bookmarkFirst) {
         const folder = await ensureFolder(['Browser Organizer', 'Saved before closing'], c);
         await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
