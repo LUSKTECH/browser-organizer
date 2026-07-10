@@ -35,6 +35,24 @@ export function buildHostManifest({ execPath, extensionId }) {
   };
 }
 
+export function winManifestPath(nativeHostDir) {
+  return path.join(nativeHostDir, `${HOST_NAME}.json`);
+}
+
+const WIN_REG_ROOTS = {
+  chrome: 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts',
+  edge: 'HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts',
+  chromium: 'HKCU\\Software\\Chromium\\NativeMessagingHosts',
+};
+
+export function registryCommands(browsers, manifestPath) {
+  return browsers.map((b) => {
+    const root = WIN_REG_ROOTS[b];
+    if (!root) throw new Error(`Unsupported browser for win32: ${b}`);
+    return `reg add "${root}\\${HOST_NAME}" /ve /t REG_SZ /d "${manifestPath}" /f`;
+  });
+}
+
 // Resolves the absolute path to the `claude` CLI using the platform's lookup
 // tool (which/where). Host-side only — never influenced by extension messages.
 export function resolveCliPath(platform = process.platform, spawnSyncFn = spawnSync) {
@@ -69,6 +87,14 @@ export function install({ extensionId, browsers, platform = process.platform, ho
   fs.writeFileSync(launcher, buildLauncherScript({ platform, nodePath, hostEntry, cliPath }));
   if (!isWin) fs.chmodSync(launcher, 0o700);
 
+  if (isWin) {
+    const manifestPath = winManifestPath(nativeHostDir);
+    fs.writeFileSync(manifestPath, JSON.stringify(buildHostManifest({ execPath: launcher, extensionId }), null, 2));
+    const written = [launcher, manifestPath];
+    written._registryCommands = registryCommands(browsers, manifestPath);
+    return written;
+  }
+
   const manifest = buildHostManifest({ execPath: launcher, extensionId });
   const written = [launcher];
   for (const browser of browsers) {
@@ -91,6 +117,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   }
   const files = install({ extensionId, browsers });
   console.log('Wrote:\n' + files.map((f) => '  ' + f).join('\n'));
-  console.log('\nWindows users: also add a registry key pointing to the manifest, e.g.\n' +
-    `  reg add "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${HOST_NAME}" /ve /t REG_SZ /d "<path-to>\\${HOST_NAME}.json" /f`);
+  if (files._registryCommands) {
+    for (const cmd of files._registryCommands) {
+      console.log('Running: ' + cmd);
+      spawnSync(cmd, { shell: true, stdio: 'inherit' });
+    }
+  }
 }

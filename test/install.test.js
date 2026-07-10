@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HOST_NAME, manifestDir, buildHostManifest, buildLauncherScript } from '../install/install.js';
+import { HOST_NAME, manifestDir, buildHostManifest, buildLauncherScript, registryCommands, winManifestPath } from '../install/install.js';
 
 test('manifestDir resolves per browser on linux', () => {
   const d = manifestDir('chrome', 'linux', '/home/u');
@@ -31,4 +31,16 @@ test('unix launcher exports the CLI path and a PATH before exec', () => {
   assert.match(s, /BROWSER_ORGANIZER_CLI="\/home\/u\/\.local\/bin\/claude"/);
   assert.match(s, /export PATH=/);
   assert.match(s, /exec "\/usr\/bin\/node" "\/x\/host\.js"/);
+});
+
+test('registryCommands builds HKCU reg add for chrome and edge', () => {
+  const cmds = registryCommands(['chrome', 'edge'], 'C:\\hosts\\com.browser_organizer.host.json');
+  assert.equal(cmds.length, 2);
+  assert.match(cmds[0], /HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com\.browser_organizer\.host/);
+  assert.match(cmds[1], /Microsoft\\Edge/);
+  assert.match(cmds[0], /C:\\hosts\\com\.browser_organizer\.host\.json/);
+});
+
+test('winManifestPath is under the native host dir', () => {
+  assert.match(winManifestPath('C:\\ext\\native-host'), /native-host.*com\.browser_organizer\.host\.json$/);
 });
