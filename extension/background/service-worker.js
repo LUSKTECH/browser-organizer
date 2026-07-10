@@ -43,16 +43,20 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 async function runScan() {
   const settings = await getSettings();
   const nativeClient = createNativeClient();
-  const items = await buildPlan({ settings, nativeClient });
-  const { autoApply, needsReview } = partitionForApply(items, settings);
-  await chrome.storage.local.set({ currentPlan: needsReview });
-  if (autoApply.length) {
-    const res = await applyItems(autoApply, { applyItem: (i) => applyItem(i, {}), recordUndo });
-    await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
-  } else if (needsReview.length) {
-    await notify(`${needsReview.length} suggestions ready to review.`);
+  try {
+    const items = await buildPlan({ settings, nativeClient });
+    const { autoApply, needsReview } = partitionForApply(items, settings);
+    await chrome.storage.local.set({ currentPlan: needsReview });
+    if (autoApply.length) {
+      const res = await applyItems(autoApply, { applyItem: (i) => applyItem(i, {}), recordUndo });
+      await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
+    } else if (needsReview.length) {
+      await notify(`${needsReview.length} suggestions ready to review.`);
+    }
+    return items;
+  } finally {
+    nativeClient.disconnect();
   }
-  return items;
 }
 
 async function notify(message) {

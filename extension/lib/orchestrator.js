@@ -54,7 +54,11 @@ export async function buildPlan(deps) {
     const deletes = [];
     deletes.push(...findDuplicateBookmarks(bookmarks));
     deletes.push(...findStaleBookmarks(bookmarks, visits, settings.staleBookmarkDays, now));
-    const deadCandidates = await checkDeadLinks(bookmarks, {});
+    const httpBookmarks = bookmarks.filter((b) => /^https?:/i.test(b.url));
+    const cursor = (await chromeApi.storage.local.get('deadCursor')).deadCursor || 0;
+    const { slice, nextCursor } = sliceForScan(httpBookmarks, cursor, settings.deadLinkBatchSize);
+    await chromeApi.storage.local.set({ deadCursor: nextCursor });
+    const deadCandidates = await checkDeadLinks(slice, {});
     const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
     const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId));
     await chromeApi.storage.local.set({ deadStrikes: strikes });
@@ -64,6 +68,13 @@ export async function buildPlan(deps) {
   }
 
   return items.filter(validatePlanItem);
+}
+
+export function sliceForScan(items, cursor, batchSize) {
+  const start = cursor % Math.max(1, items.length);
+  const slice = items.slice(start, start + batchSize);
+  const end = start + slice.length;
+  return { slice, nextCursor: end >= items.length ? 0 : end };
 }
 
 export async function applyItems(items, deps = {}) {

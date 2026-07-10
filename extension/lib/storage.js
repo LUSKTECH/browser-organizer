@@ -6,6 +6,7 @@ export const DEFAULTS = {
   staleTabDays: 14,                    // tabs idle longer are close candidates
   staleBookmarkDays: 180,             // bookmarks unvisited longer are cleanup candidates
   undoRetentionDays: 7,
+  deadLinkBatchSize: 200,
   adapter: 'claude',                   // native host adapter name
   cliCommand: 'claude',                // override if the CLI binary is elsewhere
   scanIntervalMinutes: 720,           // auto-run cadence (12h)
