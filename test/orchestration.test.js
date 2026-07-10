@@ -68,6 +68,21 @@ test('projectTabsForHost redacts query strings before sending to the model', () 
   assert.equal(out[0].url, 'https://a.com/x');
 });
 
+test('buildPlan reports progress and honors cancel', async () => {
+  const phases = [];
+  const chromeApi = {
+    storage: { local: { async get() { return {}; }, async set() {} } },
+    tabs: { async query() { return [{ id: 1, url: 'https://a.com', windowId: 1, index: 0 }]; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+  const nativeClient = { request: async () => ({ groups: [], stale: [], important: [] }) };
+  const settings = { enabledFeatures: { groupTabs: true, staleTabs: false, importantBookmarks: false, cleanBookmarks: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  const items = await buildPlan({ settings, nativeClient, chromeApi, now: 1, onProgress: (p, d, t) => phases.push([p, d, t]), shouldCancel: () => true });
+  assert.ok(phases.length >= 1);
+  assert.deepEqual(items, []); // cancelled before producing work
+});
+
 test('sliceForScan returns a batch and wraps the cursor', () => {
   const items = Array.from({ length: 5 }, (_, i) => i);
   let { slice, nextCursor } = sliceForScan(items, 0, 2);

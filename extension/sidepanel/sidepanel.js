@@ -1,7 +1,7 @@
 import { getSettings, setSettings } from '../lib/storage.js';
 import {
   summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
-  excludeMember, renameGroup, recolorGroup, healthMessage,
+  excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel,
 } from './viewmodel.js';
 
 const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
@@ -15,6 +15,20 @@ const setStatus = (t) => { $('status').textContent = t; };
 
 function send(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
+}
+
+let scanPort = null;
+function ensureScanPort() {
+  if (scanPort) return scanPort;
+  scanPort = chrome.runtime.connect({ name: 'scan' });
+  scanPort.onMessage.addListener((msg) => {
+    if (msg.progress) {
+      const { phase, done, total } = msg.progress;
+      setStatus(progressLabel(phase, done, total));
+    }
+  });
+  scanPort.onDisconnect.addListener(() => { scanPort = null; });
+  return scanPort;
 }
 
 // Persists an edited plan item locally and pushes the full plan to the
@@ -144,14 +158,19 @@ async function applyItems(itemIds) {
 }
 
 $('run').addEventListener('click', async () => {
+  ensureScanPort();
+  $('cancelRun').hidden = false;
   setStatus('Analyzing… (running your local Claude CLI)');
   const res = await send({ cmd: 'run' });
+  $('cancelRun').hidden = true;
   if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
   plan = (await send({ cmd: 'getPlan' })).items;
   selection = new Set();
   renderPlan();
   setStatus(plan.length ? `${plan.length} suggestions.` : 'Nothing to do — your browser looks tidy.');
 });
+
+$('cancelRun').addEventListener('click', () => send({ cmd: 'cancel' }));
 
 $('approveSelected').addEventListener('click', () => applyItems([...selection]));
 $('approveAll').addEventListener('click', () => applyItems(plan.map((i) => i.itemId)));

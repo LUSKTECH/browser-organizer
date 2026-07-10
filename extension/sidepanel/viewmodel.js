@@ -50,3 +50,7 @@ export function healthMessage(health) {
   if (health && health.ready) return { ok: true, text: `Claude CLI connected (${health.version || 'ok'})` };
   return { ok: false, text: 'Claude CLI not reachable. Run: npm run install-host <EXTENSION_ID> chrome,edge — then confirm the claude CLI is installed.' };
 }
+
+export function progressLabel(phase, done, total) {
+  return `${phase}… (${done}/${total})`;
+}

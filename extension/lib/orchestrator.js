@@ -24,6 +24,12 @@ export function projectTabsForHost(tabs) {
 // in production it defaults to real collectors + a native client passed in.
 export async function buildPlan(deps) {
   const { settings, nativeClient, chromeApi = chrome, now = Date.now() } = deps;
+  const onProgress = deps.onProgress || (() => {});
+  const shouldCancel = deps.shouldCancel || (() => false);
+  const PHASES = 4;
+  let done = 0;
+  const step = (label) => { onProgress(label, done++, PHASES); };
+
   const rawTabs = await chromeApi.tabs.query({});
   const priorActivity = (await chromeApi.storage.local.get('tabActivity')).tabActivity || {};
   const activity = reconcile(priorActivity, rawTabs, now);
@@ -33,10 +39,15 @@ export async function buildPlan(deps) {
   const items = [];
   const f = settings.enabledFeatures;
 
+  step('Grouping tabs');
+  if (shouldCancel()) return [];
   if (f.groupTabs && tabs.length) {
     const r = await nativeClient.request({ type: 'organize', task: 'group', payload: { tabs: projectTabsForHost(tabs) } });
     items.push(...mapGroupResult(r.groups, byId));
   }
+
+  step('Finding forgotten tabs');
+  if (shouldCancel()) return items;
   if (f.staleTabs && tabs.length) {
     const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays);
     if (stale.length) {
@@ -45,10 +56,16 @@ export async function buildPlan(deps) {
       items.push(...mapStaleResult(r.stale, byId, candidateIds));
     }
   }
+
+  step('Finding tabs to bookmark');
+  if (shouldCancel()) return items;
   if (f.importantBookmarks && tabs.length) {
     const r = await nativeClient.request({ type: 'organize', task: 'important', payload: { tabs: projectTabsForHost(tabs) } });
     items.push(...mapImportantResult(r.important, byId));
   }
+
+  step('Cleaning bookmarks');
+  if (shouldCancel()) return items;
   if (f.cleanBookmarks) {
     const bookmarks = await collectBookmarks(chromeApi);
     const visits = await getVisitsMap(bookmarks, chromeApi);

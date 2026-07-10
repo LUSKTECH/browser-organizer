@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel, excludeMember, renameGroup, recolorGroup, itemsForAction, healthMessage } from '../extension/sidepanel/viewmodel.js';
+import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel, excludeMember, renameGroup, recolorGroup, itemsForAction, healthMessage, progressLabel } from '../extension/sidepanel/viewmodel.js';
 
 const items = [
   { itemId: 'a', action: 'closeTab' },
@@ -63,4 +63,8 @@ test('healthMessage reports connected vs not', () => {
   const bad = healthMessage({ ready: false, error: 'not found' });
   assert.equal(bad.ok, false);
   assert.match(bad.text, /install-host/);
+});
+
+test('progressLabel formats phase progress', () => {
+  assert.equal(progressLabel('Grouping tabs', 2, 4), 'Grouping tabs… (2/4)');
 });

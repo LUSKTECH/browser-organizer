@@ -8,6 +8,26 @@ import { recordUndo, reverseEntry, pruneUndo, getUndoLog } from '../lib/undo-log
 const ALARM_SCAN = 'organizer-scan';
 const ALARM_PRUNE = 'organizer-prune';
 
+// Progress streaming: the panel opens a port named 'scan' before requesting a
+// run; runScan broadcasts {progress} to every connected scan port. Cancel is
+// a simple in-memory flag flipped by the {cmd:'cancel'} handler and read
+// synchronously by buildPlan's shouldCancel — the port keeps the worker alive
+// for the duration of the scan so the flag is not lost to worker teardown.
+const scanPorts = new Set();
+let cancelRequested = false;
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'scan') return;
+  scanPorts.add(port);
+  port.onDisconnect.addListener(() => scanPorts.delete(port));
+});
+
+function broadcastProgress(phase, done, total) {
+  for (const port of scanPorts) {
+    try { port.postMessage({ progress: { phase, done, total } }); } catch { /* port gone */ }
+  }
+}
+
 chrome.action.onClicked.addListener(async (tab) => {
   await chrome.sidePanel.open({ windowId: tab.windowId });
 });
@@ -40,11 +60,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-async function runScan() {
+async function runScan(deps = {}) {
   const settings = await getSettings();
   const nativeClient = createNativeClient();
   try {
-    const items = await buildPlan({ settings, nativeClient });
+    const items = await buildPlan({ settings, nativeClient, onProgress: deps.onProgress, shouldCancel: deps.shouldCancel });
     const { autoApply, needsReview } = partitionForApply(items, settings);
     await chrome.storage.local.set({ currentPlan: needsReview });
     if (autoApply.length) {
@@ -69,8 +89,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     try {
       if (message.cmd === 'run') {
-        const items = await runScan();
+        cancelRequested = false;
+        const items = await runScan({ onProgress: broadcastProgress, shouldCancel: () => cancelRequested });
         sendResponse({ ok: true, items });
+      } else if (message.cmd === 'cancel') {
+        cancelRequested = true;
+        sendResponse({ ok: true });
       } else if (message.cmd === 'getPlan') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
         sendResponse({ ok: true, items: currentPlan });
