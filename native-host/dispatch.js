@@ -19,23 +19,24 @@ export async function handle(msg, deps = {}) {
 
   if (msg.type === 'organize') {
     const { task, payload } = msg;
+    const rules = payload.rules || '';
     if (task === 'group') {
-      const out = await adapter.run(buildGroupPrompt(payload.tabs), opts);
+      const out = await adapter.run(buildGroupPrompt(payload.tabs, rules), opts);
       return { task, groups: parseGroupResult(out) };
     }
     if (task === 'stale') {
-      const out = await adapter.run(buildStalePrompt(payload.tabs, payload.thresholdDays), opts);
+      const out = await adapter.run(buildStalePrompt(payload.tabs, payload.thresholdDays, rules), opts);
       return { task, stale: parseStaleResult(out) };
     }
     if (task === 'important') {
-      const out = await adapter.run(buildImportantPrompt(payload.tabs), opts);
+      const out = await adapter.run(buildImportantPrompt(payload.tabs, rules), opts);
       return { task, important: parseImportantResult(out) };
     }
     throw new Error(`Unknown task: ${task}`);
   }
 
   if (msg.type === 'command') {
-    const out = await adapter.run(buildCommandPrompt(msg.payload.instruction, msg.payload.tabs), opts);
+    const out = await adapter.run(buildCommandPrompt(msg.payload.instruction, msg.payload.tabs, msg.payload.rules || ''), opts);
     return parseCommandResult(out);
   }
 

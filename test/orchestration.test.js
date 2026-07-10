@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList } from '../extension/lib/orchestrator.js';
+import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
 test('partitionForApply routes everything to review in review mode', () => {
   const items = [{ itemId: 'a' }, { itemId: 'b' }];
@@ -90,6 +90,15 @@ test('ignoreKey is stable per target and applyIgnoreList filters matches', () =>
   const kept = applyIgnoreList(items, [key]);
   assert.equal(kept.length, 1);
   assert.equal(kept[0].data.url, 'https://b.com');
+});
+
+test('recordDecision + decisionRules surface repeated rejects as keep-rules', () => {
+  let d = {};
+  const item = { action: 'closeTab', data: { url: 'https://mail.google.com/x' } };
+  d = recordDecision(d, item, 'reject');
+  d = recordDecision(d, item, 'reject');
+  const rules = decisionRules(d);
+  assert.ok(rules.keep.some((r) => r.includes('mail.google.com')));
 });
 
 test('sliceForScan returns a batch and wraps the cursor', () => {

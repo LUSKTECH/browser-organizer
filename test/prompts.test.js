@@ -48,3 +48,8 @@ test('command prompt embeds the instruction and wraps tab data', () => {
   assert.match(p, /BEGIN TAB DATA/);
   assert.match(p, /"close"/);
 });
+
+test('group prompt includes rules when provided', () => {
+  const p = buildGroupPrompt([{ tabId: 1, title: 't', url: 'https://a', idleDays: 1 }], 'Never group mail.google.com');
+  assert.match(p, /Never group mail\.google\.com/);
+});

@@ -8,6 +8,7 @@ export const DEFAULTS = {
   undoRetentionDays: 7,
   deadLinkBatchSize: 200,
   ignore: [],                          // never-suggest-again keys (see ignoreKey in orchestrator.js)
+  decisions: {},                       // per-target approve/reject counters (see recordDecision in orchestrator.js)
   adapter: 'claude',                   // native host adapter name
   cliCommand: 'claude',                // override if the CLI binary is elsewhere
   scanIntervalMinutes: 720,           // auto-run cadence (12h)

@@ -1,7 +1,7 @@
 import { getSettings, setSettings } from '../lib/storage.js';
 import { installActivityListeners } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
-import { buildPlan, partitionForApply, applyItems, runCommand } from '../lib/orchestrator.js';
+import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision } from '../lib/orchestrator.js';
 import { applyItem } from '../lib/executor.js';
 import { recordUndo, reverseEntry, pruneUndo, getUndoLog } from '../lib/undo-log.js';
 import { listSessions, saveCurrentWindowSession, restoreSession, removeSession, saveSessions } from '../lib/sessions.js';
@@ -63,10 +63,11 @@ chrome.commands.onCommand.addListener(async (command) => {
 chrome.omnibox.onInputEntered.addListener(async (text) => {
   const { instruction } = parseOmnibox(text);
   if (!instruction) return;
+  const settings = await getSettings();
   const win = await chrome.windows.getLastFocused();
   const client = createNativeClient();
   try {
-    const items = await runCommand(instruction, { nativeClient: client, windowId: win.id });
+    const items = await runCommand(instruction, { nativeClient: client, windowId: win.id, decisions: settings.decisions || {} });
     await chrome.storage.local.set({ currentPlan: items });
     await chrome.sidePanel.open({ windowId: win.id });
   } finally {
@@ -124,7 +125,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else if (message.cmd === 'ignore') {
         const settings = await getSettings();
         const next = [...new Set([...(settings.ignore || []), ...(message.keys || [])])];
-        await setSettings({ ignore: next });
+        let decisions = settings.decisions || {};
+        for (const item of message.items || []) decisions = recordDecision(decisions, item, 'reject');
+        await setSettings({ ignore: next, decisions });
         sendResponse({ ok: true, ignore: next });
       } else if (message.cmd === 'getPlan') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
@@ -139,6 +142,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
         const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
         await chrome.storage.local.set({ currentPlan: remaining });
+        const settings = await getSettings();
+        let decisions = settings.decisions || {};
+        for (const item of chosen.filter((i) => res.applied.includes(i.itemId))) decisions = recordDecision(decisions, item, 'approve');
+        await setSettings({ decisions });
         sendResponse({ ok: true, ...res });
       } else if (message.cmd === 'undo') {
         const log = await getUndoLog();
@@ -150,9 +157,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else if (message.cmd === 'getUndo') {
         sendResponse({ ok: true, entries: await getUndoLog() });
       } else if (message.cmd === 'command') {
+        const settings = await getSettings();
         const nativeClient = createNativeClient();
         try {
-          const items = await runCommand(message.instruction, { nativeClient, windowId: message.windowId ?? null });
+          const items = await runCommand(message.instruction, { nativeClient, windowId: message.windowId ?? null, decisions: settings.decisions || {} });
           await chrome.storage.local.set({ currentPlan: items });
           sendResponse({ ok: true, items });
         } finally {

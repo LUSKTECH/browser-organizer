@@ -184,7 +184,7 @@ async function showUndoToast() {
 // drops it from the currently displayed plan immediately.
 async function ignoreItem(item) {
   const key = ignoreKey(item);
-  await send({ cmd: 'ignore', keys: [key] });
+  await send({ cmd: 'ignore', keys: [key], items: [item] });
   plan = plan.filter((it) => it.itemId !== item.itemId);
   renderPlan();
   setStatus('Won’t suggest that again.');
