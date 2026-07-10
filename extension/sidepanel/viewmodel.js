@@ -68,6 +68,17 @@ export function digestText(items) {
   return `${parts.join(', ')} — open to review.`;
 }
 
+export function toMarkdown(items) {
+  const groups = itemsForAction(items, 'groupTabs');
+  const lines = ['# Browser Organizer export', ''];
+  for (const g of groups) {
+    lines.push(`## ${g.data.groupName}`);
+    for (const m of g.data.members || []) lines.push(`- [${m.title || m.url}](${m.url})`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 export function groupUndoByRun(entries) {
   const byRun = new Map();
   for (const e of entries) {

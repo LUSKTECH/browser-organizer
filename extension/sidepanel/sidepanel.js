@@ -2,7 +2,7 @@ import { getSettings, setSettings } from '../lib/storage.js';
 import { ignoreKey } from '../lib/orchestrator.js';
 import {
   summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
-  excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun,
+  excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun, toMarkdown,
 } from './viewmodel.js';
 
 const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
@@ -254,6 +254,23 @@ $('commandForm').addEventListener('submit', async (e) => {
 
 $('approveSelected').addEventListener('click', () => applyItems([...selection]));
 $('approveAll').addEventListener('click', () => applyItems(plan.map((i) => i.itemId)));
+
+$('exportMarkdown').addEventListener('click', async () => {
+  const md = toMarkdown(plan);
+  try {
+    await navigator.clipboard.writeText(md);
+    setStatus('Markdown copied to clipboard.');
+  } catch {
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'browser-organizer-export.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus('Markdown downloaded.');
+  }
+});
 
 $('showUndo').addEventListener('click', async () => {
   const { entries } = await send({ cmd: 'getUndo' });

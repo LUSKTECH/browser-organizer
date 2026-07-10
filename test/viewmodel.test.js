@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel, excludeMember, renameGroup, recolorGroup, itemsForAction, healthMessage, progressLabel, groupUndoByRun, digestText } from '../extension/sidepanel/viewmodel.js';
+import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel, excludeMember, renameGroup, recolorGroup, itemsForAction, healthMessage, progressLabel, groupUndoByRun, digestText, toMarkdown } from '../extension/sidepanel/viewmodel.js';
 
 const items = [
   { itemId: 'a', action: 'closeTab' },
@@ -80,4 +80,11 @@ test('groupUndoByRun buckets entries by run, newest first', () => {
 test('digestText summarizes counts or says all tidy', () => {
   assert.match(digestText([{ action: 'closeTab' }, { action: 'closeTab' }, { action: 'groupTabs' }]), /2 tabs to close.*1 group/i);
   assert.match(digestText([]), /tidy|nothing/i);
+});
+
+test('toMarkdown renders groups with member links', () => {
+  const items = [{ action: 'groupTabs', data: { groupName: 'Dev', members: [{ title: 'MDN', url: 'https://mdn.dev' }] } }];
+  const md = toMarkdown(items);
+  assert.match(md, /## Dev/);
+  assert.match(md, /\[MDN\]\(https:\/\/mdn\.dev\)/);
 });
