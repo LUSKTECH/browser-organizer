@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HOST_NAME, manifestDir, buildHostManifest } from '../install/install.js';
+import { HOST_NAME, manifestDir, buildHostManifest, buildLauncherScript } from '../install/install.js';
 
 test('manifestDir resolves per browser on linux', () => {
   const d = manifestDir('chrome', 'linux', '/home/u');
@@ -23,4 +23,12 @@ test('buildHostManifest wires name, path, and allowed_origins', () => {
   assert.equal(m.type, 'stdio');
   assert.equal(m.path, '/x/run.sh');
   assert.deepEqual(m.allowed_origins, ['chrome-extension://abc123/']);
+});
+
+test('unix launcher exports the CLI path and a PATH before exec', () => {
+  const s = buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js', cliPath: '/home/u/.local/bin/claude' });
+  assert.match(s, /^#!\/bin\/sh/);
+  assert.match(s, /BROWSER_ORGANIZER_CLI="\/home\/u\/\.local\/bin\/claude"/);
+  assert.match(s, /export PATH=/);
+  assert.match(s, /exec "\/usr\/bin\/node" "\/x\/host\.js"/);
 });

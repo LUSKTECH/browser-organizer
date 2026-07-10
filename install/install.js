@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 export const HOST_NAME = 'com.browser_organizer.host';
 
@@ -34,6 +35,27 @@ export function buildHostManifest({ execPath, extensionId }) {
   };
 }
 
+// Resolves the absolute path to the `claude` CLI using the platform's lookup
+// tool (which/where). Host-side only — never influenced by extension messages.
+export function resolveCliPath(platform = process.platform, spawnSyncFn = spawnSync) {
+  const finder = platform === 'win32' ? 'where' : 'which';
+  try {
+    const res = spawnSyncFn(finder, ['claude'], { encoding: 'utf8' });
+    const line = String(res.stdout || '').split(/\r?\n/).find(Boolean);
+    return line ? line.trim() : null;
+  } catch { return null; }
+}
+
+export function buildLauncherScript({ platform, nodePath, hostEntry, cliPath }) {
+  if (platform === 'win32') {
+    const cli = cliPath ? `set "BROWSER_ORGANIZER_CLI=${cliPath}"\r\n` : '';
+    return `@echo off\r\n${cli}"${nodePath}" "${hostEntry}" %*\r\n`;
+  }
+  const cli = cliPath ? `BROWSER_ORGANIZER_CLI="${cliPath}"\nexport BROWSER_ORGANIZER_CLI\n` : '';
+  // Prepend common CLI locations so the host finds node/claude even under a bare browser PATH.
+  return `#!/bin/sh\nexport PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"\n${cli}exec "${nodePath}" "${hostEntry}"\n`;
+}
+
 // Writes a launcher that calls node (absolute path) on host.js, then registers
 // the host manifest for each requested browser. Returns the files it wrote.
 export function install({ extensionId, browsers, platform = process.platform, home = os.homedir(), hostDir, nodePath = process.execPath }) {
@@ -42,13 +64,10 @@ export function install({ extensionId, browsers, platform = process.platform, ho
   const hostEntry = path.join(nativeHostDir, 'host.js');
 
   const isWin = platform === 'win32';
+  const cliPath = resolveCliPath(platform);
   const launcher = path.join(nativeHostDir, isWin ? 'run.bat' : 'run.sh');
-  if (isWin) {
-    fs.writeFileSync(launcher, `@echo off\r\n"${nodePath}" "${hostEntry}" %*\r\n`);
-  } else {
-    fs.writeFileSync(launcher, `#!/bin/sh\nexec "${nodePath}" "${hostEntry}"\n`);
-    fs.chmodSync(launcher, 0o755);
-  }
+  fs.writeFileSync(launcher, buildLauncherScript({ platform, nodePath, hostEntry, cliPath }));
+  if (!isWin) fs.chmodSync(launcher, 0o700);
 
   const manifest = buildHostManifest({ execPath: launcher, extensionId });
   const written = [launcher];

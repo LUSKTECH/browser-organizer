@@ -3,13 +3,21 @@ import assert from 'node:assert/strict';
 import { handle } from '../native-host/dispatch.js';
 
 function fakeGetAdapter(cannedOutput) {
-  return () => ({ name: 'fake', async run() { return cannedOutput; } });
+  return () => ({ name: 'fake', async run() { return cannedOutput; }, async health() { return { version: 'test' }; } });
 }
 
-test('health returns ready without calling the model', async () => {
+test('health runs the adapter version check and reports ready', async () => {
   const r = await handle({ type: 'health' }, { getAdapter: fakeGetAdapter('') });
   assert.equal(r.ready, true);
   assert.equal(r.adapter, 'fake');
+  assert.equal(r.version, 'test');
+});
+
+test('health reports not ready when the version check fails', async () => {
+  const getAdapter = () => ({ name: 'fake', async run() { return ''; }, async health() { throw new Error('ENOENT'); } });
+  const r = await handle({ type: 'health' }, { getAdapter });
+  assert.equal(r.ready, false);
+  assert.match(r.error, /ENOENT/);
 });
 
 test('organize/group returns parsed groups', async () => {

@@ -60,6 +60,22 @@ export const claudeAdapter = {
       try { fs.rmSync(cwd, { recursive: true, force: true }); } catch {}
     }
   },
+
+  async health(opts = {}) {
+    const spawnFn = opts.spawnFn || spawn;
+    const command = resolveCommand();
+    return await new Promise((resolve, reject) => {
+      let out = '';
+      let child;
+      try { child = spawnFn(command, ['--version'], { env: { PATH: process.env.PATH } }); }
+      catch (err) { reject(err); return; }
+      const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {}; reject(new Error('version check timed out')); }, 10000);
+      child.stdout.on('data', (d) => { out += d; });
+      child.on('error', (err) => { clearTimeout(timer); reject(err); });
+      child.on('close', (code) => { clearTimeout(timer); code === 0 || code === null ? resolve({ version: out.trim() }) : reject(new Error(`version check exited ${code}`)); });
+      if (child.stdin) child.stdin.end();
+    });
+  },
 };
 
 export function extractResultText(stdout) {

@@ -9,7 +9,12 @@ export async function handle(msg, deps = {}) {
   const opts = sanitizeOptions(msg.cliOptions);
 
   if (msg.type === 'health') {
-    return { adapter: adapter.name, ready: true };
+    try {
+      const info = await adapter.health(opts);
+      return { adapter: adapter.name, ready: true, version: info.version };
+    } catch (err) {
+      return { adapter: adapter.name, ready: false, error: String((err && err.message) || err) };
+    }
   }
 
   if (msg.type === 'organize') {

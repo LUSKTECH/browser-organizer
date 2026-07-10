@@ -29,6 +29,12 @@ test('adapter rejects on timeout', async () => {
   await assert.rejects(() => claudeAdapter.run('x', { spawnFn, timeoutMs: 5 }), /timed out/);
 });
 
+test('health runs the CLI version and returns it', async () => {
+  const spawnFn = makeFakeSpawn(() => ({ stdout: '2.1.0\n' }));
+  const r = await claudeAdapter.health({ spawnFn });
+  assert.match(r.version, /2\.1\.0/);
+});
+
 test('registry looks up claude and rejects unknown', () => {
   assert.equal(getAdapter('claude').name, 'claude');
   assert.throws(() => getAdapter('nope'), /Unknown adapter/);
