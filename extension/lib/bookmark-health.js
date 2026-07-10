@@ -26,7 +26,7 @@ export function findStaleBookmarks(bookmarks, visitsMap, thresholdDays, now) {
   const cutoff = now - thresholdDays * 86400000;
   return bookmarks
     .filter((b) => b.url)
-    .filter((b) => (visitsMap.get(b.url) ?? b.dateAdded ?? 0) < cutoff)
+    .filter((b) => (visitsMap.get(normalizeUrl(b.url)) ?? b.dateAdded ?? 0) < cutoff)
     .map((b) => deleteItem(b, `Not visited in ${thresholdDays}+ days`));
 }
 
@@ -35,7 +35,7 @@ export async function getVisitsMap(bookmarks, chromeApi = chrome) {
   for (const b of bookmarks) {
     if (!isHttpUrl(b.url)) continue;
     const visits = await chromeApi.history.getVisits({ url: b.url });
-    if (visits.length) map.set(b.url, Math.max(...visits.map((v) => v.visitTime)));
+    if (visits.length) map.set(normalizeUrl(b.url), Math.max(...visits.map((v) => v.visitTime)));
   }
   return map;
 }

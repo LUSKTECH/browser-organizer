@@ -29,6 +29,14 @@ test('findStaleBookmarks uses last visit, falling back to dateAdded', () => {
   assert.equal(items[0].data.bookmarkId, '2');
 });
 
+test('stale detection matches visits by normalized url (slash/hash variants)', () => {
+  const now = 300 * DAY;
+  const bms = [{ id: '1', url: 'https://a.com/page/', dateAdded: 0, parentId: '1', index: 0 }];
+  const visits = new Map([['https://a.com/page', 290 * DAY]]);
+  const items = findStaleBookmarks(bms, visits, 180, now);
+  assert.equal(items.length, 0);
+});
+
 test('getVisitsMap records the most recent visit per url', async () => {
   const chromeApi = { history: { async getVisits({ url }) {
     return url === 'https://a.com' ? [{ visitTime: 10 }, { visitTime: 40 }] : [];
