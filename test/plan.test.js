@@ -41,3 +41,15 @@ test('validatePlanItem rejects malformed items', () => {
   assert.equal(validatePlanItem({ action: 'nope' }), false);
   assert.equal(validatePlanItem(null), false);
 });
+
+test('mapStaleResult drops tabIds outside the candidate set (injection guard)', () => {
+  const tabs = [
+    { tabId: 1, title: 'A', url: 'https://a.com', windowId: 9, index: 0, pinned: false, idleDays: 40 },
+    { tabId: 2, title: 'B', url: 'https://b.com', windowId: 9, index: 1, pinned: false, idleDays: 5 },
+  ];
+  const byId = indexById(tabs);
+  const candidateIds = new Set([1]); // only tab 1 was sent as a candidate
+  const items = mapStaleResult([{ tabId: 1, reason: 'old' }, { tabId: 2, reason: 'injected' }], byId, candidateIds);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].data.tabId, 1);
+});

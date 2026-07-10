@@ -4,7 +4,10 @@ export function indexById(snapshots) {
   return new Map(snapshots.map((s) => [s.tabId, s]));
 }
 
-export function mapGroupResult(groups) {
+// `tabsById` is accepted but unused for now; Task 7 (Phase 1) will use it to
+// split cross-window groups. Kept as a tolerant second param so the
+// orchestrator can pass it ahead of that change without churn.
+export function mapGroupResult(groups, tabsById) {
   return groups.map((g, i) => ({
     itemId: `group-${i}`,
     action: 'groupTabs',
@@ -14,9 +17,10 @@ export function mapGroupResult(groups) {
   }));
 }
 
-export function mapStaleResult(stale, tabsById) {
+export function mapStaleResult(stale, tabsById, candidateIds = null) {
   return stale
     .map((s) => {
+      if (candidateIds && !candidateIds.has(s.tabId)) return null;
       const t = tabsById.get(s.tabId);
       if (!t) return null;
       return {

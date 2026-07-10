@@ -10,6 +10,12 @@ export function partitionForApply(items, settings) {
   return { autoApply: [], needsReview: items };
 }
 
+// What we actually send to the native host: a minimal, explicit projection so
+// no incidental tab fields (or future additions) leak to the model.
+export function projectTabsForHost(tabs) {
+  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: t.url, idleDays: t.idleDays }));
+}
+
 // Builds the full plan for the enabled features. `deps` is injectable for tests;
 // in production it defaults to real collectors + a native client passed in.
 export async function buildPlan(deps) {
@@ -21,18 +27,19 @@ export async function buildPlan(deps) {
   const f = settings.enabledFeatures;
 
   if (f.groupTabs && tabs.length) {
-    const r = await nativeClient.request({ type: 'organize', task: 'group', payload: { tabs } });
-    items.push(...mapGroupResult(r.groups));
+    const r = await nativeClient.request({ type: 'organize', task: 'group', payload: { tabs: projectTabsForHost(tabs) } });
+    items.push(...mapGroupResult(r.groups, byId));
   }
   if (f.staleTabs && tabs.length) {
     const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays);
     if (stale.length) {
-      const r = await nativeClient.request({ type: 'organize', task: 'stale', payload: { tabs: stale, thresholdDays: settings.staleTabDays } });
-      items.push(...mapStaleResult(r.stale, byId));
+      const candidateIds = new Set(stale.map((t) => t.tabId));
+      const r = await nativeClient.request({ type: 'organize', task: 'stale', payload: { tabs: projectTabsForHost(stale), thresholdDays: settings.staleTabDays } });
+      items.push(...mapStaleResult(r.stale, byId, candidateIds));
     }
   }
   if (f.importantBookmarks && tabs.length) {
-    const r = await nativeClient.request({ type: 'organize', task: 'important', payload: { tabs } });
+    const r = await nativeClient.request({ type: 'organize', task: 'important', payload: { tabs: projectTabsForHost(tabs) } });
     items.push(...mapImportantResult(r.important, byId));
   }
   if (f.cleanBookmarks) {
