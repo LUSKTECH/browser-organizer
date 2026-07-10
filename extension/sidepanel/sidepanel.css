@@ -14,3 +14,10 @@ footer { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
 #settings { margin-top: 16px; }
 #settingsForm { display: grid; gap: 8px; margin-top: 8px; }
 ul { margin: 0; padding: 0; }
+
+.groupItem { list-style: none; padding: 4px 0; border-bottom: 1px solid #8882; }
+.groupItem summary { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.groupItem .groupName { font-weight: 600; flex: 1; min-width: 0; }
+.groupItem .memberList { margin: 6px 0 6px 16px; }
+.groupItem .memberList li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.groupItem .applySection { margin-left: 16px; margin-bottom: 6px; }

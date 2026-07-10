@@ -28,3 +28,20 @@ export function toggleSelection(selected, itemId) {
 export function selectedItems(selected, items) {
   return items.filter((it) => selected.has(it.itemId));
 }
+
+export function excludeMember(item, tabId) {
+  const members = item.data.members.filter((m) => m.tabId !== tabId);
+  return { ...item, data: { ...item.data, members, tabIds: members.map((m) => m.tabId) } };
+}
+
+export function renameGroup(item, name) {
+  return { ...item, data: { ...item.data, groupName: name } };
+}
+
+export function recolorGroup(item, color) {
+  return { ...item, data: { ...item.data, color } };
+}
+
+export function itemsForAction(items, action) {
+  return items.filter((it) => it.action === action);
+}

@@ -1,14 +1,99 @@
 import { getSettings, setSettings } from '../lib/storage.js';
-import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel } from './viewmodel.js';
+import {
+  summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
+  excludeMember, renameGroup, recolorGroup,
+} from './viewmodel.js';
+
+const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
 
 let plan = [];
 let selection = new Set();
+const expandedGroups = new Set();
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (t) => { $('status').textContent = t; };
 
 function send(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
+}
+
+// Persists an edited plan item locally and pushes the full plan to the
+// service worker so it survives panel reloads.
+function updatePlanItem(itemId, updater) {
+  plan = plan.map((it) => (it.itemId === itemId ? updater(it) : it));
+  send({ cmd: 'updatePlan', items: plan });
+  renderPlan();
+}
+
+function renderGroupItem(item) {
+  const li = document.createElement('li');
+  li.className = 'item groupItem';
+
+  const details = document.createElement('details');
+  details.open = expandedGroups.has(item.itemId);
+  details.addEventListener('toggle', () => {
+    if (details.open) expandedGroups.add(item.itemId); else expandedGroups.delete(item.itemId);
+  });
+
+  const summaryEl = document.createElement('summary');
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'groupName';
+  nameInput.value = item.data.groupName;
+  nameInput.addEventListener('click', (e) => e.stopPropagation());
+  nameInput.addEventListener('change', () => {
+    updatePlanItem(item.itemId, (it) => renameGroup(it, nameInput.value));
+  });
+
+  const colorSelect = document.createElement('select');
+  colorSelect.className = 'groupColor';
+  for (const c of GROUP_COLORS) {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    if (c === item.data.color) opt.selected = true;
+    colorSelect.appendChild(opt);
+  }
+  colorSelect.addEventListener('click', (e) => e.stopPropagation());
+  colorSelect.addEventListener('change', () => {
+    updatePlanItem(item.itemId, (it) => recolorGroup(it, colorSelect.value));
+  });
+
+  const countSpan = document.createElement('span');
+  countSpan.className = 'itemReason';
+  countSpan.textContent = ` (${item.data.tabIds.length} tabs)`;
+
+  summaryEl.append(nameInput, colorSelect, countSpan);
+  details.appendChild(summaryEl);
+
+  const memberList = document.createElement('ul');
+  memberList.className = 'memberList';
+  for (const m of item.data.members) {
+    const mLi = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = m.title || m.url;
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => {
+      expandedGroups.add(item.itemId);
+      updatePlanItem(item.itemId, (it) => excludeMember(it, m.tabId));
+    });
+    mLi.append(label, removeBtn);
+    memberList.appendChild(mLi);
+  }
+  details.appendChild(memberList);
+
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'applySection';
+  applyBtn.textContent = 'Apply this group';
+  applyBtn.addEventListener('click', () => applyItems([item.itemId]));
+  details.appendChild(applyBtn);
+
+  li.appendChild(details);
+  return li;
 }
 
 function renderPlan() {
@@ -29,6 +114,10 @@ function renderPlan() {
     section.appendChild(h);
     const ul = document.createElement('ul');
     for (const item of items) {
+      if (action === 'groupTabs') {
+        ul.appendChild(renderGroupItem(item));
+        continue;
+      }
       const node = tpl.content.cloneNode(true);
       const check = node.querySelector('.itemCheck');
       check.checked = selection.has(item.itemId);

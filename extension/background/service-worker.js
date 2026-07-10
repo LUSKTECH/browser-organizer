@@ -74,6 +74,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else if (message.cmd === 'getPlan') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
         sendResponse({ ok: true, items: currentPlan });
+      } else if (message.cmd === 'updatePlan') {
+        await chrome.storage.local.set({ currentPlan: message.items || [] });
+        sendResponse({ ok: true });
       } else if (message.cmd === 'apply') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
         const chosen = currentPlan.filter((i) => message.itemIds.includes(i.itemId));
