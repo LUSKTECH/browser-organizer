@@ -1,4 +1,4 @@
-import { normalizeUrl, isHttpUrl } from './url-utils.js';
+import { normalizeUrl, isHttpUrl, isPrivateHost } from './url-utils.js';
 
 export function deleteItem(b, reason) {
   return {
@@ -50,9 +50,12 @@ async function isDead(url, fetchFn, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetchFn(url, { method: 'GET', redirect: 'follow', signal: controller.signal });
+    let res = await fetchFn(url, { method: 'HEAD', redirect: 'manual', signal: controller.signal });
+    if (res.status === 405 || res.status === 501) {
+      res = await fetchFn(url, { method: 'GET', redirect: 'manual', signal: controller.signal });
+    }
     if (res.status === 404 || res.status === 410) return `HTTP ${res.status}`;
-    return null;
+    return null; // 2xx, 3xx, 401/403, 5xx all treated as alive (conservative)
   } catch (err) {
     if (err && err.name === 'AbortError') return null; // timeout != dead (conservative)
     return 'unreachable';
@@ -92,7 +95,7 @@ export async function checkDeadLinks(bookmarks, deps = {}) {
   const fetchFn = deps.fetchFn || ((url, opts) => fetch(url, opts));
   const timeoutMs = deps.timeoutMs ?? 8000;
   const concurrency = deps.concurrency ?? 6;
-  const queue = bookmarks.filter((b) => isHttpUrl(b.url));
+  const queue = bookmarks.filter((b) => isHttpUrl(b.url) && !isPrivateHost(b.url));
   const results = [];
   let idx = 0;
 

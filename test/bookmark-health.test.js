@@ -86,6 +86,26 @@ test('recordDeadStrikes confirms only on the second consecutive failure', () => 
   assert.equal(strikes.b2, undefined);        // b2 recovered -> strike cleared
 });
 
+test('dead-link check uses HEAD, treats 3xx as alive, skips private hosts', async () => {
+  const calls = [];
+  const bms = [
+    { id: '1', url: 'https://ok.com', parentId: '1', index: 0, title: 'ok' },
+    { id: '2', url: 'https://moved.com', parentId: '1', index: 1, title: 'moved' },
+    { id: '3', url: 'http://192.168.0.1/admin', parentId: '1', index: 2, title: 'router' },
+  ];
+  const fetchFn = async (url, opts) => {
+    calls.push({ url, method: opts.method, redirect: opts.redirect });
+    if (url === 'https://ok.com') return { status: 200 };
+    if (url === 'https://moved.com') return { status: 301 }; // alive, not followed
+    throw new Error('should not fetch private host');
+  };
+  const items = await checkDeadLinks(bms, { fetchFn, concurrency: 1 });
+  assert.deepEqual(items, []);                       // none dead
+  assert.ok(calls.every((c) => c.method === 'HEAD'));
+  assert.ok(calls.every((c) => c.redirect === 'manual'));
+  assert.ok(!calls.some((c) => c.url.includes('192.168'))); // private skipped
+});
+
 test('dedupeDeletes merges same-bookmark items and combines reasons', () => {
   const items = [
     { itemId: 'del-5', action: 'deleteBookmark', reason: 'Duplicate', data: { bookmarkId: '5' } },
