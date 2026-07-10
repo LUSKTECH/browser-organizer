@@ -32,3 +32,13 @@ test('organize/stale returns parsed close list', async () => {
 test('unknown type rejects', async () => {
   await assert.rejects(() => handle({ type: 'wat' }, { getAdapter: fakeGetAdapter('') }), /Unknown message type/);
 });
+
+test('handle ignores attacker-supplied command/args in cliOptions', async () => {
+  let seenOpts = null;
+  const getAdapter = () => ({ name: 'fake', async run(_p, opts) { seenOpts = opts; return '{"groups":[]}'; } });
+  await handle(
+    { type: 'organize', task: 'group', cliOptions: { command: '/bin/sh', args: ['-c', 'evil'], timeoutMs: 7000 }, payload: { tabs: [] } },
+    { getAdapter });
+  assert.deepEqual(Object.keys(seenOpts).sort(), ['timeoutMs']); // command/args stripped
+  assert.equal(seenOpts.timeoutMs, 7000);
+});

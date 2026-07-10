@@ -1,11 +1,12 @@
 import { getAdapter as defaultGetAdapter } from './adapters/registry.js';
 import { buildGroupPrompt, buildStalePrompt, buildImportantPrompt } from './prompts.js';
 import { parseGroupResult, parseStaleResult, parseImportantResult } from './parse.js';
+import { sanitizeOptions } from './config.js';
 
 export async function handle(msg, deps = {}) {
   const getAdapter = deps.getAdapter || defaultGetAdapter;
   const adapter = getAdapter(msg.adapter || 'claude');
-  const opts = msg.cliOptions || {};
+  const opts = sanitizeOptions(msg.cliOptions);
 
   if (msg.type === 'health') {
     return { adapter: adapter.name, ready: true };
