@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseJsonBlock, parseGroupResult, parseStaleResult, parseImportantResult } from '../native-host/parse.js';
+import { parseJsonBlock, parseGroupResult, parseStaleResult, parseImportantResult, parseCommandResult } from '../native-host/parse.js';
 
 test('parseJsonBlock reads plain JSON', () => {
   assert.deepEqual(parseJsonBlock('{"a":1}'), { a: 1 });
@@ -31,4 +31,11 @@ test('parseStaleResult defaults suggestBookmark to false', () => {
 test('parseImportantResult keeps folderPath as string array', () => {
   const i = parseImportantResult('{"important":[{"tabId":9,"folderPath":["Dev","X"],"reason":"ref"}]}');
   assert.deepEqual(i, [{ tabId: 9, folderPath: ['Dev', 'X'], reason: 'ref' }]);
+});
+
+test('parseCommandResult returns the three optional action arrays', () => {
+  const r = parseCommandResult('{"close":[{"tabId":1,"reason":"travel"}],"groups":[],"important":[]}');
+  assert.equal(r.close.length, 1);
+  assert.deepEqual(r.groups, []);
+  assert.deepEqual(r.important, []);
 });

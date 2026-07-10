@@ -1,7 +1,7 @@
 import { getSettings, setSettings } from '../lib/storage.js';
 import { installActivityListeners } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
-import { buildPlan, partitionForApply, applyItems } from '../lib/orchestrator.js';
+import { buildPlan, partitionForApply, applyItems, runCommand } from '../lib/orchestrator.js';
 import { applyItem } from '../lib/executor.js';
 import { recordUndo, reverseEntry, pruneUndo, getUndoLog } from '../lib/undo-log.js';
 
@@ -124,6 +124,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true, undone: chosen.length });
       } else if (message.cmd === 'getUndo') {
         sendResponse({ ok: true, entries: await getUndoLog() });
+      } else if (message.cmd === 'command') {
+        const nativeClient = createNativeClient();
+        try {
+          const items = await runCommand(message.instruction, { nativeClient, windowId: message.windowId ?? null });
+          await chrome.storage.local.set({ currentPlan: items });
+          sendResponse({ ok: true, items });
+        } finally {
+          nativeClient.disconnect();
+        }
       } else if (message.cmd === 'health') {
         const client = createNativeClient();
         try { sendResponse({ ok: true, health: await client.request({ type: 'health' }) }); }

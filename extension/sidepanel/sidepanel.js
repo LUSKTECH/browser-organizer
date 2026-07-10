@@ -236,6 +236,22 @@ for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
   });
 }
 
+$('commandForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('commandInput');
+  const instruction = input.value.trim();
+  if (!instruction) return;
+  setStatus('Running your command… (local Claude CLI)');
+  const windowId = await currentScopeWindowId();
+  const res = await send({ cmd: 'command', instruction, windowId });
+  if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
+  plan = res.items;
+  selection = new Set();
+  renderPlan();
+  setStatus(plan.length ? `${plan.length} suggestions.` : 'No matching tabs found.');
+  input.value = '';
+});
+
 $('approveSelected').addEventListener('click', () => applyItems([...selection]));
 $('approveAll').addEventListener('click', () => applyItems(plan.map((i) => i.itemId)));
 

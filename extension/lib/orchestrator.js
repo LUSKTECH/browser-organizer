@@ -97,6 +97,23 @@ export async function buildPlan(deps) {
   return applyIgnoreList(items.filter(validatePlanItem), settings.ignore || []);
 }
 
+// Runs a free-text natural-language instruction over the current tab set and
+// maps the model's response into the same PlanItem shape as buildPlan, so it
+// goes through the exact same review/apply/undo path.
+export async function runCommand(instruction, deps) {
+  const { nativeClient, chromeApi = chrome, now = Date.now(), windowId = null } = deps;
+  const activity = (await chromeApi.storage.local.get('tabActivity')).tabActivity || {};
+  const tabs = await collectTabs(chromeApi, activity, now, windowId);
+  const byId = indexById(tabs);
+  const candidateIds = new Set(tabs.map((t) => t.tabId));
+  const r = await nativeClient.request({ type: 'command', payload: { instruction, tabs: projectTabsForHost(tabs) } });
+  return [
+    ...mapGroupResult(r.groups, byId),
+    ...mapStaleResult(r.close, byId, candidateIds),
+    ...mapImportantResult(r.important, byId),
+  ].filter(validatePlanItem);
+}
+
 export async function hasAllUrls(chromeApi = chrome) {
   if (!chromeApi.permissions) return false;
   return chromeApi.permissions.contains({ origins: ['<all_urls>'] });

@@ -37,6 +37,18 @@ export function buildStalePrompt(tabs, thresholdDays) {
   ].join('\n');
 }
 
+export function buildCommandPrompt(instruction, tabs) {
+  return [
+    'You act on a user instruction over their open browser tabs.',
+    `User instruction: ${clip(instruction, 300)}`,
+    'Each data line is: tabId<TAB>title<TAB>url<TAB>idleDays. Only reference tabIds present in the data.',
+    'Choose actions that satisfy the instruction. Respond with ONLY this JSON:',
+    '{"close":[{"tabId":1,"reason":"why","suggestBookmark":false}],"groups":[{"name":"X","color":"blue","tabIds":[2,3]}],"important":[{"tabId":4,"folderPath":["Ref"],"reason":"why"}]}',
+    '',
+    wrap(tabTable(tabs, (t) => `\t${t.idleDays ?? 0}`)),
+  ].join('\n');
+}
+
 export function buildImportantPrompt(tabs) {
   return [
     'You identify high-value browser tabs worth bookmarking and file them into a tidy shallow folder structure.',

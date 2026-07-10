@@ -41,6 +41,13 @@ test('unknown type rejects', async () => {
   await assert.rejects(() => handle({ type: 'wat' }, { getAdapter: fakeGetAdapter('') }), /Unknown message type/);
 });
 
+test('command task returns parsed actions', async () => {
+  const out = '{"close":[{"tabId":2,"reason":"travel"}],"groups":[],"important":[]}';
+  const getAdapter = () => ({ name: 'fake', async run() { return out; }, async health() { return { version: 't' }; } });
+  const r = await handle({ type: 'command', payload: { instruction: 'close travel', tabs: [{ tabId: 2 }] } }, { getAdapter });
+  assert.equal(r.close.length, 1);
+});
+
 test('handle ignores attacker-supplied command/args in cliOptions', async () => {
   let seenOpts = null;
   const getAdapter = () => ({ name: 'fake', async run(_p, opts) { seenOpts = opts; return '{"groups":[]}'; } });

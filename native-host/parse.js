@@ -41,3 +41,12 @@ export function parseImportantResult(text) {
       reason: String(i.reason ?? ''),
     }));
 }
+
+export function parseCommandResult(text) {
+  const obj = parseJsonBlock(text);
+  return {
+    close: Array.isArray(obj.close) ? obj.close.filter((c) => Number.isInteger(Number(c.tabId))).map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark })) : [],
+    groups: Array.isArray(obj.groups) ? parseGroupResult(JSON.stringify({ groups: obj.groups })) : [],
+    important: Array.isArray(obj.important) ? parseImportantResult(JSON.stringify({ important: obj.important })) : [],
+  };
+}

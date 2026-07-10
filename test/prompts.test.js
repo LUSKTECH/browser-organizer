@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGroupPrompt, buildStalePrompt, buildImportantPrompt } from '../native-host/prompts.js';
+import { buildGroupPrompt, buildStalePrompt, buildImportantPrompt, buildCommandPrompt } from '../native-host/prompts.js';
 
 const tabs = [
   { tabId: 11, title: 'MDN Array', url: 'https://developer.mozilla.org/array', idleDays: 2 },
@@ -40,4 +40,11 @@ test('stale prompt clips very long urls', () => {
   const longUrl = 'https://a.com/' + 'x'.repeat(1000);
   const p = buildStalePrompt([{ tabId: 1, title: 't', url: longUrl, idleDays: 40 }], 14);
   assert.ok(!p.includes('x'.repeat(600)), 'url should be clipped');
+});
+
+test('command prompt embeds the instruction and wraps tab data', () => {
+  const p = buildCommandPrompt('close travel tabs', [{ tabId: 1, title: 'Flights', url: 'https://x', idleDays: 1 }]);
+  assert.match(p, /close travel tabs/);
+  assert.match(p, /BEGIN TAB DATA/);
+  assert.match(p, /"close"/);
 });

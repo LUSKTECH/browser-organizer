@@ -1,6 +1,6 @@
 import { getAdapter as defaultGetAdapter } from './adapters/registry.js';
-import { buildGroupPrompt, buildStalePrompt, buildImportantPrompt } from './prompts.js';
-import { parseGroupResult, parseStaleResult, parseImportantResult } from './parse.js';
+import { buildGroupPrompt, buildStalePrompt, buildImportantPrompt, buildCommandPrompt } from './prompts.js';
+import { parseGroupResult, parseStaleResult, parseImportantResult, parseCommandResult } from './parse.js';
 import { sanitizeOptions } from './config.js';
 
 export async function handle(msg, deps = {}) {
@@ -32,6 +32,11 @@ export async function handle(msg, deps = {}) {
       return { task, important: parseImportantResult(out) };
     }
     throw new Error(`Unknown task: ${task}`);
+  }
+
+  if (msg.type === 'command') {
+    const out = await adapter.run(buildCommandPrompt(msg.payload.instruction, msg.payload.tabs), opts);
+    return parseCommandResult(out);
   }
 
   throw new Error(`Unknown message type: ${msg.type}`);
