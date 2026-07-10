@@ -5,11 +5,10 @@ export function indexById(snapshots) {
 }
 
 // Splits each model-returned group into one PlanItem per window, since
-// chrome.tabs.group is per-window and cannot span windows. Note: unlike the
-// plan's draft (which skipped windows with fewer than 2 members), a
-// single-tab window is still emitted as its own item — filtering it out
-// would silently drop tabs the model asked to group with no recourse for
-// the user to see or act on them.
+// chrome.tabs.group is per-window and cannot span windows. A window with
+// fewer than 2 of the group's tabs is skipped — grouping a single tab is a
+// pointless no-op for the user, and per-window group membership is only
+// meaningful once there's something to group it with.
 export function mapGroupResult(groups, tabsById) {
   const items = [];
   groups.forEach((g, gi) => {
@@ -22,6 +21,7 @@ export function mapGroupResult(groups, tabsById) {
     }
     let wi = 0;
     for (const [windowId, members] of byWindow) {
+      if (members.length < 2) continue;
       items.push({
         itemId: `group-${gi}-${wi++}`,
         action: 'groupTabs',

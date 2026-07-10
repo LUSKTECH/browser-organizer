@@ -34,8 +34,14 @@ export async function getVisitsMap(bookmarks, chromeApi = chrome) {
   const map = new Map();
   for (const b of bookmarks) {
     if (!isHttpUrl(b.url)) continue;
-    const visits = await chromeApi.history.getVisits({ url: b.url });
-    if (visits.length) map.set(normalizeUrl(b.url), Math.max(...visits.map((v) => v.visitTime)));
+    const norm = normalizeUrl(b.url);
+    const variants = new Set([b.url, norm, norm.endsWith('/') ? norm.slice(0, -1) : `${norm}/`]);
+    let latest = 0;
+    for (const v of variants) {
+      const visits = await chromeApi.history.getVisits({ url: v });
+      for (const visit of visits) latest = Math.max(latest, visit.visitTime);
+    }
+    if (latest) map.set(norm, latest);
   }
   return map;
 }

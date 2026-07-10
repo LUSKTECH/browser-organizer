@@ -46,6 +46,18 @@ test('getVisitsMap records the most recent visit per url', async () => {
   assert.equal(map.has('https://none.com'), false);
 });
 
+test('getVisitsMap + findStaleBookmarks: trailing-slash bookmark matches a no-slash history entry', async () => {
+  const now = 300 * DAY;
+  const chromeApi = { history: { async getVisits({ url }) {
+    // History recorded the visit only under the no-slash variant.
+    return url === 'https://a.com/page' ? [{ visitTime: 290 * DAY }] : [];
+  } } };
+  const bms = [{ id: '1', url: 'https://a.com/page/', dateAdded: 0, parentId: '1', index: 0 }];
+  const visitsMap = await getVisitsMap(bms, chromeApi);
+  const items = findStaleBookmarks(bms, visitsMap, 180, now);
+  assert.equal(items.length, 0); // must NOT be flagged stale
+});
+
 test('checkDeadLinks flags 404 and connection errors, spares timeouts and 200', async () => {
   const bms = [
     { id: '1', url: 'https://ok.com', parentId: '1', index: 0, title: 'ok' },
