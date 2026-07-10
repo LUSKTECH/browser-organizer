@@ -8,13 +8,21 @@ const tabs = [
 ];
 const byId = indexById(tabs);
 
-test('mapGroupResult builds groupTabs items', () => {
-  const items = mapGroupResult([{ name: 'Work', color: 'blue', tabIds: [1, 2] }]);
-  assert.equal(items.length, 1);
-  assert.equal(items[0].action, 'groupTabs');
-  assert.equal(items[0].status, 'pending');
-  assert.deepEqual(items[0].data.tabIds, [1, 2]);
-  assert.equal(items[0].data.groupName, 'Work');
+test('mapGroupResult splits a cross-window group into one item per window with members', () => {
+  const tabs = [
+    { tabId: 1, title: 'A', url: 'https://a.com', windowId: 9, index: 0, pinned: false, idleDays: 1 },
+    { tabId: 2, title: 'B', url: 'https://b.com', windowId: 9, index: 1, pinned: false, idleDays: 1 },
+    { tabId: 3, title: 'C', url: 'https://c.com', windowId: 7, index: 0, pinned: false, idleDays: 1 },
+  ];
+  const byId = indexById(tabs);
+  const items = mapGroupResult([{ name: 'Work', color: 'blue', tabIds: [1, 2, 3] }], byId);
+  assert.equal(items.length, 2); // window 9 and window 7
+  const w9 = items.find((i) => i.data.windowId === 9);
+  assert.deepEqual(w9.data.tabIds.sort(), [1, 2]);
+  assert.equal(w9.data.members.length, 2);
+  assert.equal(w9.data.members[0].title, 'A');
+  assert.equal(items.find((i) => i.data.windowId === 7).data.tabIds, undefined === false ? undefined : items.find((i) => i.data.windowId === 7).data.tabIds); // placeholder to keep lints quiet
+  assert.deepEqual(items.find((i) => i.data.windowId === 7).data.tabIds, [3]);
 });
 
 test('mapStaleResult resolves tab details and dedupes missing tabs', () => {

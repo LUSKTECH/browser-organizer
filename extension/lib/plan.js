@@ -4,17 +4,38 @@ export function indexById(snapshots) {
   return new Map(snapshots.map((s) => [s.tabId, s]));
 }
 
-// `tabsById` is accepted but unused for now; Task 7 (Phase 1) will use it to
-// split cross-window groups. Kept as a tolerant second param so the
-// orchestrator can pass it ahead of that change without churn.
+// Splits each model-returned group into one PlanItem per window, since
+// chrome.tabs.group is per-window and cannot span windows. Note: unlike the
+// plan's draft (which skipped windows with fewer than 2 members), a
+// single-tab window is still emitted as its own item — filtering it out
+// would silently drop tabs the model asked to group with no recourse for
+// the user to see or act on them.
 export function mapGroupResult(groups, tabsById) {
-  return groups.map((g, i) => ({
-    itemId: `group-${i}`,
-    action: 'groupTabs',
-    status: 'pending',
-    reason: `Group "${g.name}" (${g.tabIds.length} tabs)`,
-    data: { groupName: g.name, color: g.color, tabIds: g.tabIds },
-  }));
+  const items = [];
+  groups.forEach((g, gi) => {
+    const byWindow = new Map();
+    for (const id of g.tabIds) {
+      const t = tabsById.get(id);
+      if (!t) continue;
+      if (!byWindow.has(t.windowId)) byWindow.set(t.windowId, []);
+      byWindow.get(t.windowId).push(t);
+    }
+    let wi = 0;
+    for (const [windowId, members] of byWindow) {
+      items.push({
+        itemId: `group-${gi}-${wi++}`,
+        action: 'groupTabs',
+        status: 'pending',
+        reason: `Group "${g.name}" (${members.length} tabs)`,
+        data: {
+          groupName: g.name, color: g.color, windowId,
+          tabIds: members.map((m) => m.tabId),
+          members: members.map((m) => ({ tabId: m.tabId, title: m.title, url: m.url })),
+        },
+      });
+    }
+  });
+  return items;
 }
 
 export function mapStaleResult(stale, tabsById, candidateIds = null) {
