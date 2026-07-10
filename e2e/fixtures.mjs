@@ -34,12 +34,15 @@ export const test = base.extend({
   server: async ({}, use) => {
     const srv = http.createServer((req, res) => {
       const title = PAGES[req.url] || `Page ${req.url}`;
-      res.writeHead(200, { 'content-type': 'text/html' });
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(`<!doctype html><html><head><title>${title}</title></head><body><h1>${title}</h1></body></html>`);
     });
     await new Promise((r) => srv.listen(0, '127.0.0.1', r));
     const { port } = srv.address();
     await use(`http://127.0.0.1:${port}`);
+    // The browser holds keep-alive connections open; force them closed so
+    // srv.close() doesn't hang the fixture teardown.
+    srv.closeAllConnections?.();
     await new Promise((r) => srv.close(r));
   },
 
