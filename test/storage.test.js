@@ -19,3 +19,8 @@ test('setSettings merges a patch over defaults', async () => {
   assert.equal(s.staleTabDays, 30);
   assert.equal(s.adapter, 'claude'); // untouched default preserved
 });
+
+test('defaults include an empty ignore list', async () => {
+  const s = await getSettings();
+  assert.deepEqual(s.ignore, []);
+});

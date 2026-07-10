@@ -1,4 +1,5 @@
 import { getSettings, setSettings } from '../lib/storage.js';
+import { ignoreKey } from '../lib/orchestrator.js';
 import {
   summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
   excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun,
@@ -106,6 +107,14 @@ function renderGroupItem(item) {
   applyBtn.addEventListener('click', () => applyItems([item.itemId]));
   details.appendChild(applyBtn);
 
+  const ignoreBtn = document.createElement('button');
+  ignoreBtn.type = 'button';
+  ignoreBtn.className = 'itemIgnore';
+  ignoreBtn.title = 'Never suggest this again';
+  ignoreBtn.textContent = 'Never suggest this';
+  ignoreBtn.addEventListener('click', () => ignoreItem(item));
+  details.appendChild(ignoreBtn);
+
   li.appendChild(details);
   return li;
 }
@@ -139,6 +148,7 @@ function renderPlan() {
       node.querySelector('.itemAction').textContent = item.data.groupName || item.data.title || item.data.url || '';
       node.querySelector('.itemReason').textContent = item.reason || '';
       node.querySelector('.itemUrl').textContent = item.data.url || (item.data.tabIds ? `${item.data.tabIds.length} tabs` : '');
+      node.querySelector('.itemIgnore').addEventListener('click', () => ignoreItem(item));
       ul.appendChild(node);
     }
     section.appendChild(ul);
@@ -170,6 +180,29 @@ async function showUndoToast() {
   toastTimer = setTimeout(() => { toast.hidden = true; }, 8000);
 }
 
+// Marks an item as "never suggest again": persists the key server-side and
+// drops it from the currently displayed plan immediately.
+async function ignoreItem(item) {
+  const key = ignoreKey(item);
+  await send({ cmd: 'ignore', keys: [key] });
+  plan = plan.filter((it) => it.itemId !== item.itemId);
+  renderPlan();
+  setStatus('Won’t suggest that again.');
+}
+
+async function startScan(features) {
+  ensureScanPort();
+  $('cancelRun').hidden = false;
+  setStatus('Analyzing… (running your local Claude CLI)');
+  const res = await send({ cmd: 'run', features });
+  $('cancelRun').hidden = true;
+  if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
+  plan = (await send({ cmd: 'getPlan' })).items;
+  selection = new Set();
+  renderPlan();
+  setStatus(plan.length ? `${plan.length} suggestions.` : 'Nothing to do — your browser looks tidy.');
+}
+
 async function applyItems(itemIds) {
   if (!itemIds.length) { setStatus('Nothing selected.'); return; }
   setStatus(`Applying ${itemIds.length}…`);
@@ -182,20 +215,19 @@ async function applyItems(itemIds) {
   await showUndoToast();
 }
 
-$('run').addEventListener('click', async () => {
-  ensureScanPort();
-  $('cancelRun').hidden = false;
-  setStatus('Analyzing… (running your local Claude CLI)');
-  const res = await send({ cmd: 'run' });
-  $('cancelRun').hidden = true;
-  if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
-  plan = (await send({ cmd: 'getPlan' })).items;
-  selection = new Set();
-  renderPlan();
-  setStatus(plan.length ? `${plan.length} suggestions.` : 'Nothing to do — your browser looks tidy.');
-});
+$('run').addEventListener('click', () => startScan());
 
 $('cancelRun').addEventListener('click', () => send({ cmd: 'cancel' }));
+
+// Per-action run buttons: run just one feature without touching settings.
+const ALL_FEATURES = ['groupTabs', 'staleTabs', 'importantBookmarks', 'cleanBookmarks'];
+for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
+  btn.addEventListener('click', () => {
+    const only = btn.dataset.feature;
+    const features = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === only]));
+    startScan(features);
+  });
+}
 
 $('approveSelected').addEventListener('click', () => applyItems([...selection]));
 $('approveAll').addEventListener('click', () => applyItems(plan.map((i) => i.itemId)));

@@ -4,6 +4,9 @@ h1 { font-size: 15px; margin: 0 0 8px; }
 button { cursor: pointer; padding: 6px 10px; border-radius: 6px; border: 1px solid #8884; background: #8881; }
 button.primary { background: #3367d6; color: #fff; border: none; width: 100%; padding: 10px; font-weight: 600; }
 #status { min-height: 1.2em; color: #888; }
+.runOne { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.runOne button { font-size: 11px; padding: 4px 8px; }
+.itemIgnore { font-size: 11px; margin-top: 2px; }
 #health { min-height: 1.2em; font-size: 12px; padding: 4px 0; }
 #health.healthOk { color: #2a8; }
 #health.healthBad { color: #d33; }

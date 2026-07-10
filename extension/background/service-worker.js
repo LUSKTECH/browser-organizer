@@ -1,4 +1,4 @@
-import { getSettings } from '../lib/storage.js';
+import { getSettings, setSettings } from '../lib/storage.js';
 import { installActivityListeners } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
 import { buildPlan, partitionForApply, applyItems } from '../lib/orchestrator.js';
@@ -64,7 +64,7 @@ async function runScan(deps = {}) {
   const settings = await getSettings();
   const nativeClient = createNativeClient();
   try {
-    const items = await buildPlan({ settings, nativeClient, onProgress: deps.onProgress, shouldCancel: deps.shouldCancel });
+    const items = await buildPlan({ settings, nativeClient, onProgress: deps.onProgress, shouldCancel: deps.shouldCancel, features: deps.features });
     const { autoApply, needsReview } = partitionForApply(items, settings);
     await chrome.storage.local.set({ currentPlan: needsReview });
     if (autoApply.length) {
@@ -91,11 +91,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       if (message.cmd === 'run') {
         cancelRequested = false;
-        const items = await runScan({ onProgress: broadcastProgress, shouldCancel: () => cancelRequested });
+        const items = await runScan({ onProgress: broadcastProgress, shouldCancel: () => cancelRequested, features: message.features });
         sendResponse({ ok: true, items });
       } else if (message.cmd === 'cancel') {
         cancelRequested = true;
         sendResponse({ ok: true });
+      } else if (message.cmd === 'ignore') {
+        const settings = await getSettings();
+        const next = [...new Set([...(settings.ignore || []), ...(message.keys || [])])];
+        await setSettings({ ignore: next });
+        sendResponse({ ok: true, ignore: next });
       } else if (message.cmd === 'getPlan') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
         sendResponse({ ok: true, items: currentPlan });

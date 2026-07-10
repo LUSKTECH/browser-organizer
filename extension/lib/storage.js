@@ -7,6 +7,7 @@ export const DEFAULTS = {
   staleBookmarkDays: 180,             // bookmarks unvisited longer are cleanup candidates
   undoRetentionDays: 7,
   deadLinkBatchSize: 200,
+  ignore: [],                          // never-suggest-again keys (see ignoreKey in orchestrator.js)
   adapter: 'claude',                   // native host adapter name
   cliCommand: 'claude',                // override if the CLI binary is elsewhere
   scanIntervalMinutes: 720,           // auto-run cadence (12h)

@@ -37,7 +37,7 @@ export async function buildPlan(deps) {
   const tabs = await collectTabs(chromeApi, activity, now);
   const byId = indexById(tabs);
   const items = [];
-  const f = settings.enabledFeatures;
+  const f = { ...settings.enabledFeatures, ...(deps.features || {}) };
 
   step('Grouping tabs');
   if (shouldCancel()) return [];
@@ -87,12 +87,23 @@ export async function buildPlan(deps) {
     items.push(...dedupeDeletes(deletes));
   }
 
-  return items.filter(validatePlanItem);
+  return applyIgnoreList(items.filter(validatePlanItem), settings.ignore || []);
 }
 
 export async function hasAllUrls(chromeApi = chrome) {
   if (!chromeApi.permissions) return false;
   return chromeApi.permissions.contains({ origins: ['<all_urls>'] });
+}
+
+export function ignoreKey(item) {
+  const d = item.data || {};
+  const target = d.url || (d.tabIds ? `group:${d.groupName}` : d.bookmarkId || '');
+  return `${item.action}:${redactUrl(String(target))}`;
+}
+
+export function applyIgnoreList(items, ignore = []) {
+  const set = new Set(ignore);
+  return items.filter((it) => !set.has(ignoreKey(it)));
 }
 
 export function sliceForScan(items, cursor, batchSize) {

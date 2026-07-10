@@ -12,6 +12,12 @@
       <button id="run" class="primary">Analyze my tabs & bookmarks</button>
       <button id="cancelRun" hidden>Cancel</button>
       <p id="status" role="status"></p>
+      <div id="runOne" class="runOne">
+        <button type="button" data-feature="groupTabs">Group tabs</button>
+        <button type="button" data-feature="staleTabs">Find stale tabs</button>
+        <button type="button" data-feature="importantBookmarks">Bookmark important</button>
+        <button type="button" data-feature="cleanBookmarks">Clean bookmarks</button>
+      </div>
     </header>
 
     <section id="summary" hidden></section>
@@ -57,6 +63,7 @@
           <span class="itemReason"></span>
           <span class="itemUrl"></span>
         </label>
+        <button type="button" class="itemIgnore" title="Never suggest this again">Never suggest this</button>
       </li>
     </template>
 
