@@ -96,6 +96,7 @@ async function loadSettings() {
   form.staleTabs.checked = s.enabledFeatures.staleTabs;
   form.importantBookmarks.checked = s.enabledFeatures.importantBookmarks;
   form.cleanBookmarks.checked = s.enabledFeatures.cleanBookmarks;
+  form.deadLinkScan.checked = s.enabledFeatures.deadLinkScan;
   form.staleTabDays.value = s.staleTabDays;
   form.staleBookmarkDays.value = s.staleBookmarkDays;
   form.autoMode.checked = s.automationMode === 'auto';
@@ -104,12 +105,16 @@ async function loadSettings() {
 $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
+  if (form.deadLinkScan.checked) {
+    await chrome.permissions.request({ origins: ['<all_urls>'] });
+  }
   await setSettings({
     enabledFeatures: {
       groupTabs: form.groupTabs.checked,
       staleTabs: form.staleTabs.checked,
       importantBookmarks: form.importantBookmarks.checked,
       cleanBookmarks: form.cleanBookmarks.checked,
+      deadLinkScan: form.deadLinkScan.checked,
     },
     staleTabDays: Number(form.staleTabDays.value),
     staleBookmarkDays: Number(form.staleBookmarkDays.value),

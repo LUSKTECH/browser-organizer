@@ -55,20 +55,27 @@ export async function buildPlan(deps) {
     const deletes = [];
     deletes.push(...findDuplicateBookmarks(bookmarks));
     deletes.push(...findStaleBookmarks(bookmarks, visits, settings.staleBookmarkDays, now));
-    const httpBookmarks = bookmarks.filter((b) => /^https?:/i.test(b.url));
-    const cursor = (await chromeApi.storage.local.get('deadCursor')).deadCursor || 0;
-    const { slice, nextCursor } = sliceForScan(httpBookmarks, cursor, settings.deadLinkBatchSize);
-    await chromeApi.storage.local.set({ deadCursor: nextCursor });
-    const deadCandidates = await checkDeadLinks(slice, {});
-    const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
-    const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId));
-    await chromeApi.storage.local.set({ deadStrikes: strikes });
-    const confirmedSet = new Set(confirmed);
-    deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
+    if (f.deadLinkScan && await hasAllUrls(chromeApi)) {
+      const httpBookmarks = bookmarks.filter((b) => /^https?:/i.test(b.url));
+      const cursor = (await chromeApi.storage.local.get('deadCursor')).deadCursor || 0;
+      const { slice, nextCursor } = sliceForScan(httpBookmarks, cursor, settings.deadLinkBatchSize);
+      await chromeApi.storage.local.set({ deadCursor: nextCursor });
+      const deadCandidates = await checkDeadLinks(slice, {});
+      const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
+      const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId));
+      await chromeApi.storage.local.set({ deadStrikes: strikes });
+      const confirmedSet = new Set(confirmed);
+      deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
+    }
     items.push(...dedupeDeletes(deletes));
   }
 
   return items.filter(validatePlanItem);
+}
+
+export async function hasAllUrls(chromeApi = chrome) {
+  if (!chromeApi.permissions) return false;
+  return chromeApi.permissions.contains({ origins: ['<all_urls>'] });
 }
 
 export function sliceForScan(items, cursor, batchSize) {

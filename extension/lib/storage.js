@@ -1,7 +1,7 @@
 export const DEFAULTS = {
   automationMode: 'review',            // 'review' | 'auto'
   enabledFeatures: {
-    staleTabs: true, groupTabs: true, importantBookmarks: true, cleanBookmarks: true,
+    staleTabs: true, groupTabs: true, importantBookmarks: true, cleanBookmarks: true, deadLinkScan: false,
   },
   staleTabDays: 14,                    // tabs idle longer are close candidates
   staleBookmarkDays: 180,             // bookmarks unvisited longer are cleanup candidates
