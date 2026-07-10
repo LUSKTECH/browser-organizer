@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { partitionForApply, applyItems, buildPlan, sliceForScan } from '../extension/lib/orchestrator.js';
+import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost } from '../extension/lib/orchestrator.js';
 
 test('partitionForApply routes everything to review in review mode', () => {
   const items = [{ itemId: 'a' }, { itemId: 'b' }];
@@ -61,6 +61,11 @@ test('deleteBookmark is never auto-applied, even in auto mode', () => {
   const r = partitionForApply(items, { automationMode: 'auto' });
   assert.deepEqual(r.autoApply.map((i) => i.itemId), ['g']);
   assert.deepEqual(r.needsReview.map((i) => i.itemId), ['d']);
+});
+
+test('projectTabsForHost redacts query strings before sending to the model', () => {
+  const out = projectTabsForHost([{ tabId: 1, title: 't', url: 'https://a.com/x?session=abc', idleDays: 2 }]);
+  assert.equal(out[0].url, 'https://a.com/x');
 });
 
 test('sliceForScan returns a batch and wraps the cursor', () => {

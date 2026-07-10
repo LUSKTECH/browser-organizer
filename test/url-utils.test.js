@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isHttpUrl, normalizeUrl } from '../extension/lib/url-utils.js';
+import { isHttpUrl, normalizeUrl, redactUrl } from '../extension/lib/url-utils.js';
 
 test('isHttpUrl accepts http/https, rejects chrome/file', () => {
   assert.equal(isHttpUrl('https://a.com'), true);
@@ -23,4 +23,10 @@ test('normalizeUrl treats duplicates the same', () => {
 
 test('normalizeUrl returns input unchanged when unparseable', () => {
   assert.equal(normalizeUrl('not a url'), 'not a url');
+});
+
+test('redactUrl strips query and fragment, keeps origin and path', () => {
+  assert.equal(redactUrl('https://a.com/p/q?token=secret#frag'), 'https://a.com/p/q');
+  assert.equal(redactUrl('https://a.com/'), 'https://a.com/');
+  assert.equal(redactUrl('not a url'), 'not a url');
 });

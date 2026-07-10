@@ -12,7 +12,9 @@ open tabs by topic, flags forgotten tabs you can close (saving any worth keeping
 files genuinely useful pages into tidy bookmark folders, and finds stale, dead, or
 duplicate bookmarks to remove. You review every change before it happens, or turn on
 automatic mode with one-click undo. All processing runs through a helper program on your
-own computer — your tabs and bookmarks are never sent to our servers.
+own computer, which calls your own AI CLI — tab titles and URLs are sent to that CLI's
+AI provider under your own subscription. Nothing is ever sent to our servers; we operate
+none.
 
 ## Permission justifications
 - **tabs**: Read tab titles and URLs to suggest groupings and identify forgotten tabs.
@@ -28,8 +30,10 @@ own computer — your tabs and bookmarks are never sent to our servers.
   detection). The extension never reads page contents — it only checks the HTTP status.
 
 ## Privacy
-See PRIVACY.md. No data leaves the user's machine except through their own AI CLI's
-existing subscription connection.
+See PRIVACY.md. Tab titles and URLs (query strings/fragments stripped) are sent to your
+AI provider under your own subscription, via your local AI CLI. Bookmarks and history
+are never sent anywhere — they stay on your machine. No data ever reaches the
+extension developer's servers; we operate none.
 
 ## Pre-publish checklist
 - [ ] Real 16/48/128 px icons added to `extension/icons/` and referenced in manifest

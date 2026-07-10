@@ -17,3 +17,14 @@ export function normalizeUrl(url) {
     return url;
   }
 }
+
+export function redactUrl(url) {
+  try {
+    const u = new URL(url);
+    u.search = '';
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return url;
+  }
+}

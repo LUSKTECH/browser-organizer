@@ -5,6 +5,7 @@ import { indexById, mapGroupResult, mapStaleResult, mapImportantResult, validate
 import { findDuplicateBookmarks, findStaleBookmarks, getVisitsMap, checkDeadLinks, recordDeadStrikes, dedupeDeletes } from './bookmark-health.js';
 import { applyItem as defaultApplyItem } from './executor.js';
 import { recordUndo as defaultRecordUndo } from './undo-log.js';
+import { redactUrl } from './url-utils.js';
 
 export function partitionForApply(items, settings) {
   if (settings.automationMode !== 'auto') return { autoApply: [], needsReview: items };
@@ -16,7 +17,7 @@ export function partitionForApply(items, settings) {
 // What we actually send to the native host: a minimal, explicit projection so
 // no incidental tab fields (or future additions) leak to the model.
 export function projectTabsForHost(tabs) {
-  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: t.url, idleDays: t.idleDays }));
+  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: redactUrl(t.url), idleDays: t.idleDays }));
 }
 
 // Builds the full plan for the enabled features. `deps` is injectable for tests;
