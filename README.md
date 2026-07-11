@@ -61,6 +61,7 @@ extension into Chrome for Testing, drives the side panel, and exercises the full
 pipe including the native `claude` bridge. Deterministic specs (no CLI) plus
 CLI-backed specs (marked *CLI*, skippable):
 - **health** — the panel reports the CLI connected
+- **tab-panel** — the open-tabs search/filter/bulk-close (no AI) closes selected tabs and undo restores them
 - **duplicate-tabs** — detects a duplicate open tab, closes it on apply, restores it on undo
 - **sessions** — saves the current window as a session (closing its tabs) and restores them
 - **bookmark-cleanup** — detects a duplicate bookmark, deletes it on apply, restores it on undo

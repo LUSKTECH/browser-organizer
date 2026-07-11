@@ -8,6 +8,16 @@ const LABELS = {
 
 export function actionLabel(action) { return LABELS[action] || action; }
 
+// Live client-side filter over open tabs (no AI): matches title, url, or host.
+export function filterTabs(tabs, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return tabs;
+  return tabs.filter((t) => {
+    const host = (() => { try { return new URL(t.url).hostname.toLowerCase(); } catch { return ''; } })();
+    return `${t.title}`.toLowerCase().includes(q) || `${t.url}`.toLowerCase().includes(q) || host.includes(q);
+  });
+}
+
 export function summarize(items) {
   const out = {};
   for (const it of items) out[it.action] = (out[it.action] || 0) + 1;

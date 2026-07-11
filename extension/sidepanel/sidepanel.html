@@ -34,11 +34,22 @@
       </div>
     </header>
 
+    <details id="tabsPanel">
+      <summary>Open tabs</summary>
+      <input type="text" id="tabFilter" placeholder="Filter by title, URL, or domain" />
+      <ul id="tabList"></ul>
+      <div class="tabsActions">
+        <button id="closeTabsBtn">Close selected</button>
+        <span id="tabCount" class="hint"></span>
+      </div>
+    </details>
+
     <form id="commandForm" class="commandForm">
       <label for="commandInput">Tell it what to do</label>
       <input type="text" id="commandInput" placeholder="e.g. close everything about travel" />
       <button type="submit">Run command</button>
     </form>
+    <p class="hint">Tip: <kbd>Ctrl+Shift+O</kbd> to analyze · type <kbd>org &lt;instruction&gt;</kbd> in the address bar.</p>
 
     <section id="summary" hidden></section>
 
@@ -70,11 +81,16 @@
         <label><input type="checkbox" name="staleTabs" /> Suggest closing forgotten tabs</label>
         <label><input type="checkbox" name="importantBookmarks" /> Auto-bookmark important tabs</label>
         <label><input type="checkbox" name="cleanBookmarks" /> Clean up stale/dead bookmarks</label>
+        <label><input type="checkbox" name="dupeTabs" /> Detect duplicate open tabs</label>
         <label><input type="checkbox" name="deadLinkScan" /> Check bookmarked pages for dead links (requests access to all sites)</label>
         <label>Close tabs idle more than
           <input type="number" name="staleTabDays" min="1" max="365" /> days</label>
         <label>Bookmarks unvisited more than
           <input type="number" name="staleBookmarkDays" min="1" max="3650" /> days</label>
+        <label>Auto-scan every
+          <input type="number" name="scanIntervalHours" min="1" max="168" /> hours</label>
+        <label>Keep undo history for
+          <input type="number" name="undoRetentionDays" min="1" max="90" /> days</label>
         <label><input type="checkbox" name="autoMode" /> Auto-apply on a schedule (with undo)</label>
         <label>Protected domains (never close/delete) — one per line
           <textarea name="whitelist" rows="3" placeholder="github.com&#10;mail.google.com"></textarea>

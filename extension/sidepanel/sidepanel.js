@@ -2,7 +2,7 @@ import { getSettings, setSettings } from '../lib/storage.js';
 import { ignoreKey } from '../lib/orchestrator.js';
 import {
   summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
-  excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun, toMarkdown,
+  excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun, toMarkdown, filterTabs,
 } from './viewmodel.js';
 
 const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
@@ -10,6 +10,8 @@ const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple'
 let plan = [];
 let selection = new Set();
 const expandedGroups = new Set();
+let openTabs = [];
+let tabSelection = new Set();
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (t) => { $('status').textContent = t; };
@@ -52,6 +54,13 @@ function renderGroupItem(item) {
 
   const summaryEl = document.createElement('summary');
 
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.className = 'itemCheck';
+  check.checked = selection.has(item.itemId);
+  check.addEventListener('click', (e) => e.stopPropagation()); // don't toggle the <details>
+  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); });
+
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.className = 'groupName';
@@ -79,7 +88,7 @@ function renderGroupItem(item) {
   countSpan.className = 'itemReason';
   countSpan.textContent = ` (${item.data.tabIds.length} tabs)`;
 
-  summaryEl.append(nameInput, colorSelect, countSpan);
+  summaryEl.append(check, nameInput, colorSelect, countSpan);
   details.appendChild(summaryEl);
 
   const memberList = document.createElement('ul');
@@ -189,6 +198,47 @@ async function ignoreItem(item) {
   renderPlan();
   setStatus('Won’t suggest that again.');
 }
+
+// ---- Direct tab list / search / bulk-close (no AI) ----
+function drawTabs() {
+  const shown = filterTabs(openTabs, $('tabFilter').value);
+  const list = $('tabList');
+  list.textContent = '';
+  for (const t of shown) {
+    const li = document.createElement('li');
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = tabSelection.has(t.id);
+    cb.addEventListener('change', () => { if (cb.checked) tabSelection.add(t.id); else tabSelection.delete(t.id); });
+    const span = document.createElement('span');
+    span.textContent = `${t.pinned ? '📌 ' : ''}${t.title || t.url}`;
+    span.title = t.url;
+    label.append(cb, span);
+    li.appendChild(label);
+    list.appendChild(li);
+  }
+  $('tabCount').textContent = `${shown.length} of ${openTabs.length} tabs`;
+}
+
+async function renderTabs() {
+  const res = await send({ cmd: 'listOpenTabs', windowId: await currentScopeWindowId() });
+  openTabs = (res && res.tabs) || [];
+  tabSelection = new Set([...tabSelection].filter((id) => openTabs.some((t) => t.id === id)));
+  drawTabs();
+}
+
+$('tabsPanel').addEventListener('toggle', () => { if ($('tabsPanel').open) renderTabs(); });
+$('tabFilter').addEventListener('input', drawTabs);
+$('closeTabsBtn').addEventListener('click', async () => {
+  const ids = [...tabSelection];
+  if (!ids.length) { setStatus('No tabs selected.'); return; }
+  const res = await send({ cmd: 'closeTabs', tabIds: ids });
+  tabSelection = new Set();
+  setStatus(`Closed ${res.closed} tab${res.closed === 1 ? '' : 's'}.`);
+  await renderTabs();
+  await showUndoToast();
+});
 
 async function currentScopeWindowId() {
   if ($('scope').value !== 'window') return null;
@@ -338,9 +388,12 @@ async function loadSettings() {
   form.staleTabs.checked = s.enabledFeatures.staleTabs;
   form.importantBookmarks.checked = s.enabledFeatures.importantBookmarks;
   form.cleanBookmarks.checked = s.enabledFeatures.cleanBookmarks;
+  form.dupeTabs.checked = s.enabledFeatures.dupeTabs;
   form.deadLinkScan.checked = s.enabledFeatures.deadLinkScan;
   form.staleTabDays.value = s.staleTabDays;
   form.staleBookmarkDays.value = s.staleBookmarkDays;
+  form.scanIntervalHours.value = Math.round(s.scanIntervalMinutes / 60);
+  form.undoRetentionDays.value = s.undoRetentionDays;
   form.autoMode.checked = s.automationMode === 'auto';
   form.whitelist.value = (s.whitelist || []).join('\n');
 }
@@ -358,10 +411,13 @@ $('settingsForm').addEventListener('submit', async (e) => {
       staleTabs: form.staleTabs.checked,
       importantBookmarks: form.importantBookmarks.checked,
       cleanBookmarks: form.cleanBookmarks.checked,
+      dupeTabs: form.dupeTabs.checked,
       deadLinkScan: form.deadLinkScan.checked,
     },
     staleTabDays: Number(form.staleTabDays.value),
     staleBookmarkDays: Number(form.staleBookmarkDays.value),
+    scanIntervalMinutes: Math.max(1, Number(form.scanIntervalHours.value)) * 60,
+    undoRetentionDays: Number(form.undoRetentionDays.value),
     automationMode: form.autoMode.checked ? 'auto' : 'review',
     whitelist: form.whitelist.value.split('\n').map((s) => s.trim()).filter(Boolean),
   });

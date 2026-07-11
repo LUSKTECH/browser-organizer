@@ -115,6 +115,12 @@ async function runScan(deps = {}) {
   }
 }
 
+// Clicking a background digest notification opens the panel.
+chrome.notifications.onClicked.addListener(async () => {
+  const win = await chrome.windows.getLastFocused();
+  await chrome.sidePanel.open({ windowId: win.id });
+});
+
 async function notify(message) {
   try {
     await chrome.notifications.create({ type: 'basic', title: 'Browser Organizer', message });
@@ -138,6 +144,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         for (const item of message.items || []) decisions = recordDecision(decisions, item, 'reject');
         await setSettings({ ignore: next, decisions });
         sendResponse({ ok: true, ignore: next });
+      } else if (message.cmd === 'listOpenTabs') {
+        const all = await chrome.tabs.query(message.windowId ? { windowId: message.windowId } : {});
+        const tabs = all.filter((t) => /^https?:/i.test(t.url || ''))
+          .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
+        sendResponse({ ok: true, tabs });
+      } else if (message.cmd === 'closeTabs') {
+        // Manual, explicit bulk close (no AI). Records undo so it's reversible.
+        const runId = `run-${Date.now()}`;
+        const entries = [];
+        const validIds = [];
+        for (const id of message.tabIds || []) {
+          const t = await chrome.tabs.get(id).catch(() => null);
+          if (!t) continue;
+          validIds.push(id);
+          entries.push({ undoId: `${Date.now()}-${id}-${Math.random().toString(36).slice(2)}`, runId, ts: Date.now(), action: 'closeTab', label: `Close tab: ${t.title || t.url}`, reverse: { url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } });
+        }
+        if (validIds.length) {
+          await chrome.tabs.remove(validIds).catch(() => {});
+          await recordUndo(entries);
+        }
+        sendResponse({ ok: true, closed: validIds.length });
       } else if (message.cmd === 'getPlan') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
         sendResponse({ ok: true, items: currentPlan });

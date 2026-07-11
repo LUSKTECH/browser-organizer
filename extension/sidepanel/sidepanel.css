@@ -320,15 +320,25 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 footer { display: flex; gap: 6px; margin: 14px 0; flex-wrap: wrap; }
 footer button { flex: 1 1 auto; font-size: 12px; }
 
+/* ---------- Open-tabs panel ---------- */
+#tabFilter { width: 100%; margin: 4px 12px 8px; width: calc(100% - 24px); }
+#tabList { list-style: none; margin: 0; padding: 0 12px; display: grid; gap: 2px; max-height: 40vh; overflow: auto; }
+#tabList li label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--r-sm); cursor: pointer; font-size: 12px; }
+#tabList li label:hover { background: var(--surface-hover); }
+#tabList li span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabsActions { display: flex; align-items: center; gap: 10px; padding: 8px 12px 12px; }
+.hint { color: var(--text-faint); font-size: 11px; margin: 6px 2px; }
+kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+
 /* ---------- Disclosure sections ---------- */
-#settings, #sessions {
+#settings, #sessions, #tabsPanel {
   margin-top: 14px;
   border: 1px solid var(--border);
   border-radius: var(--r);
   background: var(--surface);
   overflow: hidden;
 }
-#settings > summary, #sessions > summary {
+#settings > summary, #sessions > summary, #tabsPanel > summary {
   cursor: pointer;
   padding: 10px 12px;
   font-weight: 600;
@@ -337,8 +347,8 @@ footer button { flex: 1 1 auto; font-size: 12px; }
   align-items: center;
   gap: 8px;
 }
-#settings > summary::-webkit-details-marker, #sessions > summary::-webkit-details-marker { display: none; }
-#settings > summary::before, #sessions > summary::before {
+#settings > summary::-webkit-details-marker, #sessions > summary::-webkit-details-marker, #tabsPanel > summary::-webkit-details-marker { display: none; }
+#settings > summary::before, #sessions > summary::before, #tabsPanel > summary::before {
   content: "";
   width: 6px; height: 6px; flex: none;
   border-right: 2px solid var(--text-faint);
@@ -346,7 +356,7 @@ footer button { flex: 1 1 auto; font-size: 12px; }
   transform: rotate(-45deg);
   transition: transform var(--dur) ease;
 }
-#settings[open] > summary::before, #sessions[open] > summary::before { transform: rotate(45deg); }
+#settings[open] > summary::before, #sessions[open] > summary::before, #tabsPanel[open] > summary::before { transform: rotate(45deg); }
 
 #settingsForm { display: grid; gap: 11px; padding: 4px 12px 14px; }
 #settingsForm label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }

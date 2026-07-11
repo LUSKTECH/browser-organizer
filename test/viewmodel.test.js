@@ -8,6 +8,20 @@ const items = [
   { itemId: 'c', action: 'groupTabs' },
 ];
 
+import { filterTabs } from '../extension/sidepanel/viewmodel.js';
+
+test('filterTabs matches title, url, or host case-insensitively; empty query returns all', () => {
+  const tabs = [
+    { id: 1, title: 'React Docs', url: 'https://react.dev/learn' },
+    { id: 2, title: 'Inbox', url: 'https://mail.google.com/' },
+    { id: 3, title: 'Sports', url: 'https://nytimes.com/sports' },
+  ];
+  assert.deepEqual(filterTabs(tabs, 'react').map((t) => t.id), [1]);
+  assert.deepEqual(filterTabs(tabs, 'google.com').map((t) => t.id), [2]);
+  assert.deepEqual(filterTabs(tabs, 'SPORTS').map((t) => t.id), [3]);
+  assert.equal(filterTabs(tabs, '').length, 3);
+});
+
 test('summarize counts per action', () => {
   assert.deepEqual(summarize(items), { closeTab: 2, groupTabs: 1 });
 });
