@@ -18,7 +18,7 @@ export function partitionForApply(items, settings) {
 // What we actually send to the native host: a minimal, explicit projection so
 // no incidental tab fields (or future additions) leak to the model.
 export function projectTabsForHost(tabs) {
-  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: redactUrl(t.url), idleDays: t.idleDays }));
+  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: redactUrl(t.url), idleDays: t.idleDays, pinned: !!t.pinned }));
 }
 
 // Builds the full plan for the enabled features. `deps` is injectable for tests;
@@ -58,7 +58,7 @@ export async function buildPlan(deps) {
   step('Finding forgotten tabs');
   if (shouldCancel()) return finalizePlan(items, settings);
   if (f.staleTabs && tabs.length) {
-    const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays);
+    const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays && !t.pinned); // never propose closing pinned tabs
     if (stale.length) {
       const candidateIds = new Set(stale.map((t) => t.tabId));
       const r = await nativeClient.request({ type: 'organize', task: 'stale', adapter, payload: { tabs: projectTabsForHost(stale), thresholdDays: settings.staleTabDays, rules } });
@@ -116,8 +116,21 @@ export function dedupeTabActions(items) {
   });
 }
 
+// Drops destructive actions (close/discard/delete) targeting a whitelisted host,
+// so users can protect domains ("never touch github.com") outright.
+export function applyWhitelist(items, whitelist = []) {
+  const hosts = whitelist.map((w) => String(w).trim().toLowerCase()).filter(Boolean);
+  if (!hosts.length) return items;
+  const PROTECTED = new Set(['closeTab', 'discardTab', 'deleteBookmark']);
+  const hostOf = (url) => { try { return new URL(url).hostname.toLowerCase(); } catch { return ''; } };
+  const matches = (h) => h && hosts.some((w) => h === w || h.endsWith('.' + w));
+  return items.filter((it) => !(PROTECTED.has(it.action) && matches(hostOf(it.data && it.data.url))));
+}
+
 export function finalizePlan(items, settings) {
-  return applyIgnoreList(dedupeTabActions(items).filter(validatePlanItem), (settings && settings.ignore) || []);
+  const s = settings || {};
+  const cleaned = applyWhitelist(dedupeTabActions(items).filter(validatePlanItem), s.whitelist || []);
+  return applyIgnoreList(cleaned, s.ignore || []);
 }
 
 // Runs a free-text natural-language instruction over the current tab set and

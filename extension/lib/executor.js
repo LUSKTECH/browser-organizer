@@ -35,6 +35,7 @@ async function applyItemInner(item, c) {
       const { tabId, url, title, windowId, index, pinned, bookmarkFirst } = item.data;
       const live = await c.tabs.get(tabId).catch(() => null);
       if (!live || live.url !== url) throw new StaleTabError(`Tab ${tabId} no longer matches ${url}`);
+      if (live.pinned) throw new StaleTabError(`Tab ${tabId} is pinned (protected)`); // never close a pinned tab
       let savedBookmarkId = null;
       if (bookmarkFirst) {
         const folder = await ensureFolder(['Browser Organizer', 'Saved before closing'], c);

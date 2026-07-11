@@ -41,6 +41,17 @@ test('closeTab removes the tab and returns a reopen undo entry', async () => {
   assert.equal(undo.reverse.url, 'https://a.com');
 });
 
+test('closeTab refuses to close a pinned tab (protected)', async () => {
+  const removed = [];
+  const chrome = {
+    tabs: { async get(id) { return { id, url: 'https://a.com', pinned: true }; }, async remove(id) { removed.push(id); } },
+    bookmarks: { async getChildren() { return []; }, async create(n) { return { id: '1', ...n }; } },
+  };
+  const item = { action: 'closeTab', data: { tabId: 3, url: 'https://a.com', title: 'A', windowId: 1, index: 0, pinned: false, bookmarkFirst: false } };
+  await assert.rejects(() => applyItem(item, { chrome }), /pinned/i);
+  assert.deepEqual(removed, []);
+});
+
 test('closeTab with bookmarkFirst saves before closing and records the bookmark for undo', async () => {
   const chrome = makeChrome();
   const item = { action: 'closeTab', data: { tabId: 3, url: 'https://a.com', title: 'A', windowId: 1, index: 2, pinned: false, bookmarkFirst: true } };

@@ -342,6 +342,7 @@ async function loadSettings() {
   form.staleTabDays.value = s.staleTabDays;
   form.staleBookmarkDays.value = s.staleBookmarkDays;
   form.autoMode.checked = s.automationMode === 'auto';
+  form.whitelist.value = (s.whitelist || []).join('\n');
 }
 
 $('settingsForm').addEventListener('submit', async (e) => {
@@ -362,6 +363,7 @@ $('settingsForm').addEventListener('submit', async (e) => {
     staleTabDays: Number(form.staleTabDays.value),
     staleBookmarkDays: Number(form.staleBookmarkDays.value),
     automationMode: form.autoMode.checked ? 'auto' : 'review',
+    whitelist: form.whitelist.value.split('\n').map((s) => s.trim()).filter(Boolean),
   });
   setStatus('Settings saved.');
 });

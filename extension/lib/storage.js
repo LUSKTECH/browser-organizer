@@ -8,6 +8,7 @@ export const DEFAULTS = {
   undoRetentionDays: 7,
   deadLinkBatchSize: 200,
   ignore: [],                          // never-suggest-again keys (see ignoreKey in orchestrator.js)
+  whitelist: [],                       // protected domains — never close/discard/delete their tabs/bookmarks
   decisions: {},                       // per-target approve/reject counters (see recordDecision in orchestrator.js)
   adapter: 'claude',                   // native host adapter name
   cliCommand: 'claude',                // override if the CLI binary is elsewhere

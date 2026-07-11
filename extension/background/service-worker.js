@@ -53,7 +53,7 @@ chrome.runtime.onStartup.addListener(async () => {
 installActivityListeners(chrome);
 
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command === 'run-scan') await runScan();
+  if (command === 'run-scan') await runScan({ background: true });
   if (command === 'open-panel') {
     const win = await chrome.windows.getLastFocused();
     await chrome.sidePanel.open({ windowId: win.id });
@@ -82,7 +82,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   if (alarm.name === ALARM_SCAN && settings.automationMode === 'auto') {
-    await runScan();
+    await runScan({ background: true });
   }
 });
 
@@ -97,7 +97,8 @@ async function runScan(deps = {}) {
       const runId = `run-${Date.now()}`;
       const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
       await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
-    } else if (needsReview.length) {
+    } else if (needsReview.length && deps.background) {
+      // Only notify for background/scheduled scans; a foreground run already shows the panel.
       await notify(digestText(needsReview));
     }
     return items;

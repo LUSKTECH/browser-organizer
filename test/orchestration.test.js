@@ -2,7 +2,39 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
-import { dedupeTabActions, finalizePlan } from '../extension/lib/orchestrator.js';
+import { dedupeTabActions, finalizePlan, applyWhitelist } from '../extension/lib/orchestrator.js';
+
+test('applyWhitelist drops destructive actions on protected domains (and subdomains)', () => {
+  const items = [
+    { action: 'closeTab', data: { url: 'https://mail.google.com/x' } },
+    { action: 'closeTab', data: { url: 'https://random.com' } },
+    { action: 'deleteBookmark', data: { url: 'https://sub.github.com/y' } },
+    { action: 'groupTabs', data: { tabIds: [1] } },
+  ];
+  const out = applyWhitelist(items, ['google.com', 'github.com']);
+  assert.deepEqual(out.map((i) => i.data.url || 'group'), ['https://random.com', 'group']);
+});
+
+test('buildPlan excludes pinned tabs from stale close candidates', async () => {
+  const stored = {};
+  const chromeApi = {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: stored[k] } : { ...stored }; }, async set(o) { Object.assign(stored, o); } } },
+    tabs: { async query() { return [
+      { id: 1, url: 'https://a.com', windowId: 1, index: 0, pinned: true, lastAccessed: 0 },
+      { id: 2, url: 'https://b.com', windowId: 1, index: 1, pinned: false, lastAccessed: 0 },
+    ]; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+  let stalePayload = null;
+  const nativeClient = { request: async (m) => { if (m.task === 'stale') stalePayload = m.payload; return { groups: [], stale: [], important: [] }; } };
+  const settings = { adapter: 'claude', enabledFeatures: { groupTabs: false, staleTabs: true, importantBookmarks: false, cleanBookmarks: false, dupeTabs: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  await buildPlan({ settings, nativeClient, chromeApi, now: 100 * 86400000 });
+  assert.ok(stalePayload, 'stale task should run');
+  const ids = stalePayload.tabs.map((t) => t.tabId);
+  assert.ok(!ids.includes(1), 'pinned tab excluded from stale candidates');
+  assert.ok(ids.includes(2), 'unpinned idle tab included');
+});
 
 test('dedupeTabActions keeps one close/discard per tab (dupe+stale collision)', () => {
   const items = [
