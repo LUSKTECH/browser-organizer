@@ -83,8 +83,50 @@ export function recolorGroup(item, color) {
   return { ...item, data: { ...item.data, color } };
 }
 
-export function itemsForAction(items, action) {
-  return items.filter((it) => it.action === action);
+// All item ids, for bulk "Select all".
+export function allItemIds(items) {
+  return items.map((it) => it.itemId);
+}
+
+// Live client-side filter over plan items: matches group name, title, url,
+// reason, or any group member's title/url.
+export function filterPlan(items, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return items;
+  const hit = (s) => String(s || '').toLowerCase().includes(q);
+  return items.filter((it) => {
+    const d = it.data || {};
+    if (hit(d.groupName) || hit(d.title) || hit(d.url) || hit(it.reason)) return true;
+    if (Array.isArray(d.members)) return d.members.some((m) => hit(m.title) || hit(m.url));
+    return false;
+  });
+}
+
+const DESTRUCTIVE = new Set(['closeTab', 'discardTab', 'deleteBookmark']);
+
+// Count of irreversible-feeling actions (close/suspend/delete) in a set.
+export function destructiveCount(items) {
+  return items.filter((it) => DESTRUCTIVE.has(it.action)).length;
+}
+
+// Whether a batch is large enough to warrant an explicit confirmation prompt.
+export function needsBulkConfirm(items, threshold = 10) {
+  return destructiveCount(items) >= threshold;
+}
+
+const ADAPTER_NOTES = {
+  copilot: 'Lower assurance: Copilot CLI is agentic and runs with its default tool policy. Lock it down by setting BROWSER_ORGANIZER_COPILOT_ARGS to a read-only/tool-deny flag list.',
+};
+
+// A caution note for adapters that can't be sandboxed as tightly as the others.
+export function adapterNote(adapter) {
+  return ADAPTER_NOTES[adapter] || '';
+}
+
+// "m:ss" elapsed clock for the scan heartbeat.
+export function formatElapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 const ADAPTER_LABELS = { claude: 'Claude CLI', antigravity: 'Antigravity CLI', kiro: 'Kiro CLI', copilot: 'Copilot CLI', codex: 'Codex CLI', ollama: 'Ollama' };

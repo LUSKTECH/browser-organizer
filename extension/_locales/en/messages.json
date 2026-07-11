@@ -1,0 +1,22 @@
+{
+  "appName": {
+    "message": "Browser Organizer",
+    "description": "Extension name shown in the browser and store."
+  },
+  "appDesc": {
+    "message": "Group tabs, close forgotten ones, and tidy bookmarks using your local AI CLI. Tab titles and URLs are sent to your CLI's AI provider under your own subscription.",
+    "description": "Extension description shown in the store."
+  },
+  "panelTitle": {
+    "message": "Browser Organizer",
+    "description": "Side-panel heading."
+  },
+  "analyzeButton": {
+    "message": "Analyze my tabs & bookmarks",
+    "description": "Primary action button."
+  },
+  "settingsTitle": {
+    "message": "Settings",
+    "description": "Settings section heading."
+  }
+}

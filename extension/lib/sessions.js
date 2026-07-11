@@ -9,6 +9,20 @@ export function buildSession(name, tabs, now = Date.now()) {
   };
 }
 
+// Derives a human-friendly name from the tabs' most common host so unnamed
+// sessions aren't just timestamps. Deliberately local + deterministic — no CLI,
+// network, or new native-host surface for a cosmetic default.
+export function autoSessionName(tabs, now = Date.now()) {
+  const hosts = {};
+  for (const t of tabs) {
+    try { const h = new URL(t.url).hostname.replace(/^www\./, ''); if (h) hosts[h] = (hosts[h] || 0) + 1; } catch { /* skip non-URL tabs */ }
+  }
+  const top = Object.entries(hosts).sort((a, b) => b[1] - a[1])[0];
+  const n = tabs.length;
+  if (!top) return `Session ${new Date(now).toLocaleString()}`;
+  return `${top[0]} + ${n} tab${n === 1 ? '' : 's'}`;
+}
+
 export function addSession(store, session) { return [...store, session]; }
 export function removeSession(store, id) { return store.filter((s) => s.sessionId !== id); }
 export function renameSession(store, id, name) {
@@ -31,7 +45,7 @@ export async function saveCurrentWindowSession(name, deps = {}) {
   const close = deps.close !== false;
   const win = await c.windows.getCurrent({ populate: true });
   const httpTabs = win.tabs.filter((t) => /^https?:/i.test(t.url || ''));
-  const session = buildSession(name, httpTabs, now);
+  const session = buildSession(name || autoSessionName(httpTabs, now), httpTabs, now);
   await saveSessions(addSession(await listSessions(), session));
   if (close) await c.tabs.remove(httpTabs.map((t) => t.id));
   return session;

@@ -167,10 +167,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await setSettings({ ignore: next, decisions });
         sendResponse({ ok: true, ignore: next });
       } else if (message.cmd === 'listOpenTabs') {
+        // Include browser pages (chrome://, edge://, about:) too — the panel tags
+        // them so the user can still bulk-close them; the AI send-path elsewhere
+        // still only ever sees http(s) URLs. Exclude our own extension pages,
+        // about:blank, and empty/loading tabs so the list stays meaningful.
         const all = await chrome.tabs.query(message.windowId ? { windowId: message.windowId } : {});
-        const tabs = all.filter((t) => /^https?:/i.test(t.url || ''))
+        const tabs = all
+          .filter((t) => t.id != null && t.url && t.url !== 'about:blank' && !/^chrome-extension:|^moz-extension:/i.test(t.url))
           .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
         sendResponse({ ok: true, tabs });
+      } else if (message.cmd === 'focusTab') {
+        const t = await chrome.tabs.get(message.tabId).catch(() => null);
+        if (t) { await chrome.tabs.update(t.id, { active: true }); await chrome.windows.update(t.windowId, { focused: true }); }
+        sendResponse({ ok: !!t });
       } else if (message.cmd === 'closeTabs') {
         // Manual, explicit bulk close (no AI). Records undo only for tabs that
         // were actually removed, so "Undo" can't re-create still-open tabs.

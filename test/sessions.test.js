@@ -1,7 +1,17 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
-import { buildSession, addSession, removeSession, renameSession, listSessions, saveSessions, saveCurrentWindowSession } from '../extension/lib/sessions.js';
+import { buildSession, addSession, removeSession, renameSession, listSessions, saveSessions, saveCurrentWindowSession, autoSessionName } from '../extension/lib/sessions.js';
+
+test('autoSessionName names by the most common host, falls back to timestamp', () => {
+  const tabs = [
+    { url: 'https://github.com/a' }, { url: 'https://www.github.com/b' }, { url: 'https://news.example/c' },
+  ];
+  assert.equal(autoSessionName(tabs, 0), 'github.com + 3 tabs');
+  assert.equal(autoSessionName([{ url: 'https://x.io/1' }], 0), 'x.io + 1 tab');
+  assert.match(autoSessionName([], 0), /^Session /); // no hosts → timestamp
+  assert.match(autoSessionName([{ url: 'not a url' }], 0), /^Session /); // unparseable → timestamp
+});
 
 test('renameSession updates only the matching session', () => {
   const store = [{ sessionId: 'a', name: 'One' }, { sessionId: 'b', name: 'Two' }];

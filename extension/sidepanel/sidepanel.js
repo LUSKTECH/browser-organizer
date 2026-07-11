@@ -4,6 +4,7 @@ import {
   summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
   excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun, toMarkdown, filterTabs,
   describeIgnoreKey, installCommand, moveMember,
+  allItemIds, filterPlan, needsBulkConfirm, destructiveCount, adapterNote, formatElapsed,
 } from './viewmodel.js';
 
 const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
@@ -13,6 +14,7 @@ let selection = new Set();
 const expandedGroups = new Set();
 let openTabs = [];
 let tabSelection = new Set();
+let planFilter = '';
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (t) => { $('status').textContent = t; };
@@ -21,6 +23,19 @@ function send(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
 }
 
+// Bring a tab to the foreground (used by click-to-focus on a suggestion).
+function focusTab(tabId) { if (tabId != null) send({ cmd: 'focusTab', tabId }); }
+
+// A live elapsed-time heartbeat so long scans visibly progress even between
+// phase updates. lastScanLabel holds the most recent phase text; the ticker
+// appends the running clock to it once a second.
+let scanTimer = null;
+let scanStartTs = 0;
+let lastScanLabel = '';
+function tickScan() { setStatus(`${lastScanLabel} · ${formatElapsed(Date.now() - scanStartTs)}`); }
+function startScanClock(label) { scanStartTs = Date.now(); lastScanLabel = label; tickScan(); clearInterval(scanTimer); scanTimer = setInterval(tickScan, 1000); }
+function stopScanClock() { clearInterval(scanTimer); scanTimer = null; }
+
 let scanPort = null;
 function ensureScanPort() {
   if (scanPort) return scanPort;
@@ -28,7 +43,8 @@ function ensureScanPort() {
   scanPort.onMessage.addListener((msg) => {
     if (msg.progress) {
       const { phase, done, total } = msg.progress;
-      setStatus(progressLabel(phase, done, total));
+      lastScanLabel = progressLabel(phase, done, total);
+      tickScan();
     }
   });
   scanPort.onDisconnect.addListener(() => { scanPort = null; });
@@ -59,6 +75,7 @@ function renderGroupItem(item) {
   check.type = 'checkbox';
   check.className = 'itemCheck';
   check.checked = selection.has(item.itemId);
+  check.setAttribute('aria-label', `Select group ${item.data.groupName}`);
   check.addEventListener('click', (e) => e.stopPropagation()); // don't toggle the <details>
   check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); });
 
@@ -98,6 +115,13 @@ function renderGroupItem(item) {
     const mLi = document.createElement('li');
     const label = document.createElement('span');
     label.textContent = m.title || m.url;
+    // Click a member to jump to that tab.
+    label.className = 'focusable';
+    label.setAttribute('role', 'link');
+    label.setAttribute('tabindex', '0');
+    label.title = 'Go to this tab';
+    label.addEventListener('click', () => focusTab(m.tabId));
+    label.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusTab(m.tabId); } });
     // "Move to" another proposed group.
     const otherGroups = plan.filter((i) => i.action === 'groupTabs' && i.itemId !== item.itemId);
     const moveSel = document.createElement('select');
@@ -153,12 +177,15 @@ function renderGroupItem(item) {
 function renderPlan() {
   const container = $('plan');
   container.textContent = '';
-  const counts = summarize(plan);
+  const shown = filterPlan(plan, planFilter);
+  const counts = summarize(shown);
   const summary = $('summary');
   summary.hidden = plan.length === 0;
-  summary.textContent = Object.entries(counts).map(([a, n]) => `${actionLabel(a)}: ${n}`).join('  •  ');
+  const filterNote = planFilter && shown.length !== plan.length ? `  (filtered from ${plan.length})` : '';
+  summary.textContent = Object.entries(counts).map(([a, n]) => `${actionLabel(a)}: ${n}`).join('  •  ') + filterNote;
+  $('planTools').hidden = plan.length === 0;
 
-  const groups = groupByAction(plan);
+  const groups = groupByAction(shown);
   const tpl = $('itemTemplate');
   for (const [action, items] of Object.entries(groups)) {
     const section = document.createElement('div');
@@ -180,6 +207,16 @@ function renderPlan() {
       node.querySelector('.itemReason').textContent = item.reason || '';
       node.querySelector('.itemUrl').textContent = item.data.url || (item.data.tabIds ? `${item.data.tabIds.length} tabs` : '');
       node.querySelector('.itemIgnore').addEventListener('click', () => ignoreItem(item));
+      // Click-to-focus: only meaningful when the suggestion targets a live tab.
+      if (item.data.tabId != null) {
+        const goBtn = document.createElement('button');
+        goBtn.type = 'button';
+        goBtn.className = 'itemFocus';
+        goBtn.textContent = 'Go to tab';
+        goBtn.setAttribute('aria-label', `Go to tab: ${item.data.title || item.data.url || ''}`);
+        goBtn.addEventListener('click', () => focusTab(item.data.tabId));
+        node.querySelector('.item').appendChild(goBtn);
+      }
       ul.appendChild(node);
     }
     section.appendChild(ul);
@@ -237,6 +274,15 @@ function drawTabs() {
     span.textContent = `${t.pinned ? '📌 ' : ''}${t.title || t.url}`;
     span.title = t.url;
     label.append(cb, span);
+    // Non-http tabs (chrome://, edge://, about:, extensions) are shown but tagged
+    // so it's clear they're browser pages, not normal sites.
+    if (!/^https?:/i.test(t.url || '')) {
+      li.classList.add('nonHttp');
+      const tag = document.createElement('span');
+      tag.className = 'tabTag';
+      tag.textContent = 'browser page';
+      label.append(tag);
+    }
     li.appendChild(label);
     list.appendChild(li);
   }
@@ -271,9 +317,10 @@ async function currentScopeWindowId() {
 async function startScan(features) {
   ensureScanPort();
   $('cancelRun').hidden = false;
-  setStatus('Analyzing… (running your local Claude CLI)');
+  startScanClock('Analyzing… (running your local AI CLI)');
   const windowId = await currentScopeWindowId();
   const res = await send({ cmd: 'run', features, windowId });
+  stopScanClock();
   $('cancelRun').hidden = true;
   if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
   plan = (await send({ cmd: 'getPlan' })).items;
@@ -282,8 +329,27 @@ async function startScan(features) {
   setStatus(plan.length ? `${plan.length} suggestions.` : 'Nothing to do — your browser looks tidy.');
 }
 
+// Confirms a large destructive batch via a modal before applying. Resolves true
+// to proceed, false to cancel (Cancel button or Esc).
+function confirmBulk(items) {
+  const dlg = $('confirmDialog');
+  $('confirmMsg').textContent = `Apply ${items.length} changes — ${destructiveCount(items)} will close, suspend, or delete tabs/bookmarks. This can be undone, but continue?`;
+  return new Promise((resolve) => {
+    const done = (val) => { dlg.close(); resolve(val); };
+    $('confirmOk').onclick = () => done(true);
+    $('confirmCancel').onclick = () => done(false);
+    dlg.addEventListener('cancel', () => resolve(false), { once: true }); // Esc / backdrop
+    dlg.showModal();
+  });
+}
+
 async function applyItems(itemIds) {
   if (!itemIds.length) { setStatus('Nothing selected.'); return; }
+  const chosen = selectedItems(new Set(itemIds), plan);
+  if (needsBulkConfirm(chosen)) {
+    const ok = await confirmBulk(chosen);
+    if (!ok) { setStatus('Cancelled — nothing applied.'); return; }
+  }
   setStatus(`Applying ${itemIds.length}…`);
   const res = await send({ cmd: 'apply', itemIds });
   if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
@@ -311,10 +377,22 @@ for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
 $('clearPlan').addEventListener('click', async () => {
   plan = [];
   selection = new Set();
+  planFilter = '';
+  $('planFilter').value = '';
   await send({ cmd: 'updatePlan', items: [] }); // also clear the stored plan so it doesn't reappear on reload
   renderPlan();
   setStatus('Cleared.');
 });
+
+// ---- Plan toolbar: filter, bulk-select, expand/collapse ----
+$('planFilter').addEventListener('input', (e) => { planFilter = e.target.value; renderPlan(); });
+$('selectAll').addEventListener('click', () => { selection = new Set(allItemIds(filterPlan(plan, planFilter))); renderPlan(); });
+$('selectNone').addEventListener('click', () => { selection = new Set(); renderPlan(); });
+$('expandAll').addEventListener('click', () => {
+  for (const it of plan) if (it.action === 'groupTabs') expandedGroups.add(it.itemId);
+  renderPlan();
+});
+$('collapseAll').addEventListener('click', () => { expandedGroups.clear(); renderPlan(); });
 
 $('commandForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -419,10 +497,20 @@ $('copyCmd').addEventListener('click', async () => {
 });
 $('recheck').addEventListener('click', () => checkHealth());
 
+// Shows a caution note for lower-assurance adapters (e.g. Copilot).
+function updateAdapterNote(value) {
+  const note = adapterNote(value);
+  const el = $('adapterNote');
+  el.textContent = note;
+  el.hidden = !note;
+}
+$('settingsForm').adapter.addEventListener('change', (e) => updateAdapterNote(e.target.value));
+
 async function loadSettings() {
   const s = await getSettings();
   const form = $('settingsForm');
   form.adapter.value = s.adapter;
+  updateAdapterNote(s.adapter);
   form.groupTabs.checked = s.enabledFeatures.groupTabs;
   form.staleTabs.checked = s.enabledFeatures.staleTabs;
   form.importantBookmarks.checked = s.enabledFeatures.importantBookmarks;
@@ -567,7 +655,18 @@ $('saveSessionForm').addEventListener('submit', async (e) => {
   await renderSessions();
 });
 
+// chrome.i18n scaffolding: replace the text of any [data-i18n] element with its
+// localized message. Static English remains in the HTML as the fallback.
+function applyI18n() {
+  if (!chrome.i18n) return;
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    const msg = chrome.i18n.getMessage(el.dataset.i18n);
+    if (msg) el.textContent = msg;
+  }
+}
+
 (async () => {
+  applyI18n();
   await loadSettings();
   await checkHealth();
   plan = (await send({ cmd: 'getPlan' })).items || [];

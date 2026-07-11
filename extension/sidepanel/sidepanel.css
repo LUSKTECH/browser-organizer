@@ -416,6 +416,30 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
 #closeUndo { color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; }
 #closeUndo:hover { background: var(--accent-hover); }
 
+/* ---------- Plan toolbar (filter / bulk-select / expand) ---------- */
+.planTools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.planTools input[type="search"] { flex: 1 1 140px; min-width: 120px; }
+.planTools button { padding: 4px 10px; font-size: 11px; }
+
+/* ---------- Click-to-focus affordances ---------- */
+.focusable { cursor: pointer; color: var(--link); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.focusable:hover { text-decoration-style: solid; }
+.itemFocus { padding: 3px 9px; font-size: 11px; }
+
+/* ---------- Lower-assurance adapter note ---------- */
+.warnNote { margin: 4px 0 8px; padding: 7px 10px; border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn-soft-text); font-size: 12px; line-height: 1.4; }
+
+/* ---------- Non-http (browser page) tabs ---------- */
+li.nonHttp span:not(.tabTag) { color: var(--text-muted); }
+.tabTag { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ---------- Confirm dialog ---------- */
+#confirmDialog { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px 18px; max-width: 320px; box-shadow: var(--shadow-2); background: var(--surface); color: var(--text); }
+#confirmDialog::backdrop { background: rgba(2, 6, 23, 0.55); backdrop-filter: blur(2px); }
+#confirmDialog h2 { font-size: 14px; margin: 0 0 8px; }
+#confirmDialog p { font-size: 13px; line-height: 1.45; margin: 0 0 14px; }
+.dialogActions { display: flex; justify-content: flex-end; gap: 8px; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

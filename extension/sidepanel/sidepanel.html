@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Browser Organizer</title>
@@ -14,7 +14,7 @@
           <rect width="7" height="7" x="14" y="14" rx="1.5" />
           <rect width="7" height="7" x="3" y="14" rx="1.5" />
         </svg>
-        <h1>Browser Organizer</h1>
+        <h1 data-i18n="panelTitle">Browser Organizer</h1>
       </div>
       <div id="health" role="status"></div>
       <label>Scope
@@ -23,8 +23,8 @@
           <option value="all">All windows</option>
         </select>
       </label>
-      <button id="run" class="primary">Analyze my tabs & bookmarks</button>
-      <button id="cancelRun" hidden>Cancel</button>
+      <button id="run" class="primary" data-i18n="analyzeButton">Analyze my tabs & bookmarks</button>
+      <button id="cancelRun" aria-label="Cancel the running scan" hidden>Cancel</button>
       <p id="status" role="status"></p>
       <div id="runOne" class="runOne">
         <button type="button" data-feature="groupTabs">Group tabs</button>
@@ -48,7 +48,7 @@
 
     <details id="tabsPanel">
       <summary>Open tabs</summary>
-      <input type="text" id="tabFilter" placeholder="Filter by title, URL, or domain" />
+      <input type="text" id="tabFilter" aria-label="Filter open tabs by title, URL, or domain" placeholder="Filter by title, URL, or domain" />
       <ul id="tabList"></ul>
       <div class="tabsActions">
         <button id="closeTabsBtn">Close selected</button>
@@ -65,6 +65,14 @@
 
     <section id="summary" hidden></section>
 
+    <div id="planTools" class="planTools" role="toolbar" aria-label="Suggestion list controls" hidden>
+      <input type="search" id="planFilter" aria-label="Filter suggestions" placeholder="Filter suggestions" />
+      <button type="button" id="selectAll">Select all</button>
+      <button type="button" id="selectNone">Select none</button>
+      <button type="button" id="expandAll">Expand groups</button>
+      <button type="button" id="collapseAll">Collapse groups</button>
+    </div>
+
     <section id="plan" aria-label="Suggestions"></section>
 
     <div id="undoToast" role="status" hidden></div>
@@ -77,18 +85,19 @@
     </footer>
 
     <details id="settings">
-      <summary>Settings</summary>
+      <summary data-i18n="settingsTitle">Settings</summary>
       <form id="settingsForm">
         <label>AI backend
           <select name="adapter">
             <option value="claude">Claude Code</option>
             <option value="antigravity">Antigravity (agy)</option>
             <option value="kiro">Kiro CLI</option>
-            <option value="copilot">GitHub Copilot</option>
+            <option value="copilot">GitHub Copilot (lower assurance)</option>
             <option value="codex">OpenAI Codex</option>
             <option value="ollama">Ollama (local)</option>
           </select>
         </label>
+        <p id="adapterNote" class="warnNote" role="note" hidden></p>
         <label><input type="checkbox" name="groupTabs" /> Group open tabs by topic</label>
         <label><input type="checkbox" name="staleTabs" /> Suggest closing forgotten tabs</label>
         <label><input type="checkbox" name="importantBookmarks" /> Auto-bookmark important tabs</label>
@@ -111,10 +120,19 @@
       </form>
     </details>
 
-    <dialog id="undoDialog">
-      <h2>Undo history</h2>
+    <dialog id="undoDialog" aria-labelledby="undoDialogTitle">
+      <h2 id="undoDialogTitle">Undo history</h2>
       <ul id="undoList"></ul>
       <button id="closeUndo">Close</button>
+    </dialog>
+
+    <dialog id="confirmDialog" aria-labelledby="confirmTitle" aria-describedby="confirmMsg">
+      <h2 id="confirmTitle">Apply changes?</h2>
+      <p id="confirmMsg"></p>
+      <div class="dialogActions">
+        <button type="button" id="confirmCancel">Cancel</button>
+        <button type="button" id="confirmOk" class="primary" autofocus>Apply</button>
+      </div>
     </dialog>
 
     <details id="sessions">

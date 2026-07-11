@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel, excludeMember, renameGroup, recolorGroup, itemsForAction, healthMessage, progressLabel, groupUndoByRun, digestText, toMarkdown } from '../extension/sidepanel/viewmodel.js';
+import { summarize, groupByAction, toggleSelection, selectedItems, actionLabel, excludeMember, renameGroup, recolorGroup, healthMessage, progressLabel, groupUndoByRun, digestText, toMarkdown, allItemIds, filterPlan, destructiveCount, needsBulkConfirm, adapterNote, formatElapsed } from '../extension/sidepanel/viewmodel.js';
 
 const items = [
   { itemId: 'a', action: 'closeTab' },
@@ -86,9 +86,47 @@ test('renameGroup and recolorGroup update data immutably', () => {
   assert.equal(recolorGroup(base, 'green').data.color, 'green');
 });
 
-test('itemsForAction filters by action', () => {
-  const items = [groupItem(), { itemId: 'c', action: 'closeTab' }];
-  assert.equal(itemsForAction(items, 'groupTabs').length, 1);
+test('allItemIds returns every item id', () => {
+  assert.deepEqual(allItemIds(items), ['a', 'b', 'c']);
+});
+
+test('filterPlan matches name/title/url/reason and group members', () => {
+  const plan = [
+    { itemId: 'g', action: 'groupTabs', data: { groupName: 'Work', members: [{ tabId: 1, title: 'Jira', url: 'https://x.com' }] } },
+    { itemId: 't', action: 'closeTab', reason: 'idle', data: { title: 'News', url: 'https://news.example' } },
+  ];
+  assert.deepEqual(filterPlan(plan, 'work').map((i) => i.itemId), ['g']); // group name
+  assert.deepEqual(filterPlan(plan, 'jira').map((i) => i.itemId), ['g']); // member title
+  assert.deepEqual(filterPlan(plan, 'news').map((i) => i.itemId), ['t']); // item title
+  assert.deepEqual(filterPlan(plan, 'idle').map((i) => i.itemId), ['t']); // reason
+  assert.equal(filterPlan(plan, '').length, 2); // empty → unfiltered
+  assert.equal(filterPlan(plan, 'zzz').length, 0);
+});
+
+test('destructiveCount / needsBulkConfirm count only close/suspend/delete', () => {
+  const plan = [
+    ...Array.from({ length: 3 }, (_, i) => ({ itemId: `c${i}`, action: 'closeTab' })),
+    { itemId: 'd', action: 'deleteBookmark' },
+    { itemId: 's', action: 'discardTab' },
+    { itemId: 'g', action: 'groupTabs' },
+    { itemId: 'b', action: 'createBookmark' },
+  ];
+  assert.equal(destructiveCount(plan), 5);
+  assert.equal(needsBulkConfirm(plan, 10), false);
+  assert.equal(needsBulkConfirm(plan, 5), true);
+});
+
+test('adapterNote warns for copilot only', () => {
+  assert.match(adapterNote('copilot'), /Lower assurance/);
+  assert.equal(adapterNote('claude'), '');
+  assert.equal(adapterNote('ollama'), '');
+});
+
+test('formatElapsed renders m:ss', () => {
+  assert.equal(formatElapsed(0), '0:00');
+  assert.equal(formatElapsed(7000), '0:07');
+  assert.equal(formatElapsed(75000), '1:15');
+  assert.equal(formatElapsed(-5), '0:00');
 });
 
 test('healthMessage reports connected vs not', () => {
