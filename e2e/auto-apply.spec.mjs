@@ -4,9 +4,11 @@ import { test, expect, send, getAlarms, setStoredSettings, createBookmark, searc
 test.describe.configure({ mode: 'serial' });
 
 test('onInstalled schedules the scan and prune alarms', async ({ panel }) => {
-  const names = (await getAlarms(panel)).map((a) => a.name);
-  expect(names).toContain('organizer-scan');
-  expect(names).toContain('organizer-prune');
+  // onInstalled creates the alarms asynchronously; poll until they appear.
+  await expect.poll(async () => {
+    const names = (await getAlarms(panel)).map((a) => a.name);
+    return names.includes('organizer-scan') && names.includes('organizer-prune');
+  }, { timeout: 10000 }).toBe(true);
 });
 
 test('auto mode applies tab actions automatically but never auto-deletes bookmarks', async ({ context, server, panel }) => {
