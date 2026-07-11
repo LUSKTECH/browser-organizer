@@ -3,14 +3,18 @@
 // `agy -p "<prompt>"` runs non-interactively and prints PLAIN TEXT (there is no
 // command-line JSON output mode yet), so we return the raw stdout and let the
 // dispatcher's JSON parser extract the JSON the prompt asked the model to emit.
-// `--yes` auto-approves, `--no-color` keeps ANSI escapes out of the output.
-// Auth uses the user's persisted `agy` login (subscription) or, if set,
-// GEMINI_API_KEY / ANTIGRAVITY_API_KEY — never an inline key.
+// SECURITY: agy is an agentic CLI. We run it with `--sandbox` (terminal
+// restrictions) and deliberately do NOT pass `--dangerously-skip-permissions`,
+// so a prompt-injected tab title cannot get tools auto-approved. Auth uses the
+// user's persisted `agy` login (subscription) or, if set, GEMINI_API_KEY /
+// ANTIGRAVITY_API_KEY — never an inline key.
 
 import { runCli, cliVersion } from './run-cli.js';
-import { hostEnv } from '../config.js';
+import { hostEnv, overrideArgs } from '../config.js';
 
 const ENV_VAR = 'BROWSER_ORGANIZER_ANTIGRAVITY_CMD';
+const ARGS_VAR = 'BROWSER_ORGANIZER_ANTIGRAVITY_ARGS';
+const DEFAULT_ARGS = ['--sandbox', '-p']; // prompt appended last (value of -p)
 const AUTH_ENV = ['GEMINI_API_KEY', 'ANTIGRAVITY_API_KEY'];
 
 // Host-controlled binary resolution: env override or the default on PATH.
@@ -23,7 +27,7 @@ export const antigravityAdapter = {
   async run(prompt, opts = {}) {
     const out = await runCli({
       command: resolveCommand(),
-      args: ['-p', prompt, '--yes', '--no-color'],
+      args: [...overrideArgs(ARGS_VAR, DEFAULT_ARGS), prompt],
       usesStdin: false,
       env: hostEnv(AUTH_ENV),
       timeoutMs: opts.timeoutMs,

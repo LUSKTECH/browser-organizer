@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import { kiroAdapter, resolveCommand } from '../native-host/adapters/kiro.js';
 import { makeFakeSpawn } from './helpers/fake-spawn.js';
 
-test('run invokes `chat --no-interactive <prompt>` and returns trimmed plain text', async () => {
+test('run invokes `chat --no-interactive --trust-tools= <prompt>` (trust no tools)', async () => {
   let seen = null;
   const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: ' {"close":[]} \n' }; });
   const out = await kiroAdapter.run('PROMPT', { spawnFn });
   assert.equal(out, '{"close":[]}');
   assert.deepEqual(seen.args.slice(0, 2), ['chat', '--no-interactive']);
+  assert.ok(seen.args.includes('--trust-tools='));       // explicitly trust no tools
+  assert.ok(!seen.args.includes('--trust-all-tools'));
   assert.equal(seen.args[seen.args.length - 1], 'PROMPT');
-  assert.ok(!seen.args.includes('--trust-all-tools')); // read-only categorization: no tool trust
 });
 
 test('health returns the CLI version', async () => {

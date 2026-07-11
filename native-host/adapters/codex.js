@@ -6,10 +6,17 @@
 // the dispatcher extract the JSON the prompt requested. Auth uses your persisted
 // ChatGPT login (Plus/Pro/Business) or OPENAI_API_KEY / CODEX_API_KEY — never inline.
 
+// SECURITY: codex exec is agentic. We pin `--sandbox read-only` so a prompt-
+// injected tab title cannot make it write files or run networked commands.
+// (read-only still permits local reads — tighten via BROWSER_ORGANIZER_CODEX_ARGS
+// against your codex version if needed.)
+
 import { runCli, cliVersion } from './run-cli.js';
-import { hostEnv } from '../config.js';
+import { hostEnv, overrideArgs } from '../config.js';
 
 const ENV_VAR = 'BROWSER_ORGANIZER_CODEX_CMD';
+const ARGS_VAR = 'BROWSER_ORGANIZER_CODEX_ARGS';
+const DEFAULT_ARGS = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check']; // prompt appended last
 const AUTH_ENV = ['OPENAI_API_KEY', 'CODEX_API_KEY'];
 
 export function resolveCommand() {
@@ -21,7 +28,7 @@ export const codexAdapter = {
   async run(prompt, opts = {}) {
     const out = await runCli({
       command: resolveCommand(),
-      args: ['exec', '--skip-git-repo-check', prompt],
+      args: [...overrideArgs(ARGS_VAR, DEFAULT_ARGS), prompt],
       usesStdin: false,
       env: hostEnv(AUTH_ENV),
       timeoutMs: opts.timeoutMs,

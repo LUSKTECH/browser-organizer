@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { copilotAdapter, resolveCommand } from '../native-host/adapters/copilot.js';
 import { makeFakeSpawn } from './helpers/fake-spawn.js';
 
-test('run passes the prompt as an arg with -p/-s/--no-ask-user and returns trimmed text', async () => {
+test('run passes prompt last with -s/--no-ask-user/-p and returns trimmed text', async () => {
   let seen = null;
   const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: '  {"groups":[]}\n' }; });
   const out = await copilotAdapter.run('PROMPT', { spawnFn });
   assert.equal(out, '{"groups":[]}');
-  assert.deepEqual(seen.args, ['-p', 'PROMPT', '-s', '--no-ask-user']);
+  assert.deepEqual(seen.args, ['-s', '--no-ask-user', '-p', 'PROMPT']);
 });
 
 test('health returns the CLI version', async () => {

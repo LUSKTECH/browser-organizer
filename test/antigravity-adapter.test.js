@@ -3,15 +3,25 @@ import assert from 'node:assert/strict';
 import { antigravityAdapter, resolveCommand } from '../native-host/adapters/antigravity.js';
 import { makeFakeSpawn } from './helpers/fake-spawn.js';
 
-test('run passes the prompt as an arg (with -p/--yes/--no-color) and returns trimmed plain text', async () => {
+test('run passes prompt last, sandboxed, without auto-approving tools', async () => {
   let seen = null;
   const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: '  {"groups":[]}\n' }; });
   const out = await antigravityAdapter.run('PROMPT', { spawnFn });
   assert.equal(out, '{"groups":[]}'); // trimmed, returned raw (JSON extracted downstream)
-  assert.ok(seen.args.includes('PROMPT'));
+  assert.equal(seen.args[seen.args.length - 1], 'PROMPT');
+  assert.ok(seen.args.includes('--sandbox'));
   assert.ok(seen.args.includes('-p'));
-  assert.ok(seen.args.includes('--yes'));
-  assert.ok(seen.args.includes('--no-color'));
+  assert.ok(!seen.args.includes('--dangerously-skip-permissions')); // tools not auto-approved
+});
+
+test('BROWSER_ORGANIZER_ANTIGRAVITY_ARGS overrides the flags (prompt still last)', async () => {
+  const prev = process.env.BROWSER_ORGANIZER_ANTIGRAVITY_ARGS;
+  process.env.BROWSER_ORGANIZER_ANTIGRAVITY_ARGS = '--print --sandbox';
+  let seen = null;
+  const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = args; return { stdout: '{}' }; });
+  await antigravityAdapter.run('PROMPT', { spawnFn });
+  assert.deepEqual(seen, ['--print', '--sandbox', 'PROMPT']);
+  if (prev === undefined) delete process.env.BROWSER_ORGANIZER_ANTIGRAVITY_ARGS; else process.env.BROWSER_ORGANIZER_ANTIGRAVITY_ARGS = prev;
 });
 
 test('health returns the CLI version', async () => {

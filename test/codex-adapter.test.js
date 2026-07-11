@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { codexAdapter, resolveCommand } from '../native-host/adapters/codex.js';
 import { makeFakeSpawn } from './helpers/fake-spawn.js';
 
-test('run invokes `exec --skip-git-repo-check <prompt>` and returns trimmed text', async () => {
+test('run invokes `exec --sandbox read-only ... <prompt>` (read-only sandbox) and returns trimmed text', async () => {
   let seen = null;
   const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: ' {"important":[]} \n' }; });
   const out = await codexAdapter.run('PROMPT', { spawnFn });
   assert.equal(out, '{"important":[]}');
-  assert.deepEqual(seen.args, ['exec', '--skip-git-repo-check', 'PROMPT']);
+  assert.deepEqual(seen.args, ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', 'PROMPT']);
 });
 
 test('health returns the CLI version', async () => {

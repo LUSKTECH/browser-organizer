@@ -6,10 +6,17 @@
 // reuses your Copilot subscription via COPILOT_GITHUB_TOKEN / GH_TOKEN /
 // GITHUB_TOKEN, or the OAuth token from an existing `gh` login — never inline.
 
+// SECURITY: Copilot CLI is agentic. `--no-ask-user` prevents interactive pauses
+// but the tool policy is the CLI's default — this adapter is LOWER-ASSURANCE than
+// claude/ollama. Lock it down for your Copilot CLI version by overriding
+// BROWSER_ORGANIZER_COPILOT_ARGS with an explicit tool-deny/read-only flag list.
+
 import { runCli, cliVersion } from './run-cli.js';
-import { hostEnv } from '../config.js';
+import { hostEnv, overrideArgs } from '../config.js';
 
 const ENV_VAR = 'BROWSER_ORGANIZER_COPILOT_CMD';
+const ARGS_VAR = 'BROWSER_ORGANIZER_COPILOT_ARGS';
+const DEFAULT_ARGS = ['-s', '--no-ask-user', '-p']; // prompt appended last (value of -p)
 const AUTH_ENV = ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
 
 export function resolveCommand() {
@@ -21,7 +28,7 @@ export const copilotAdapter = {
   async run(prompt, opts = {}) {
     const out = await runCli({
       command: resolveCommand(),
-      args: ['-p', prompt, '-s', '--no-ask-user'],
+      args: [...overrideArgs(ARGS_VAR, DEFAULT_ARGS), prompt],
       usesStdin: false,
       env: hostEnv(AUTH_ENV),
       timeoutMs: opts.timeoutMs,

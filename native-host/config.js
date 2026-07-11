@@ -19,6 +19,15 @@ export function tmpBase() {
   return os.tmpdir();
 }
 
+// Host-controlled args override: an operator can tune/lock down an adapter's
+// flags (e.g. a version whose sandbox flag differs) by setting an env var. The
+// override is a space-separated flag list; the prompt is always appended last by
+// the adapter. Env is host-side only — never taken from an extension message.
+export function overrideArgs(envVar, defaults) {
+  const v = process.env[envVar];
+  return v ? v.split(/\s+/).filter(Boolean) : defaults;
+}
+
 // A minimal, host-controlled environment for spawned CLIs: always PATH and HOME
 // (needed for PATH resolution and persisted login credentials), plus any named
 // auth vars the adapter declares (e.g. GEMINI_API_KEY, KIRO_API_KEY). Env is
