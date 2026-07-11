@@ -22,6 +22,11 @@ test('run rejects on non-zero exit', async () => {
   await assert.rejects(() => codexAdapter.run('x', { spawnFn }), /login required/);
 });
 
+test('run rejects when the CLI is killed by a signal (code null), not treated as success', async () => {
+  const spawnFn = makeFakeSpawn(() => ({ stdout: 'partial', code: null }));
+  await assert.rejects(() => codexAdapter.run('x', { spawnFn }), /exited/);
+});
+
 test('resolveCommand defaults to codex and honors the env override', () => {
   const prev = process.env.BROWSER_ORGANIZER_CODEX_CMD;
   delete process.env.BROWSER_ORGANIZER_CODEX_CMD;

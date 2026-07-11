@@ -43,20 +43,20 @@ export async function buildPlan(deps) {
   const adapter = settings.adapter || 'claude';
 
   step('Finding duplicate tabs');
-  if (shouldCancel()) return [];
+  if (shouldCancel()) return finalizePlan(items, settings);
   if (f.dupeTabs && tabs.length) {
     items.push(...findDuplicateTabs(tabs));
   }
 
   step('Grouping tabs');
-  if (shouldCancel()) return items;
+  if (shouldCancel()) return finalizePlan(items, settings);
   if (f.groupTabs && tabs.length) {
     const r = await nativeClient.request({ type: 'organize', task: 'group', adapter, payload: { tabs: projectTabsForHost(tabs), rules } });
     items.push(...mapGroupResult(r.groups, byId));
   }
 
   step('Finding forgotten tabs');
-  if (shouldCancel()) return items;
+  if (shouldCancel()) return finalizePlan(items, settings);
   if (f.staleTabs && tabs.length) {
     const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays);
     if (stale.length) {
@@ -67,14 +67,14 @@ export async function buildPlan(deps) {
   }
 
   step('Finding tabs to bookmark');
-  if (shouldCancel()) return items;
+  if (shouldCancel()) return finalizePlan(items, settings);
   if (f.importantBookmarks && tabs.length) {
     const r = await nativeClient.request({ type: 'organize', task: 'important', adapter, payload: { tabs: projectTabsForHost(tabs), rules } });
     items.push(...mapImportantResult(r.important, byId));
   }
 
   step('Cleaning bookmarks');
-  if (shouldCancel()) return items;
+  if (shouldCancel()) return finalizePlan(items, settings);
   if (f.cleanBookmarks) {
     const bookmarks = await collectBookmarks(chromeApi);
     const visits = await getVisitsMap(bookmarks, chromeApi);
@@ -88,7 +88,11 @@ export async function buildPlan(deps) {
       await chromeApi.storage.local.set({ deadCursor: nextCursor });
       const deadCandidates = await checkDeadLinks(slice, {});
       const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
-      const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId));
+      // Pass the ids actually scanned this batch so strikes for bookmarks in
+      // OTHER (unscanned) slices are carried forward, not silently reset —
+      // otherwise pagination means a strike never survives to reach 2.
+      const scannedIds = slice.map((b) => b.id);
+      const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId), scannedIds);
       await chromeApi.storage.local.set({ deadStrikes: strikes });
       const confirmedSet = new Set(confirmed);
       deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
@@ -96,7 +100,24 @@ export async function buildPlan(deps) {
     items.push(...dedupeDeletes(deletes));
   }
 
-  return applyIgnoreList(items.filter(validatePlanItem), settings.ignore || []);
+  return finalizePlan(items, settings);
+}
+
+// Single tail for every buildPlan return path (including cancellation): dedupe
+// tab-close/suspend actions by tab, drop malformed items, apply the ignore-list.
+export function dedupeTabActions(items) {
+  const seen = new Set();
+  return items.filter((it) => {
+    if (it.action !== 'closeTab' && it.action !== 'discardTab') return true;
+    const key = it.data && it.data.tabId;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function finalizePlan(items, settings) {
+  return applyIgnoreList(dedupeTabActions(items).filter(validatePlanItem), (settings && settings.ignore) || []);
 }
 
 // Runs a free-text natural-language instruction over the current tab set and

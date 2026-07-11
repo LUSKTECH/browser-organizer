@@ -35,12 +35,15 @@ async function applyItemInner(item, c) {
       const { tabId, url, title, windowId, index, pinned, bookmarkFirst } = item.data;
       const live = await c.tabs.get(tabId).catch(() => null);
       if (!live || live.url !== url) throw new StaleTabError(`Tab ${tabId} no longer matches ${url}`);
+      let savedBookmarkId = null;
       if (bookmarkFirst) {
         const folder = await ensureFolder(['Browser Organizer', 'Saved before closing'], c);
-        await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
+        const bm = await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
+        savedBookmarkId = bm && bm.id;
       }
       await c.tabs.remove(tabId);
-      return { undoId: undoId(), ts: Date.now(), action: 'closeTab', reverse: { url, windowId, index, pinned } };
+      // Record the safety bookmark so undo is a clean inverse (reopen + delete it).
+      return { undoId: undoId(), ts: Date.now(), action: 'closeTab', reverse: { url, windowId, index, pinned, savedBookmarkId } };
     }
     case 'groupTabs': {
       const { tabIds, groupName, color } = item.data;

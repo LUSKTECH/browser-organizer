@@ -2,6 +2,29 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
+import { dedupeTabActions, finalizePlan } from '../extension/lib/orchestrator.js';
+
+test('dedupeTabActions keeps one close/discard per tab (dupe+stale collision)', () => {
+  const items = [
+    { itemId: 'dupe-close-5', action: 'closeTab', data: { tabId: 5 } },
+    { itemId: 'close-5', action: 'closeTab', data: { tabId: 5 } },   // same tab, other source
+    { itemId: 'close-6', action: 'closeTab', data: { tabId: 6 } },
+    { itemId: 'group-0', action: 'groupTabs', data: { tabIds: [5, 6] } }, // untouched
+  ];
+  const out = dedupeTabActions(items);
+  assert.deepEqual(out.map((i) => i.itemId), ['dupe-close-5', 'close-6', 'group-0']);
+});
+
+test('finalizePlan dedupes, validates, and applies the ignore list', () => {
+  const items = [
+    { itemId: 'close-5', action: 'closeTab', status: 'pending', data: { tabId: 5, url: 'https://a.com' } },
+    { itemId: 'close-5b', action: 'closeTab', status: 'pending', data: { tabId: 5, url: 'https://a.com' } },
+    { action: 'bogus' }, // dropped by validatePlanItem
+  ];
+  const out = finalizePlan(items, { ignore: [] });
+  assert.equal(out.length, 1); // one valid close for tab 5
+});
+
 test('partitionForApply routes everything to review in review mode', () => {
   const items = [{ itemId: 'a' }, { itemId: 'b' }];
   const r = partitionForApply(items, { automationMode: 'review' });

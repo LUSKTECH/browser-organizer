@@ -41,7 +41,7 @@ export async function runCli({ command, args, prompt = '', usesStdin = false, en
       child.stderr.on('data', (d) => { stderr += d; });
       child.on('error', (err) => finish(reject, err));
       child.on('close', (code) => {
-        if (code === 0 || code === null) finish(resolve, stdout);
+        if (code === 0) finish(resolve, stdout);
         else finish(reject, new Error(`CLI exited ${code}: ${stderr.trim()}`));
       });
 
@@ -63,7 +63,7 @@ export async function cliVersion({ command, versionArgs = ['--version'], env, sp
     const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {}; reject(new Error('version check timed out')); }, timeoutMs);
     child.stdout.on('data', (d) => { out += d; });
     child.on('error', (err) => { clearTimeout(timer); reject(err); });
-    child.on('close', (code) => { clearTimeout(timer); (code === 0 || code === null) ? resolve({ version: out.trim() }) : reject(new Error(`version check exited ${code}`)); });
+    child.on('close', (code) => { clearTimeout(timer); code === 0 ? resolve({ version: out.trim() }) : reject(new Error(`version check exited ${code}`)); });
     if (child.stdin) child.stdin.end();
   });
 }

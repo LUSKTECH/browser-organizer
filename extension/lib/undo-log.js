@@ -24,8 +24,10 @@ export async function pruneUndo(now, retentionDays) {
 export async function reverseEntry(entry, chromeApi = chrome) {
   switch (entry.action) {
     case 'closeTab': {
-      const { url, windowId, index, pinned } = entry.reverse;
+      const { url, windowId, index, pinned, savedBookmarkId } = entry.reverse;
       await chromeApi.tabs.create({ url, windowId, index, pinned, active: false });
+      // Clean up the "Saved before closing" bookmark so undo is a true inverse.
+      if (savedBookmarkId) { try { await chromeApi.bookmarks.remove(savedBookmarkId); } catch { /* already gone */ } }
       return;
     }
     case 'groupTabs':

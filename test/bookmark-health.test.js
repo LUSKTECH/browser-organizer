@@ -78,12 +78,18 @@ test('checkDeadLinks flags 404 and connection errors, spares timeouts and 200', 
   assert.deepEqual(ids, ['2', '3']); // 404 + connection error; slow(200-ish timeout) and non-http skipped
 });
 
-test('recordDeadStrikes confirms only on the second consecutive failure', () => {
-  let { strikes, confirmed } = recordDeadStrikes({}, ['b1', 'b2']);
-  assert.deepEqual(confirmed, []);            // first strike, none confirmed
-  ({ strikes, confirmed } = recordDeadStrikes(strikes, ['b1']));
-  assert.deepEqual(confirmed, ['b1']);        // b1 failed twice
-  assert.equal(strikes.b2, undefined);        // b2 recovered -> strike cleared
+test('recordDeadStrikes: confirms on 2nd dead; carries forward unscanned; resets scanned-alive', () => {
+  // pass 1: both scanned and dead
+  let r = recordDeadStrikes({}, ['b1', 'b2'], ['b1', 'b2']);
+  assert.deepEqual(r.confirmed, []);
+  assert.deepEqual(r.strikes, { b1: 1, b2: 1 });
+  // pass 2: a DIFFERENT slice — only b1 scanned, still dead -> confirmed; b2 carried forward
+  r = recordDeadStrikes(r.strikes, ['b1'], ['b1']);
+  assert.deepEqual(r.confirmed, ['b1']);
+  assert.equal(r.strikes.b2, 1, 'unscanned bookmark keeps its strike (the pagination bug fix)');
+  // pass 3: b1 scanned and now alive -> strike reset
+  r = recordDeadStrikes(r.strikes, [], ['b1']);
+  assert.equal(r.strikes.b1, undefined);
 });
 
 test('dead-link check uses HEAD, treats 3xx as alive, skips private hosts', async () => {

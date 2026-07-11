@@ -41,12 +41,13 @@ test('closeTab removes the tab and returns a reopen undo entry', async () => {
   assert.equal(undo.reverse.url, 'https://a.com');
 });
 
-test('closeTab with bookmarkFirst saves before closing', async () => {
+test('closeTab with bookmarkFirst saves before closing and records the bookmark for undo', async () => {
   const chrome = makeChrome();
   const item = { action: 'closeTab', data: { tabId: 3, url: 'https://a.com', title: 'A', windowId: 1, index: 2, pinned: false, bookmarkFirst: true } };
-  await applyItem(item, { chrome });
+  const undo = await applyItem(item, { chrome });
   assert.equal(chrome._created.length, 3); // 2 folders + 1 bookmark
   assert.equal(chrome._created.at(-1).url, 'https://a.com');
+  assert.equal(undo.reverse.savedBookmarkId, chrome._created.at(-1).id); // recorded so undo can delete it
 });
 
 test('groupTabs groups and titles the group', async () => {

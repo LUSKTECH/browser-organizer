@@ -15,7 +15,7 @@ export function findDuplicateTabs(tabs) {
     for (const t of group) {
       if (t.tabId === keep.tabId || t.pinned) continue;
       items.push({
-        itemId: `close-${t.tabId}`,
+        itemId: `dupe-close-${t.tabId}`,
         action: 'closeTab',
         status: 'pending',
         reason: `Duplicate of "${keep.title || keep.url}"`,

@@ -28,6 +28,16 @@ test('pruneUndo persists the filtered log', async () => {
   assert.equal(log.length, 0);
 });
 
+test('reverseEntry closeTab reopens the tab and deletes the safety bookmark', async () => {
+  const calls = [];
+  const chrome = {
+    tabs: { async create(x) { calls.push(['create', x]); } },
+    bookmarks: { async remove(id) { calls.push(['bmRemove', id]); } },
+  };
+  await reverseEntry({ action: 'closeTab', reverse: { url: 'https://a', windowId: 1, index: 0, pinned: false, savedBookmarkId: '99' } }, chrome);
+  assert.deepEqual(calls, [['create', { url: 'https://a', windowId: 1, index: 0, pinned: false, active: false }], ['bmRemove', '99']]);
+});
+
 test('reverseEntry dispatches by action', async () => {
   const calls = [];
   const chrome = {

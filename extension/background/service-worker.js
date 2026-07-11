@@ -150,10 +150,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else if (message.cmd === 'undo') {
         const log = await getUndoLog();
         const chosen = log.filter((e) => message.undoIds.includes(e.undoId));
-        for (const entry of chosen) { try { await reverseEntry(entry, chrome); } catch { /* skip */ } }
-        const remaining = log.filter((e) => !message.undoIds.includes(e.undoId));
-        await chrome.storage.local.set({ undoLog: remaining });
-        sendResponse({ ok: true, undone: chosen.length });
+        const undoneIds = [];
+        for (const entry of chosen) {
+          try { await reverseEntry(entry, chrome); undoneIds.push(entry.undoId); } catch { /* keep entry so the user can retry */ }
+        }
+        // Only drop entries whose reversal actually succeeded.
+        const undoneSet = new Set(undoneIds);
+        await chrome.storage.local.set({ undoLog: log.filter((e) => !undoneSet.has(e.undoId)) });
+        sendResponse({ ok: true, undone: undoneIds.length, failed: chosen.length - undoneIds.length });
       } else if (message.cmd === 'getUndo') {
         sendResponse({ ok: true, entries: await getUndoLog() });
       } else if (message.cmd === 'command') {
