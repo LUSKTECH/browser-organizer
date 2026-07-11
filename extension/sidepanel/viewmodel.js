@@ -129,14 +129,29 @@ export function formatElapsed(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-const ADAPTER_LABELS = { claude: 'Claude CLI', antigravity: 'Antigravity CLI', kiro: 'Kiro CLI', copilot: 'Copilot CLI', codex: 'Codex CLI', ollama: 'Ollama' };
+const ADAPTER_LABELS = { claude: 'Claude CLI', antigravity: 'Antigravity CLI', kiro: 'Kiro CLI', copilot: 'Copilot CLI', codex: 'Codex CLI', ollama: 'Ollama', openai: 'OpenAI-compatible API' };
 const ADAPTER_CMDS = { claude: 'claude', antigravity: 'agy', kiro: 'kiro-cli', copilot: 'copilot', codex: 'codex', ollama: 'ollama' };
+// Adapters that talk HTTP with a host-side key instead of spawning a CLI — their
+// fix-it guidance is "set the env key", not "install/sign-in to a CLI".
+const API_ADAPTERS = new Set(['openai']);
 
 export function healthMessage(health, extensionId = '<your-extension-id>') {
   const key = health && health.adapter;
   const label = ADAPTER_LABELS[key] || 'Claude CLI';
   const cmd = ADAPTER_CMDS[key] || 'claude';
   if (health && health.ready) return { ok: true, text: `${label} connected (${health.version || 'ok'})` };
+  if (API_ADAPTERS.has(key)) {
+    return {
+      ok: false,
+      text: [
+        `Can't reach the ${label}.`,
+        'Fix: set your key in the helper app’s environment, then reopen this panel:',
+        '    BROWSER_ORGANIZER_OPENAI_API_KEY=sk-…',
+        'Optional: BROWSER_ORGANIZER_OPENAI_BASE_URL (default https://api.openai.com/v1)',
+        '          BROWSER_ORGANIZER_OPENAI_MODEL (default gpt-4o-mini)',
+      ].join('\n'),
+    };
+  }
   const err = String((health && health.error) || '');
   // Two very different causes need two different fixes. Native-messaging
   // connection failures ("host not found/disconnected") mean the helper isn't

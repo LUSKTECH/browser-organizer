@@ -4,6 +4,7 @@ import { kiroAdapter } from './kiro.js';
 import { copilotAdapter } from './copilot.js';
 import { codexAdapter } from './codex.js';
 import { ollamaAdapter } from './ollama.js';
+import { openaiAdapter } from './openai.js';
 
 const ADAPTERS = new Map([
   [claudeAdapter.name, claudeAdapter],
@@ -12,6 +13,7 @@ const ADAPTERS = new Map([
   [copilotAdapter.name, copilotAdapter],
   [codexAdapter.name, codexAdapter],
   [ollamaAdapter.name, ollamaAdapter],
+  [openaiAdapter.name, openaiAdapter],
 ]);
 
 export function getAdapter(name) {

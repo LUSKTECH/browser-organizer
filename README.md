@@ -10,11 +10,12 @@ clean up stale/dead/duplicate bookmarks. All page/tab/bookmark data stays on you
 - Chrome 116+ or Edge (Chromium)
 
 ## AI backends
-The extension talks to a local AI CLI through the native host. Pick one in
-**Settings → AI backend**; the host runs it headlessly. All keep processing on
-your machine (only the CLI's own subscription traffic leaves).
+The extension talks to a local AI CLI — or, optionally, an OpenAI-compatible
+HTTP API — through the native host. Pick one in **Settings → AI backend**; the
+host runs it headlessly. All keep secrets host-side (never in the extension);
+only the backend's own provider traffic leaves your machine.
 
-| Backend | CLI | Invocation | Auth |
+| Backend | CLI/transport | Invocation | Auth |
 |---------|-----|-----------|------|
 | **Claude Code** (default) | `claude` | `claude -p --output-format json` | persisted `claude` login |
 | **Antigravity** | `agy` | `agy -p "<prompt>" --yes --no-color` | persisted `agy` login, or `GEMINI_API_KEY` / `ANTIGRAVITY_API_KEY` |
@@ -22,6 +23,7 @@ your machine (only the CLI's own subscription traffic leaves).
 | **GitHub Copilot** | `copilot` | `copilot -p "<prompt>" -s --no-ask-user` | Copilot subscription via `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / existing `gh` login |
 | **OpenAI Codex** | `codex` | `codex exec --skip-git-repo-check "<prompt>"` | persisted ChatGPT login, or `OPENAI_API_KEY` |
 | **Ollama** (local) | `ollama` | `ollama run <model>` (prompt on stdin) | none — fully local; nothing leaves the machine |
+| **OpenAI-compatible API** | HTTP | `POST <base>/chat/completions` | `BROWSER_ORGANIZER_OPENAI_API_KEY` (host env) |
 
 The installer bakes the absolute path of each CLI it finds into the launcher. To
 override a binary location, set the matching env var: `BROWSER_ORGANIZER_CLI`
@@ -33,6 +35,20 @@ Claude prints plain text; the extension's prompts already request strict JSON,
 which the host extracts. For CLIs that need an API key, export it in the
 environment the browser (and thus the host) is launched from. **Ollama** runs
 models locally, so with it selected no tab/bookmark data leaves your machine.
+
+### OpenAI-compatible API backend
+The `openai` backend calls any `/chat/completions`-shaped endpoint directly from
+the native host (no CLI needed). Like every other backend, its credentials are
+resolved **host-side** — set them in the environment the browser/host launches
+from, never in the extension:
+
+- `BROWSER_ORGANIZER_OPENAI_API_KEY` — bearer token (required)
+- `BROWSER_ORGANIZER_OPENAI_BASE_URL` — default `https://api.openai.com/v1`
+- `BROWSER_ORGANIZER_OPENAI_MODEL` — default `gpt-4o-mini`
+
+Point `BASE_URL` at OpenAI, OpenRouter, Groq, Together, or a local server
+(LM Studio, vLLM) — one adapter covers them all. Unlike the CLI subscriptions,
+this path is **metered/pay-per-token**; a local endpoint keeps data on-device.
 
 ## Install (developer / unpacked)
 1. Load the extension:

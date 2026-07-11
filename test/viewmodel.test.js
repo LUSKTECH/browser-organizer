@@ -142,6 +142,15 @@ test('healthMessage labels the connected adapter', () => {
   assert.deepEqual(healthMessage({ ready: true, version: '1.3', adapter: 'copilot' }), { ok: true, text: 'Copilot CLI connected (1.3)' });
   assert.deepEqual(healthMessage({ ready: true, version: '0.9', adapter: 'codex' }), { ok: true, text: 'Codex CLI connected (0.9)' });
   assert.deepEqual(healthMessage({ ready: true, version: '0.5', adapter: 'ollama' }), { ok: true, text: 'Ollama connected (0.5)' });
+  assert.deepEqual(healthMessage({ ready: true, version: 'openai-compatible (gpt-4o)', adapter: 'openai' }), { ok: true, text: 'OpenAI-compatible API connected (openai-compatible (gpt-4o))' });
+});
+
+test('healthMessage: openai adapter gives API-key guidance, not a CLI install step', () => {
+  const m = healthMessage({ ready: false, error: 'OpenAI API 401', adapter: 'openai' }, 'abcdef123');
+  assert.equal(m.ok, false);
+  assert.match(m.text, /BROWSER_ORGANIZER_OPENAI_API_KEY/);
+  assert.match(m.text, /OpenAI-compatible API/);
+  assert.doesNotMatch(m.text, /install-host|--version/); // not CLI-flavored
 });
 
 test('healthMessage: host-missing error gives the install-host step with the real extension id', () => {
