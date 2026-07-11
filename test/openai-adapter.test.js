@@ -97,6 +97,23 @@ test('health GETs /models and returns a version; throws on non-2xx / missing key
   });
 });
 
+test('run refuses cleartext http to a non-loopback base, allows loopback http', async () => {
+  await withEnv({ [KEY]: 'k', [BASE]: 'http://api.example.com/v1' }, async () => {
+    await assert.rejects(() => openaiAdapter.run('p', { fetchFn: () => { throw new Error('should not fetch'); } }), /must be https/);
+  });
+  await withEnv({ [KEY]: 'k', [BASE]: 'http://127.0.0.1:1234/v1' }, async () => {
+    const fetchFn = () => Promise.resolve(okJson({ choices: [{ message: { content: '{}' } }] }));
+    assert.equal(await openaiAdapter.run('p', { fetchFn }), '{}'); // loopback http is allowed
+  });
+});
+
+test('run rejects an over-cap response body (content-length)', async () => {
+  await withEnv({ [KEY]: 'k' }, async () => {
+    const huge = { ok: true, status: 200, headers: { get: (h) => (h === 'content-length' ? String(50 * 1024 * 1024) : null) }, async json() { return {}; }, async text() { return ''; } };
+    await assert.rejects(() => openaiAdapter.run('p', { fetchFn: () => Promise.resolve(huge) }), /exceeded size limit/);
+  });
+});
+
 test('resolvers apply defaults and env overrides', async () => {
   await withEnv({}, async () => {
     assert.equal(resolveKey(), '');

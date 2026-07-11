@@ -164,6 +164,14 @@ test('runCli rejects on spawn error', async () => {
   await assert.rejects(() => runCli({ command: 'x', args: [], spawnFn }), /spawn failed/);
 });
 
+test('runCli rejects (does not crash) when child stdin emits an error', async () => {
+  const spawnFn = () => ({
+    stdout: { on() {} }, stderr: { on() {} }, on() {}, kill() {},
+    stdin: { on(ev, cb) { if (ev === 'error') setTimeout(() => cb(new Error('EPIPE')), 0); }, write() {}, end() {} },
+  });
+  await assert.rejects(() => runCli({ command: 'x', args: [], usesStdin: true, spawnFn, timeoutMs: 5000 }), /EPIPE/);
+});
+
 test('cliVersion returns version and rejects on nonzero exit', async () => {
   const ok = await cliVersion({ command: 'x', spawnFn: makeFakeSpawn(() => ({ stdout: '1.2.3' })) });
   assert.match(ok.version, /1\.2\.3/);
@@ -198,7 +206,7 @@ test('install() writes launcher + manifest (linux) and returns registry commands
     const win = install({ extensionId: 'abc123', browsers: ['chrome'], platform: 'win32', home, hostDir, nodePath: 'C:\\node.exe' });
     assert.ok(win.some((f) => f.endsWith('run.bat')));
     assert.equal(win._registryCommands.length, 1);
-    assert.match(win._registryCommands[0], /reg add/);
+    assert.deepEqual(win._registryCommands[0].slice(0, 2), ['reg', 'add']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(hostDir, { recursive: true, force: true });

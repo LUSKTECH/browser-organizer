@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { CLI_ADAPTERS } from '../native-host/adapters/catalog.js';
 
 export const HOST_NAME = 'com.browser_organizer.host';
 
@@ -48,11 +49,13 @@ const WIN_REG_ROOTS = {
   chromium: 'HKCU\\Software\\Chromium\\NativeMessagingHosts',
 };
 
+// Returns argv arrays (not shell strings) so they can be run without a shell —
+// no metacharacter injection from a manifest path containing " & % etc.
 export function registryCommands(browsers, manifestPath) {
   return browsers.map((b) => {
     const root = WIN_REG_ROOTS[b];
     if (!root) throw new Error(`Unsupported browser for win32: ${b}`);
-    return `reg add "${root}\\${HOST_NAME}" /ve /t REG_SZ /d "${manifestPath}" /f`;
+    return ['reg', 'add', `${root}\\${HOST_NAME}`, '/ve', '/t', 'REG_SZ', '/d', manifestPath, '/f'];
   });
 }
 
@@ -67,17 +70,10 @@ export function resolveCliPath(platform = process.platform, spawnSyncFn = spawnS
   } catch { return null; }
 }
 
-export function buildLauncherScript({ platform, nodePath, hostEntry, cliPath, agyPath, kiroPath, copilotPath, codexPath, ollamaPath }) {
-  // Bake absolute CLI paths (when found) so the host resolves each adapter's
-  // binary even under a bare browser launch environment.
-  const vars = [
-    ['BROWSER_ORGANIZER_CLI', cliPath],
-    ['BROWSER_ORGANIZER_ANTIGRAVITY_CMD', agyPath],
-    ['BROWSER_ORGANIZER_KIRO_CMD', kiroPath],
-    ['BROWSER_ORGANIZER_COPILOT_CMD', copilotPath],
-    ['BROWSER_ORGANIZER_CODEX_CMD', codexPath],
-    ['BROWSER_ORGANIZER_OLLAMA_CMD', ollamaPath],
-  ].filter(([, v]) => v);
+export function buildLauncherScript({ platform, nodePath, hostEntry, vars = [] }) {
+  // `vars` is [[ENV_NAME, absolutePath], …] for each CLI found; bake them so the
+  // host resolves each adapter's binary even under a bare browser launch env.
+  vars = vars.filter(([, v]) => v);
   if (platform === 'win32') {
     const sets = vars.map(([k, v]) => `set "${k}=${v}"\r\n`).join('');
     return `@echo off\r\n${sets}"${nodePath}" "${hostEntry}" %*\r\n`;
@@ -95,14 +91,10 @@ export function install({ extensionId, browsers, platform = process.platform, ho
   const hostEntry = path.join(nativeHostDir, 'host.js');
 
   const isWin = platform === 'win32';
-  const cliPath = resolveCliPath(platform);
-  const agyPath = resolveCliPath(platform, spawnSync, 'agy');
-  const kiroPath = resolveCliPath(platform, spawnSync, 'kiro-cli');
-  const copilotPath = resolveCliPath(platform, spawnSync, 'copilot');
-  const codexPath = resolveCliPath(platform, spawnSync, 'codex');
-  const ollamaPath = resolveCliPath(platform, spawnSync, 'ollama');
+  // Resolve every catalogued adapter's binary path in one pass (declarative).
+  const vars = CLI_ADAPTERS.map((a) => [a.cmdEnv, resolveCliPath(platform, spawnSync, a.bin)]);
   const launcher = path.join(nativeHostDir, isWin ? 'run.bat' : 'run.sh');
-  fs.writeFileSync(launcher, buildLauncherScript({ platform, nodePath, hostEntry, cliPath, agyPath, kiroPath, copilotPath, codexPath, ollamaPath }));
+  fs.writeFileSync(launcher, buildLauncherScript({ platform, nodePath, hostEntry, vars }));
   if (!isWin) fs.chmodSync(launcher, 0o700);
 
   if (isWin) {
@@ -136,9 +128,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   const files = install({ extensionId, browsers });
   console.log('Wrote:\n' + files.map((f) => '  ' + f).join('\n'));
   if (files._registryCommands) {
-    for (const cmd of files._registryCommands) {
-      console.log('Running: ' + cmd);
-      spawnSync(cmd, { shell: true, stdio: 'inherit' });
+    for (const argv of files._registryCommands) {
+      console.log('Running: ' + argv.join(' '));
+      spawnSync(argv[0], argv.slice(1), { stdio: 'inherit' }); // no shell → no metachar injection
     }
   }
 }

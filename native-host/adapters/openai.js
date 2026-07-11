@@ -22,9 +22,48 @@ const DEFAULT_MODEL = 'gpt-4o-mini';
 const DEFAULT_TIMEOUT = 120000;
 const HEALTH_TIMEOUT = 10000;
 
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // mirror the CLI adapters' output cap
+
 export function resolveKey() { return process.env[KEY_VAR] || ''; }
 export function resolveBase() { return (process.env[BASE_VAR] || DEFAULT_BASE).replace(/\/+$/, ''); }
 export function resolveModel() { return process.env[MODEL_VAR] || DEFAULT_MODEL; }
+
+// Refuse to send the bearer key over cleartext http, except to loopback (local
+// servers like LM Studio / vLLM). Returns the validated base URL.
+function checkedBase() {
+  const base = resolveBase();
+  let u;
+  try { u = new URL(base); } catch { throw new Error(`Invalid ${BASE_VAR}: ${base}`); }
+  const loopback = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]' || u.hostname === '::1';
+  if (u.protocol === 'http:' && !loopback) {
+    throw new Error(`${BASE_VAR} must be https:// (refusing to send the API key over cleartext http to ${u.hostname})`);
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(`${BASE_VAR} must be http(s): ${base}`);
+  return base;
+}
+
+// Read a response body with a hard size cap so a hostile/broken upstream can't
+// exhaust host memory. Streams when possible; falls back to text() otherwise.
+async function readCappedJson(res) {
+  const declared = Number(res.headers && res.headers.get && res.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) throw new Error('OpenAI API response exceeded size limit');
+  if (res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_RESPONSE_BYTES) { try { await reader.cancel(); } catch {} throw new Error('OpenAI API response exceeded size limit'); }
+      chunks.push(value);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  }
+  const text = await res.text();
+  if (text.length > MAX_RESPONSE_BYTES) throw new Error('OpenAI API response exceeded size limit');
+  return JSON.parse(text);
+}
 
 function authHeaders(key) {
   return { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
@@ -61,9 +100,9 @@ export const openaiAdapter = {
       messages: [{ role: 'user', content: prompt }],
       temperature: 0, // deterministic-ish: we want strict JSON, not creativity
     });
-    const res = await fetchWithTimeout(fetchFn, `${resolveBase()}/chat/completions`, { method: 'POST', headers: authHeaders(key), body }, timeoutMs);
+    const res = await fetchWithTimeout(fetchFn, `${checkedBase()}/chat/completions`, { method: 'POST', headers: authHeaders(key), body }, timeoutMs);
     if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${(await safeText(res)).slice(0, 200)}`);
-    const data = await res.json();
+    const data = await readCappedJson(res);
     const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     if (typeof content !== 'string') throw new Error('OpenAI API returned no message content');
     return content.trim();
@@ -72,7 +111,7 @@ export const openaiAdapter = {
     const key = resolveKey();
     if (!key) throw new Error(`OpenAI API key not set — set ${KEY_VAR} in the helper app's environment`);
     const fetchFn = opts.fetchFn || globalThis.fetch;
-    const res = await fetchWithTimeout(fetchFn, `${resolveBase()}/models`, { method: 'GET', headers: authHeaders(key) }, HEALTH_TIMEOUT);
+    const res = await fetchWithTimeout(fetchFn, `${checkedBase()}/models`, { method: 'GET', headers: authHeaders(key) }, HEALTH_TIMEOUT);
     if (!res.ok) throw new Error(`OpenAI API ${res.status}`);
     return { version: `openai-compatible (${resolveModel()})` };
   },

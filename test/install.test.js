@@ -26,19 +26,20 @@ test('buildHostManifest wires name, path, and allowed_origins', () => {
 });
 
 test('unix launcher exports the CLI path and a PATH before exec', () => {
-  const s = buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js', cliPath: '/home/u/.local/bin/claude' });
+  const s = buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js', vars: [['BROWSER_ORGANIZER_CLI', '/home/u/.local/bin/claude']] });
   assert.match(s, /^#!\/bin\/sh/);
   assert.match(s, /BROWSER_ORGANIZER_CLI="\/home\/u\/\.local\/bin\/claude"/);
   assert.match(s, /export PATH=/);
   assert.match(s, /exec "\/usr\/bin\/node" "\/x\/host\.js"/);
 });
 
-test('registryCommands builds HKCU reg add for chrome and edge', () => {
+test('registryCommands builds HKCU reg add argv (no shell) for chrome and edge', () => {
   const cmds = registryCommands(['chrome', 'edge'], 'C:\\hosts\\com.browser_organizer.host.json');
   assert.equal(cmds.length, 2);
-  assert.match(cmds[0], /HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com\.browser_organizer\.host/);
-  assert.match(cmds[1], /Microsoft\\Edge/);
-  assert.match(cmds[0], /C:\\hosts\\com\.browser_organizer\.host\.json/);
+  assert.deepEqual(cmds[0].slice(0, 3), ['reg', 'add', 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.browser_organizer.host']);
+  assert.ok(cmds[1][2].includes('Microsoft\\Edge'));
+  assert.ok(cmds[0].includes('C:\\hosts\\com.browser_organizer.host.json'));
+  assert.equal(cmds[0].at(-1), '/f');
 });
 
 test('winManifestPath is under the native host dir', () => {

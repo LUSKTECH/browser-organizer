@@ -40,6 +40,10 @@ export async function runCli({ command, args, prompt = '', usesStdin = false, en
       });
       child.stderr.on('data', (d) => { stderr += d; });
       child.on('error', (err) => finish(reject, err));
+      // A CLI that dies before reading stdin makes the write below emit EPIPE on
+      // the stdin stream; without this listener Node throws it uncaught and the
+      // whole native host process crashes, killing every in-flight request.
+      if (child.stdin && typeof child.stdin.on === 'function') child.stdin.on('error', (err) => finish(reject, err));
       child.on('close', (code) => {
         if (code === 0) finish(resolve, stdout);
         else finish(reject, new Error(`CLI exited ${code}: ${stderr.trim()}`));

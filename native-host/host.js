@@ -7,14 +7,9 @@ function send(obj) { process.stdout.write(encodeMessage(obj)); }
 const reader = createMessageReader();
 
 process.stdin.on('data', async (chunk) => {
-  let messages;
-  try {
-    messages = reader.push(chunk);
-  } catch (err) {
-    send({ id: null, ok: false, error: `Bad frame: ${err.message}` });
-    return;
-  }
+  const messages = reader.push(chunk);
   for (const msg of messages) {
+    if (msg && msg.frameError) { send({ id: null, ok: false, error: `Bad frame: ${msg.frameError}` }); continue; }
     try {
       const result = await handle(msg);
       send({ id: msg.id, ok: true, result });

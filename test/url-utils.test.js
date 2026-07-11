@@ -31,10 +31,27 @@ test('redactUrl strips query and fragment, keeps origin and path', () => {
   assert.equal(redactUrl('not a url'), 'not a url');
 });
 
+test('redactUrl strips embedded basic-auth credentials', () => {
+  assert.equal(redactUrl('https://admin:secret@host.com/p?q=1'), 'https://host.com/p');
+  assert.equal(redactUrl('https://user@host.com/'), 'https://host.com/');
+});
+
 test('isPrivateHost flags loopback and RFC-1918 ranges', () => {
   assert.equal(isPrivateHost('http://localhost/x'), true);
   assert.equal(isPrivateHost('http://127.0.0.1/x'), true);
   assert.equal(isPrivateHost('http://192.168.1.1/'), true);
   assert.equal(isPrivateHost('http://10.0.0.5/'), true);
   assert.equal(isPrivateHost('https://example.com/'), false);
+});
+
+test('isPrivateHost flags IPv6 ULA/link-local, 0.0.0.0, and encoded IPv4; fails closed', () => {
+  assert.equal(isPrivateHost('http://[::1]/'), true);          // v6 loopback
+  assert.equal(isPrivateHost('http://[fd00::1]/'), true);      // v6 ULA
+  assert.equal(isPrivateHost('http://[fe80::1]/'), true);      // v6 link-local
+  assert.equal(isPrivateHost('http://[2606:4700::1111]/'), false); // public v6
+  assert.equal(isPrivateHost('http://0.0.0.0/'), true);
+  assert.equal(isPrivateHost('http://2130706433/'), true);     // decimal 127.0.0.1
+  assert.equal(isPrivateHost('http://0x7f000001/'), true);     // hex 127.0.0.1
+  assert.equal(isPrivateHost('not a url'), true);              // fail closed
+  assert.equal(isPrivateHost('http://fcbarcelona.com/'), false); // 'fc' hostname is NOT v6 ULA
 });

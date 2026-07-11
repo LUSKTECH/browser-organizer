@@ -8,7 +8,8 @@ export function makeFakeSpawn(behavior) {
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     let stdin = '';
-    child.stdin = { write(d) { stdin += d; }, end() {
+    const stdinEvents = new EventEmitter();
+    child.stdin = { on: (...a) => stdinEvents.on(...a), emit: (...a) => stdinEvents.emit(...a), write(d) { stdin += d; }, end() {
       const { stdout = '', stderr = '', code = 0, delay = 0 } = behavior(stdin, command, args, options) || {};
       setTimeout(() => {
         if (stdout) child.stdout.emit('data', Buffer.from(stdout));

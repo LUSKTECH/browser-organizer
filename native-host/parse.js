@@ -43,16 +43,39 @@ export function parseJsonBlock(text) {
 
 const COLORS = new Set(['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']);
 
-export function parseGroupResult(text) {
-  const obj = parseJsonBlock(text);
-  if (!obj || !Array.isArray(obj.groups)) throw new Error('Expected {"groups":[...]}');
-  return obj.groups
+// Normalizers operate on an already-parsed array (reused by the command path
+// without a JSON re-serialize round-trip); the parse* wrappers add text parsing.
+export function normalizeGroups(groups) {
+  if (!Array.isArray(groups)) throw new Error('Expected {"groups":[...]}');
+  return groups
     .map((g) => ({
       name: String(g.name ?? 'Group').slice(0, 40),
       color: COLORS.has(g.color) ? g.color : 'grey',
       tabIds: (Array.isArray(g.tabIds) ? g.tabIds : []).map(Number).filter(Number.isInteger),
     }))
     .filter((g) => g.tabIds.length > 0);
+}
+
+export function normalizeImportant(important) {
+  if (!Array.isArray(important)) throw new Error('Expected {"important":[...]}');
+  return important
+    .filter((i) => Number.isInteger(Number(i.tabId)))
+    .map((i) => ({
+      tabId: Number(i.tabId),
+      folderPath: (Array.isArray(i.folderPath) ? i.folderPath : []).map(String).filter(Boolean),
+      reason: String(i.reason ?? ''),
+    }));
+}
+
+function normalizeClose(close) {
+  return (Array.isArray(close) ? close : [])
+    .filter((c) => Number.isInteger(Number(c.tabId)))
+    .map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark }));
+}
+
+export function parseGroupResult(text) {
+  const obj = parseJsonBlock(text);
+  return normalizeGroups(obj && obj.groups);
 }
 
 export function parseStaleResult(text) {
@@ -65,21 +88,14 @@ export function parseStaleResult(text) {
 
 export function parseImportantResult(text) {
   const obj = parseJsonBlock(text);
-  if (!obj || !Array.isArray(obj.important)) throw new Error('Expected {"important":[...]}');
-  return obj.important
-    .filter((i) => Number.isInteger(Number(i.tabId)))
-    .map((i) => ({
-      tabId: Number(i.tabId),
-      folderPath: (Array.isArray(i.folderPath) ? i.folderPath : []).map(String).filter(Boolean),
-      reason: String(i.reason ?? ''),
-    }));
+  return normalizeImportant(obj && obj.important);
 }
 
 export function parseCommandResult(text) {
   const obj = parseJsonBlock(text) || {}; // model may emit literal null
   return {
-    close: Array.isArray(obj.close) ? obj.close.filter((c) => Number.isInteger(Number(c.tabId))).map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark })) : [],
-    groups: Array.isArray(obj.groups) ? parseGroupResult(JSON.stringify({ groups: obj.groups })) : [],
-    important: Array.isArray(obj.important) ? parseImportantResult(JSON.stringify({ important: obj.important })) : [],
+    close: normalizeClose(obj.close),
+    groups: Array.isArray(obj.groups) ? normalizeGroups(obj.groups) : [],
+    important: Array.isArray(obj.important) ? normalizeImportant(obj.important) : [],
   };
 }
