@@ -5,12 +5,11 @@ function stripAnsi(s) {
   return s.replace(/\[[0-9;?]*[a-zA-Z]/g, '');
 }
 
-// Extract the first *balanced* {…} or […] block starting at `open`, respecting
+// Extract the *balanced* {…}/[…] block that starts at index `start`, respecting
 // string literals/escapes so a brace inside a string doesn't end it early.
-function extractBalanced(t, open) {
+function extractBalancedAt(t, start) {
+  const open = t[start];
   const close = open === '{' ? '}' : ']';
-  const start = t.indexOf(open);
-  if (start < 0) return null;
   let depth = 0, inStr = false, esc = false;
   for (let i = start; i < t.length; i++) {
     const c = t[i];
@@ -32,10 +31,12 @@ export function parseJsonBlock(text) {
   try { return JSON.parse(t); } catch { /* try harder */ }
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) { try { return JSON.parse(fence[1].trim()); } catch { /* fall through */ } }
-  // Prefer an object (all our expected shapes are objects), then an array.
-  for (const open of ['{', '[']) {
-    const block = extractBalanced(t, open);
-    if (block) { try { return JSON.parse(block); } catch { /* fall through */ } }
+  // Scan every { or [ and return the first balanced block that parses — handles
+  // adapters that print prose (even prose with braces) before the JSON answer.
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] !== '{' && t[i] !== '[') continue;
+    const block = extractBalancedAt(t, i);
+    if (block) { try { return JSON.parse(block); } catch { /* keep scanning */ } }
   }
   throw new Error('No JSON found in model output');
 }
@@ -75,7 +76,7 @@ export function parseImportantResult(text) {
 }
 
 export function parseCommandResult(text) {
-  const obj = parseJsonBlock(text);
+  const obj = parseJsonBlock(text) || {}; // model may emit literal null
   return {
     close: Array.isArray(obj.close) ? obj.close.filter((c) => Number.isInteger(Number(c.tabId))).map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark })) : [],
     groups: Array.isArray(obj.groups) ? parseGroupResult(JSON.stringify({ groups: obj.groups })) : [],

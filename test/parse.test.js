@@ -18,6 +18,17 @@ test('parseJsonBlock throws when no JSON present', () => {
   assert.throws(() => parseJsonBlock('nothing here'), /No JSON/);
 });
 
+test('parseJsonBlock skips prose-with-braces before the JSON answer', () => {
+  assert.deepEqual(
+    parseJsonBlock('Here is my plan {step 1}. Answer: {"groups":[{"name":"X","tabIds":[1]}]}'),
+    { groups: [{ name: 'X', tabIds: [1] }] },
+  );
+});
+
+test('parseCommandResult tolerates null/primitive model output', () => {
+  assert.deepEqual(parseCommandResult('null'), { close: [], groups: [], important: [] });
+});
+
 test('parseJsonBlock strips ANSI color codes and a leading label (kiro-shaped)', () => {
   const kiro = '[38;5;141m> [0m[1mjson\n[0m[38;5;10m{"groups":[{"name":"Dev","tabIds":[1]}]}\n[0m';
   assert.deepEqual(parseJsonBlock(kiro), { groups: [{ name: 'Dev', tabIds: [1] }] });

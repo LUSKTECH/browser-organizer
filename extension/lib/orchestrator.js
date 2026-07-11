@@ -6,7 +6,7 @@ import { findDuplicateBookmarks, findStaleBookmarks, getVisitsMap, checkDeadLink
 import { findDuplicateTabs } from './tab-health.js';
 import { applyItem as defaultApplyItem } from './executor.js';
 import { recordUndo as defaultRecordUndo } from './undo-log.js';
-import { redactUrl } from './url-utils.js';
+import { redactUrl, isPrivateHost } from './url-utils.js';
 
 export function partitionForApply(items, settings) {
   if (settings.automationMode !== 'auto') return { autoApply: [], needsReview: items };
@@ -17,8 +17,16 @@ export function partitionForApply(items, settings) {
 
 // What we actually send to the native host: a minimal, explicit projection so
 // no incidental tab fields (or future additions) leak to the model.
+// Coarsen private/loopback hosts to origin-only so internal paths (tokens, IDs)
+// on localhost / RFC-1918 / *.local aren't sent to the AI provider; public hosts
+// keep their path (needed for grouping) with query+fragment redacted.
+function safeUrlForModel(url) {
+  if (isPrivateHost(url)) { try { return new URL(url).origin; } catch { return ''; } }
+  return redactUrl(url);
+}
+
 export function projectTabsForHost(tabs) {
-  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: redactUrl(t.url), idleDays: t.idleDays, pinned: !!t.pinned }));
+  return tabs.map((t) => ({ tabId: t.tabId, title: t.title, url: safeUrlForModel(t.url), idleDays: t.idleDays, pinned: !!t.pinned }));
 }
 
 // Builds the full plan for the enabled features. `deps` is injectable for tests;
@@ -45,7 +53,7 @@ export async function buildPlan(deps) {
   step('Finding duplicate tabs');
   if (shouldCancel()) return finalizePlan(items, settings);
   if (f.dupeTabs && tabs.length) {
-    items.push(...findDuplicateTabs(tabs));
+    try { items.push(...findDuplicateTabs(tabs)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); }
   }
 
   step('Grouping tabs');
@@ -53,34 +61,41 @@ export async function buildPlan(deps) {
   if (f.groupTabs && tabs.length) {
     // Respect existing Chrome tab groups: only offer to group currently-ungrouped
     // tabs, so re-running doesn't propose new groups over already-organized ones.
-    const ungrouped = tabs.filter((t) => (t.groupId ?? -1) === -1);
-    if (ungrouped.length) {
-      const r = await nativeClient.request({ type: 'organize', task: 'group', adapter, payload: { tabs: projectTabsForHost(ungrouped), rules } });
-      items.push(...mapGroupResult(r.groups, byId));
-    }
+    try {
+      const ungrouped = tabs.filter((t) => (t.groupId ?? -1) === -1);
+      if (ungrouped.length) {
+        const r = await nativeClient.request({ type: 'organize', task: 'group', adapter, payload: { tabs: projectTabsForHost(ungrouped), rules } });
+        items.push(...mapGroupResult(r.groups, byId));
+      }
+    } catch (e) { console.warn('[organizer] grouping phase failed:', e); } // keep other results
   }
 
   step('Finding forgotten tabs');
   if (shouldCancel()) return finalizePlan(items, settings);
   if (f.staleTabs && tabs.length) {
-    const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays && !t.pinned); // never propose closing pinned tabs
-    if (stale.length) {
-      const candidateIds = new Set(stale.map((t) => t.tabId));
-      const r = await nativeClient.request({ type: 'organize', task: 'stale', adapter, payload: { tabs: projectTabsForHost(stale), thresholdDays: settings.staleTabDays, rules } });
-      items.push(...mapStaleResult(r.stale, byId, candidateIds));
-    }
+    try {
+      const stale = tabs.filter((t) => t.idleDays >= settings.staleTabDays && !t.pinned); // never propose closing pinned tabs
+      if (stale.length) {
+        const candidateIds = new Set(stale.map((t) => t.tabId));
+        const r = await nativeClient.request({ type: 'organize', task: 'stale', adapter, payload: { tabs: projectTabsForHost(stale), thresholdDays: settings.staleTabDays, rules } });
+        items.push(...mapStaleResult(r.stale, byId, candidateIds));
+      }
+    } catch (e) { console.warn('[organizer] stale-tabs phase failed:', e); }
   }
 
   step('Finding tabs to bookmark');
   if (shouldCancel()) return finalizePlan(items, settings);
   if (f.importantBookmarks && tabs.length) {
-    const r = await nativeClient.request({ type: 'organize', task: 'important', adapter, payload: { tabs: projectTabsForHost(tabs), rules } });
-    items.push(...mapImportantResult(r.important, byId));
+    try {
+      const r = await nativeClient.request({ type: 'organize', task: 'important', adapter, payload: { tabs: projectTabsForHost(tabs), rules } });
+      items.push(...mapImportantResult(r.important, byId));
+    } catch (e) { console.warn('[organizer] important-bookmarks phase failed:', e); }
   }
 
   step('Cleaning bookmarks');
   if (shouldCancel()) return finalizePlan(items, settings);
   if (f.cleanBookmarks) {
+   try {
     const bookmarks = await collectBookmarks(chromeApi);
     const visits = await getVisitsMap(bookmarks, chromeApi);
     const deletes = [];
@@ -103,6 +118,7 @@ export async function buildPlan(deps) {
       deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
     }
     items.push(...dedupeDeletes(deletes));
+   } catch (e) { console.warn('[organizer] bookmark-cleanup phase failed:', e); }
   }
 
   return finalizePlan(items, settings);
@@ -142,18 +158,21 @@ export function finalizePlan(items, settings) {
 // maps the model's response into the same PlanItem shape as buildPlan, so it
 // goes through the exact same review/apply/undo path.
 export async function runCommand(instruction, deps) {
-  const { nativeClient, chromeApi = chrome, now = Date.now(), windowId = null, decisions = {}, adapter = 'claude' } = deps;
+  const { nativeClient, chromeApi = chrome, now = Date.now(), windowId = null, settings = {} } = deps;
+  const adapter = settings.adapter || 'claude';
   const activity = (await chromeApi.storage.local.get('tabActivity')).tabActivity || {};
   const tabs = await collectTabs(chromeApi, activity, now, windowId);
   const byId = indexById(tabs);
   const candidateIds = new Set(tabs.map((t) => t.tabId));
-  const rules = decisionRules(decisions).keep.join('; ');
+  const rules = decisionRules(settings.decisions || {}).keep.join('; ');
   const r = await nativeClient.request({ type: 'command', adapter, payload: { instruction, tabs: projectTabsForHost(tabs), rules } });
-  return [
+  const items = [
     ...mapGroupResult(r.groups, byId),
     ...mapStaleResult(r.close, byId, candidateIds),
     ...mapImportantResult(r.important, byId),
-  ].filter(validatePlanItem);
+  ];
+  // Same safety tail as buildPlan: dedupe + validate + whitelist + ignore-list.
+  return finalizePlan(items, settings);
 }
 
 export async function hasAllUrls(chromeApi = chrome) {

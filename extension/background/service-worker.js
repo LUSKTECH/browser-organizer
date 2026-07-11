@@ -75,7 +75,7 @@ chrome.omnibox.onInputEntered.addListener(async (text) => {
   const win = await chrome.windows.getLastFocused();
   const client = createNativeClient();
   try {
-    const items = await runCommand(instruction, { nativeClient: client, windowId: win.id, decisions: settings.decisions || {}, adapter: settings.adapter });
+    const items = await runCommand(instruction, { nativeClient: client, windowId: win.id, settings });
     await chrome.storage.local.set({ currentPlan: items });
     await chrome.sidePanel.open({ windowId: win.id });
   } finally {
@@ -172,21 +172,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
         sendResponse({ ok: true, tabs });
       } else if (message.cmd === 'closeTabs') {
-        // Manual, explicit bulk close (no AI). Records undo so it's reversible.
+        // Manual, explicit bulk close (no AI). Records undo only for tabs that
+        // were actually removed, so "Undo" can't re-create still-open tabs.
         const runId = `run-${Date.now()}`;
         const entries = [];
-        const validIds = [];
         for (const id of message.tabIds || []) {
           const t = await chrome.tabs.get(id).catch(() => null);
           if (!t) continue;
-          validIds.push(id);
+          try { await chrome.tabs.remove(id); } catch { continue; }
           entries.push({ undoId: `${Date.now()}-${id}-${Math.random().toString(36).slice(2)}`, runId, ts: Date.now(), action: 'closeTab', label: `Close tab: ${t.title || t.url}`, reverse: { url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } });
         }
-        if (validIds.length) {
-          await chrome.tabs.remove(validIds).catch(() => {});
-          await recordUndo(entries);
-        }
-        sendResponse({ ok: true, closed: validIds.length });
+        if (entries.length) await recordUndo(entries);
+        sendResponse({ ok: true, closed: entries.length });
       } else if (message.cmd === 'getPlan') {
         const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
         sendResponse({ ok: true, items: currentPlan });
@@ -218,7 +215,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const settings = await getSettings();
         const nativeClient = createNativeClient();
         try {
-          const items = await runCommand(message.instruction, { nativeClient, windowId: message.windowId ?? null, decisions: settings.decisions || {}, adapter: settings.adapter });
+          const items = await runCommand(message.instruction, { nativeClient, windowId: message.windowId ?? null, settings });
           await chrome.storage.local.set({ currentPlan: items });
           sendResponse({ ok: true, items });
         } finally {

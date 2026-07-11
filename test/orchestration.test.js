@@ -2,7 +2,51 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
-import { dedupeTabActions, finalizePlan, applyWhitelist } from '../extension/lib/orchestrator.js';
+import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand } from '../extension/lib/orchestrator.js';
+
+test('runCommand applies whitelist + ignore-list via finalizePlan (safety controls hold on the command path)', async () => {
+  const chromeApi = {
+    storage: { local: { async get() { return {}; }, async set() {} } },
+    tabs: { async query() { return [
+      { id: 1, url: 'https://github.com/x', windowId: 1, index: 0 },
+      { id: 2, url: 'https://other.com/y', windowId: 1, index: 1 },
+    ]; } },
+  };
+  const nativeClient = { request: async () => ({ close: [{ tabId: 1, reason: 'a' }, { tabId: 2, reason: 'b' }], groups: [], important: [] }) };
+  const settings = { adapter: 'claude', decisions: {}, whitelist: ['github.com'], ignore: [] };
+  const items = await runCommand('close old tabs', { nativeClient, chromeApi, settings });
+  const urls = items.filter((i) => i.action === 'closeTab').map((i) => i.data.url);
+  assert.ok(!urls.some((u) => u.includes('github.com')), 'whitelisted host dropped on command path');
+  assert.ok(urls.some((u) => u.includes('other.com')), 'non-whitelisted tab kept');
+});
+
+test('projectTabsForHost coarsens private/localhost URLs to origin only', () => {
+  const out = projectTabsForHost([
+    { tabId: 1, title: 'a', url: 'https://example.com/path?q=1#f', idleDays: 1 },
+    { tabId: 2, title: 'b', url: 'http://192.168.1.1/admin/secret?token=x', idleDays: 1 },
+    { tabId: 3, title: 'c', url: 'http://localhost:8080/private/id', idleDays: 1 },
+  ]);
+  assert.equal(out[0].url, 'https://example.com/path'); // public: query stripped, path kept
+  assert.equal(out[1].url, 'http://192.168.1.1');       // private: origin only, path dropped
+  assert.equal(out[2].url, 'http://localhost:8080');    // localhost: origin only
+});
+
+test('buildPlan preserves free/local results when an AI phase throws', async () => {
+  const stored = {};
+  const chromeApi = {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: stored[k] } : { ...stored }; }, async set(o) { Object.assign(stored, o); } } },
+    tabs: { async query() { return [
+      { id: 1, url: 'https://a.com', windowId: 1, index: 0, pinned: false },
+      { id: 2, url: 'https://a.com', windowId: 1, index: 1, pinned: false }, // duplicate → local result
+    ]; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+  const nativeClient = { request: async () => { throw new Error('CLI crashed'); } };
+  const settings = { adapter: 'claude', enabledFeatures: { dupeTabs: true, groupTabs: true, staleTabs: false, importantBookmarks: false, cleanBookmarks: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  const items = await buildPlan({ settings, nativeClient, chromeApi, now: 1 });
+  assert.ok(items.some((i) => i.action === 'closeTab'), 'local dupe-tab result preserved despite the group phase throwing');
+});
 
 test('applyWhitelist drops destructive actions on protected domains (and subdomains)', () => {
   const items = [
