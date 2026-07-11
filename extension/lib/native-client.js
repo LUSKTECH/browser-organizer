@@ -39,7 +39,17 @@ export function createNativeClient(deps = {}) {
     });
   }
 
-  function disconnect() { if (port) { port.disconnect(); port = null; } }
+  // Intentionally tearing down the port: reject any in-flight requests and clear
+  // their timers. Chrome does NOT fire our own onDisconnect listener when we call
+  // port.disconnect() ourselves, so without this those promises would hang and
+  // their timeout timers would leak until they fire minutes later.
+  function disconnect() {
+    if (!port) return;
+    for (const [, entry] of pending) { clearTimeout(entry.timer); entry.reject(new Error('Native host disconnected')); }
+    pending.clear();
+    port.disconnect();
+    port = null;
+  }
 
   return { request, disconnect };
 }
