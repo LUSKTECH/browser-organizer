@@ -41,6 +41,14 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.alarms.create(ALARM_PRUNE, { periodInMinutes: 1440 });
 });
 
+// Keep the scheduled-scan cadence in sync when settings change (it's otherwise
+// frozen at the install-time default).
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area !== 'sync' || !changes.settings) return;
+  const settings = await getSettings();
+  await chrome.alarms.create(ALARM_SCAN, { periodInMinutes: settings.scanIntervalMinutes });
+});
+
 chrome.runtime.onStartup.addListener(async () => {
   const now = Date.now();
   const rawTabs = await chrome.tabs.query({});
@@ -143,10 +151,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
         const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
         await chrome.storage.local.set({ currentPlan: remaining });
-        const settings = await getSettings();
-        let decisions = settings.decisions || {};
-        for (const item of chosen.filter((i) => res.applied.includes(i.itemId))) decisions = recordDecision(decisions, item, 'approve');
-        await setSettings({ decisions });
         sendResponse({ ok: true, ...res });
       } else if (message.cmd === 'undo') {
         const log = await getUndoLog();

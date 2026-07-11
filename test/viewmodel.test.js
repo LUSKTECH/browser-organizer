@@ -105,9 +105,15 @@ test('digestText summarizes counts or says all tidy', () => {
   assert.match(digestText([]), /tidy|nothing/i);
 });
 
-test('toMarkdown renders groups with member links', () => {
-  const items = [{ action: 'groupTabs', data: { groupName: 'Dev', members: [{ title: 'MDN', url: 'https://mdn.dev' }] } }];
+test('toMarkdown renders groups with member links and includes non-group items', () => {
+  const items = [
+    { action: 'groupTabs', data: { groupName: 'Dev', members: [{ title: 'MDN', url: 'https://mdn.dev' }] } },
+    { action: 'closeTab', reason: 'Idle 30d', data: { title: 'Old tab', url: 'https://old.com' } },
+    { action: 'deleteBookmark', data: { title: 'Dead bookmark', url: 'https://dead.com' } },
+  ];
   const md = toMarkdown(items);
-  assert.match(md, /## Dev/);
+  assert.match(md, /\*\*Dev\*\*/);
   assert.match(md, /\[MDN\]\(https:\/\/mdn\.dev\)/);
+  assert.match(md, /\[Old tab\]\(https:\/\/old\.com\)/);   // non-group item included
+  assert.match(md, /\[Dead bookmark\]\(https:\/\/dead\.com\)/);
 });

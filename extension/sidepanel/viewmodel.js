@@ -99,11 +99,19 @@ export function digestText(items) {
 }
 
 export function toMarkdown(items) {
-  const groups = itemsForAction(items, 'groupTabs');
   const lines = ['# Browser Organizer export', ''];
-  for (const g of groups) {
-    lines.push(`## ${g.data.groupName}`);
-    for (const m of g.data.members || []) lines.push(`- [${m.title || m.url}](${m.url})`);
+  for (const [action, list] of Object.entries(groupByAction(items))) {
+    lines.push(`## ${actionLabel(action)}`);
+    for (const it of list) {
+      if (action === 'groupTabs') {
+        lines.push(`- **${it.data.groupName}**`);
+        for (const m of it.data.members || []) lines.push(`  - [${m.title || m.url}](${m.url})`);
+      } else {
+        const label = it.data.title || it.data.url || '';
+        const reason = it.reason ? ` — ${it.reason}` : '';
+        lines.push(it.data.url ? `- [${label}](${it.data.url})${reason}` : `- ${label}${reason}`);
+      }
+    }
     lines.push('');
   }
   return lines.join('\n');

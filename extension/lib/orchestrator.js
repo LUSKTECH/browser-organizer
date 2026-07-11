@@ -162,25 +162,22 @@ export function ignoreKey(item) {
   return `${item.action}:${redactUrl(String(target))}`;
 }
 
-// Tracks per-target approve/reject counts so repeated rejections become
-// "do not suggest this again" rules fed back into future prompts, and
-// repeated approvals could relax caution (surfaced via decisionRules().drop).
+// Only rejections drive behavior: repeated "never suggest this" become rules
+// fed back into future prompts. (The approve/"relax caution" side was never
+// wired and was removed — it risked auto-acting on merely-often-approved targets.)
 export function recordDecision(decisions, item, verdict) {
+  if (verdict !== 'reject') return decisions;
   const key = ignoreKey(item);
-  const prev = decisions[key] || { approve: 0, reject: 0 };
-  const next = { ...prev, [verdict === 'reject' ? 'reject' : 'approve']: (verdict === 'reject' ? prev.reject : prev.approve) + 1 };
-  return { ...decisions, [key]: next };
+  const prev = decisions[key] || {};
+  return { ...decisions, [key]: { reject: (prev.reject || 0) + 1 } };
 }
 
 export function decisionRules(decisions) {
   const keep = [];
-  const drop = [];
   for (const [key, v] of Object.entries(decisions)) {
-    const target = key.split(':').slice(1).join(':');
-    if (v.reject >= 2) keep.push(`Do not suggest actions on ${target}`);
-    if (v.approve >= 3) drop.push(target);
+    if (v.reject >= 2) keep.push(`Do not suggest actions on ${key.split(':').slice(1).join(':')}`);
   }
-  return { keep, drop };
+  return { keep };
 }
 
 export function applyIgnoreList(items, ignore = []) {

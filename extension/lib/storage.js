@@ -11,7 +11,6 @@ export const DEFAULTS = {
   whitelist: [],                       // protected domains — never close/discard/delete their tabs/bookmarks
   decisions: {},                       // per-target approve/reject counters (see recordDecision in orchestrator.js)
   adapter: 'claude',                   // native host adapter name
-  cliCommand: 'claude',                // override if the CLI binary is elsewhere
   scanIntervalMinutes: 720,           // auto-run cadence (12h)
 };
 

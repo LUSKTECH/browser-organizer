@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveCommand, resolveArgs, tmpBase } from '../config.js';
+import { resolveCommand, resolveArgs, tmpBase, hostEnv } from '../config.js';
 
 const MAX_STDOUT = 5 * 1024 * 1024; // 5 MB hard cap against runaway output
 
@@ -24,7 +24,7 @@ export const claudeAdapter = {
       return await new Promise((resolve, reject) => {
         let child;
         try {
-          child = spawnFn(command, args, { cwd, env: { PATH: process.env.PATH } });
+          child = spawnFn(command, args, { cwd, env: hostEnv([]) });
         } catch (err) { reject(err); return; }
 
         let stdout = '';
@@ -67,7 +67,7 @@ export const claudeAdapter = {
     return await new Promise((resolve, reject) => {
       let out = '';
       let child;
-      try { child = spawnFn(command, ['--version'], { env: { PATH: process.env.PATH } }); }
+      try { child = spawnFn(command, ['--version'], { env: hostEnv([]) }); }
       catch (err) { reject(err); return; }
       const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {}; reject(new Error('version check timed out')); }, 10000);
       child.stdout.on('data', (d) => { out += d; });
