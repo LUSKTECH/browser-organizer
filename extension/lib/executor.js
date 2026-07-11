@@ -1,10 +1,11 @@
-const COLORS = new Set(['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']);
+import { TAB_GROUP_COLORS } from './colors.js';
+import { ACTION_LABELS } from './labels.js';
+import { uniqueId as undoId } from './ids.js';
+
+const COLORS = new Set(TAB_GROUP_COLORS);
 
 export class StaleTabError extends Error {}
 
-function undoId() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
-
-const ACTION_LABELS = { closeTab: 'Close tab', groupTabs: 'Group tabs', createBookmark: 'Bookmark', deleteBookmark: 'Delete bookmark', discardTab: 'Suspend tab' };
 function labelFor(item) {
   const name = item.data.title || item.data.groupName || item.data.url || '';
   return `${ACTION_LABELS[item.action] || item.action}: ${name}`.trim();

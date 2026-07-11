@@ -7,7 +7,7 @@ import {
   allItemIds, filterPlan, needsBulkConfirm, destructiveCount, adapterNote, formatElapsed,
 } from './viewmodel.js';
 
-const GROUP_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+import { TAB_GROUP_COLORS as GROUP_COLORS } from '../lib/colors.js';
 
 let plan = [];
 let selection = new Set();

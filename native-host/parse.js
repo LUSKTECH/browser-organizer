@@ -41,7 +41,9 @@ export function parseJsonBlock(text) {
   throw new Error('No JSON found in model output');
 }
 
-const COLORS = new Set(['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']);
+import { TAB_GROUP_COLORS } from './colors.js';
+
+const COLORS = new Set(TAB_GROUP_COLORS);
 
 // Normalizers operate on an already-parsed array (reused by the command path
 // without a JSON re-serialize round-trip); the parse* wrappers add text parsing.

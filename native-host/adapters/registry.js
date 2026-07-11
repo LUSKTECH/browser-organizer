@@ -22,6 +22,7 @@ export function getAdapter(name) {
   return a;
 }
 
+// Test seam: lets tests inject a fake adapter. Not used by production code.
 export function registerAdapter(adapter) {
   ADAPTERS.set(adapter.name, adapter);
 }

@@ -1,3 +1,5 @@
+import { TAB_GROUP_COLORS } from './colors.js';
+
 function clip(s, n) { return String(s == null ? '' : s).replace(/\s+/g, ' ').slice(0, n); }
 
 function tabTable(tabs, extraCols = () => '') {
@@ -20,7 +22,7 @@ export function buildGroupPrompt(tabs, rules = '') {
     'You organize browser tabs into topical groups.',
     'Each data line is: tabId<TAB>title<TAB>url.',
     'Cluster them into 2 to 8 meaningful groups by topic; every tabId in exactly one group; prefer fewer broader groups.',
-    '"color" must be one of: grey, blue, red, yellow, green, pink, purple, cyan, orange.',
+    `"color" must be one of: ${TAB_GROUP_COLORS.join(', ')}.`,
     'Respond with ONLY this JSON, no prose:',
     '{"groups":[{"name":"Short label","color":"blue","tabIds":[1,2]}]}',
     ...rulesLines(rules),

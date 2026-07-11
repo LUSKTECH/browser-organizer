@@ -71,6 +71,13 @@ export async function restoreSession(id, deps = {}) {
   const session = (await listSessions()).find((s) => s.sessionId === id);
   if (!session) return null;
   const win = await c.windows.create({});
-  for (const t of session.tabs) await c.tabs.create({ windowId: win.id, url: t.url, pinned: t.pinned, active: false });
-  return session;
+  // Skip tabs that fail to open (e.g. a malformed stored URL) instead of aborting
+  // the whole restore and leaving a half-built window with no error surfaced.
+  let restored = 0;
+  let failed = 0;
+  for (const t of session.tabs) {
+    try { await c.tabs.create({ windowId: win.id, url: t.url, pinned: t.pinned, active: false }); restored += 1; }
+    catch { failed += 1; }
+  }
+  return { ...session, restored, failed };
 }

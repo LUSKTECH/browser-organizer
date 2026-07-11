@@ -1,3 +1,6 @@
+import { uniqueId } from './ids.js';
+
+// Must byte-match install/install.js HOST_NAME (asserted by test/host-name.test.js).
 export const HOST_NAME = 'com.browser_organizer.host';
 
 // A long-lived native messaging port keeps the service worker alive while a
@@ -31,11 +34,14 @@ export function createNativeClient(deps = {}) {
 
   function request(message) {
     const p = ensurePort();
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const id = uniqueId();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { pending.delete(id); reject(new Error('Native host request timed out')); }, timeoutMs);
       pending.set(id, { resolve, reject, timer });
-      p.postMessage({ ...message, id });
+      // If the port is dying, postMessage can throw synchronously — clean up the
+      // pending entry and timer instead of leaking them until the timeout fires.
+      try { p.postMessage({ ...message, id }); }
+      catch (err) { clearTimeout(timer); pending.delete(id); reject(err); }
     });
   }
 

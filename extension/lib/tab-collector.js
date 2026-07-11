@@ -1,4 +1,5 @@
 import { isHttpUrl } from './url-utils.js';
+import { idleDays } from './activity-tracker.js';
 
 const DAY = 86400000;
 
@@ -17,7 +18,7 @@ export function toSnapshot(tab, activity, now) {
     lastActive,
     firstSeen,
     ageDays: Math.floor((now - firstSeen) / DAY),
-    idleDays: Math.floor((now - lastActive) / DAY),
+    idleDays: idleDays({ lastActive }, now), // single source for the idle-days math
   };
 }
 

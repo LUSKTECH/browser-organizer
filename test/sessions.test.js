@@ -3,6 +3,20 @@ import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
 import { buildSession, addSession, removeSession, renameSession, listSessions, saveSessions, saveCurrentWindowSession, autoSessionName } from '../extension/lib/sessions.js';
 
+test('restoreSession skips tabs that fail to open and reports counts', async () => {
+  installChromeMock();
+  const { saveSessions, buildSession, listSessions, restoreSession } = await import('../extension/lib/sessions.js');
+  await saveSessions([buildSession('S', [{ url: 'https://ok.com' }, { url: 'bad://x' }], 1)]);
+  const [s] = await listSessions();
+  const chromeApi = {
+    windows: { async create() { return { id: 7 }; } },
+    tabs: { async create(t) { if (!/^https?:/.test(t.url)) throw new Error('bad url'); } },
+  };
+  const res = await restoreSession(s.sessionId, { chrome: chromeApi });
+  assert.equal(res.restored, 1);
+  assert.equal(res.failed, 1); // the bad:// tab was skipped, not fatal
+});
+
 test('mutateSessions serializes concurrent mutations (no lost update)', async () => {
   installChromeMock();
   const { mutateSessions, buildSession } = await import('../extension/lib/sessions.js');
