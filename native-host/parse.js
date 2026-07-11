@@ -1,10 +1,42 @@
+// Strip ANSI/CSI escape sequences (colors, cursor moves) some CLIs emit even
+// when piped — their '[' would otherwise fool bracket extraction.
+function stripAnsi(s) {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\[[0-9;?]*[a-zA-Z]/g, '');
+}
+
+// Extract the first *balanced* {…} or […] block starting at `open`, respecting
+// string literals/escapes so a brace inside a string doesn't end it early.
+function extractBalanced(t, open) {
+  const close = open === '{' ? '}' : ']';
+  const start = t.indexOf(open);
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === open) depth++;
+    else if (c === close) { depth--; if (depth === 0) return t.slice(start, i + 1); }
+  }
+  return null;
+}
+
 export function parseJsonBlock(text) {
-  const t = String(text).trim();
+  const t = stripAnsi(String(text)).trim();
   try { return JSON.parse(t); } catch { /* try harder */ }
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) { try { return JSON.parse(fence[1].trim()); } catch { /* fall through */ } }
-  const brace = t.match(/[\{\[][\s\S]*[\}\]]/);
-  if (brace) { try { return JSON.parse(brace[0]); } catch { /* fall through */ } }
+  // Prefer an object (all our expected shapes are objects), then an array.
+  for (const open of ['{', '[']) {
+    const block = extractBalanced(t, open);
+    if (block) { try { return JSON.parse(block); } catch { /* fall through */ } }
+  }
   throw new Error('No JSON found in model output');
 }
 

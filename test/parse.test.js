@@ -18,6 +18,24 @@ test('parseJsonBlock throws when no JSON present', () => {
   assert.throws(() => parseJsonBlock('nothing here'), /No JSON/);
 });
 
+test('parseJsonBlock strips ANSI color codes and a leading label (kiro-shaped)', () => {
+  const kiro = '[38;5;141m> [0m[1mjson\n[0m[38;5;10m{"groups":[{"name":"Dev","tabIds":[1]}]}\n[0m';
+  assert.deepEqual(parseJsonBlock(kiro), { groups: [{ name: 'Dev', tabIds: [1] }] });
+});
+
+test('parseJsonBlock skips a leading bracketed log line (codex/copilot-shaped)', () => {
+  const logged = '[2026-07-11 10:00] thinking...\n{"close":[{"tabId":5}]}';
+  assert.deepEqual(parseJsonBlock(logged), { close: [{ tabId: 5 }] });
+});
+
+test('parseJsonBlock extracts a balanced object and ignores trailing text', () => {
+  assert.deepEqual(parseJsonBlock('here: {"a":{"b":1}} -- done'), { a: { b: 1 } });
+});
+
+test('parseJsonBlock does not mistake a brace inside a string for the end', () => {
+  assert.deepEqual(parseJsonBlock('{"name":"a}b","x":1} trailing'), { name: 'a}b', x: 1 });
+});
+
 test('parseGroupResult coerces tabIds to ints and drops empty groups', () => {
   const g = parseGroupResult('{"groups":[{"name":"A","color":"blue","tabIds":["1",2]},{"name":"B","tabIds":[]}]}');
   assert.deepEqual(g, [{ name: 'A', color: 'blue', tabIds: [1, 2] }]);
