@@ -14,15 +14,46 @@ export const DEFAULTS = {
   scanIntervalMinutes: 720,           // auto-run cadence (12h)
 };
 
+// `ignore` and `decisions` grow unbounded with use, so they live in storage.local
+// (≈5 MB) — NOT in the single storage.sync `settings` item (8 KB/item quota),
+// where growth would eventually make every settings write throw and lock the user
+// out of changing any setting. They are also capped as defense in depth.
+const MAX_IGNORE = 500;
+const MAX_DECISIONS = 500;
+
+function capDecisions(decisions) {
+  const keys = Object.keys(decisions || {});
+  if (keys.length <= MAX_DECISIONS) return decisions || {};
+  const kept = keys.sort((a, b) => ((decisions[b].reject || 0) - (decisions[a].reject || 0))).slice(0, MAX_DECISIONS);
+  const out = {};
+  for (const k of kept) out[k] = decisions[k];
+  return out;
+}
+
 export async function getSettings() {
   const { settings = {} } = await chrome.storage.sync.get('settings');
-  return { ...DEFAULTS, ...settings, enabledFeatures: { ...DEFAULTS.enabledFeatures, ...(settings.enabledFeatures || {}) } };
+  const { ignore: localIgnore } = await chrome.storage.local.get('ignore');
+  const { decisions: localDecisions } = await chrome.storage.local.get('decisions');
+  // Prefer storage.local; fall back to any legacy value still in the sync blob.
+  const ignore = localIgnore ?? settings.ignore ?? [];
+  const decisions = localDecisions ?? settings.decisions ?? {};
+  return {
+    ...DEFAULTS,
+    ...settings,
+    ignore,
+    decisions,
+    enabledFeatures: { ...DEFAULTS.enabledFeatures, ...(settings.enabledFeatures || {}) },
+  };
 }
 
 export async function setSettings(patch) {
   const current = await getSettings();
+  if (patch.ignore !== undefined) await chrome.storage.local.set({ ignore: patch.ignore.slice(-MAX_IGNORE) });
+  if (patch.decisions !== undefined) await chrome.storage.local.set({ decisions: capDecisions(patch.decisions) });
   const next = { ...current, ...patch };
   if (patch.enabledFeatures) next.enabledFeatures = { ...current.enabledFeatures, ...patch.enabledFeatures };
-  await chrome.storage.sync.set({ settings: next });
+  // Keep the two unbounded fields out of the synced item.
+  const { ignore, decisions, ...syncable } = next;
+  await chrome.storage.sync.set({ settings: syncable });
   return next;
 }

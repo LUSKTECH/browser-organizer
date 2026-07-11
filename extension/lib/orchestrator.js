@@ -222,16 +222,17 @@ export async function applyItems(items, deps = {}) {
   const recordUndo = deps.recordUndo || defaultRecordUndo;
   const applied = [];
   const failed = [];
-  const undos = [];
   for (const item of items) {
     try {
       const undo = await applyItem(item);
-      if (undo) undos.push(undo);
+      // Persist each undo record immediately: if a later item or the process
+      // dies, the destructive actions already taken remain undoable (a single
+      // end-of-batch write would lose them all on failure).
+      if (undo) await recordUndo([undo]);
       applied.push(item.itemId);
     } catch {
       failed.push(item.itemId);
     }
   }
-  if (undos.length) await recordUndo(undos);
   return { applied, failed };
 }

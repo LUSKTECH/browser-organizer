@@ -1,4 +1,7 @@
+import { withLock } from './mutex.js';
+
 const MAX_ENTRIES = 2000;
+const LOCK = 'undoLog';
 
 export async function getUndoLog() {
   const { undoLog = [] } = await chrome.storage.local.get('undoLog');
@@ -6,9 +9,11 @@ export async function getUndoLog() {
 }
 
 export async function recordUndo(entries) {
-  const log = await getUndoLog();
-  const next = [...log, ...entries].slice(-MAX_ENTRIES);
-  await chrome.storage.local.set({ undoLog: next });
+  return withLock(LOCK, async () => {
+    const log = await getUndoLog();
+    const next = [...log, ...entries].slice(-MAX_ENTRIES);
+    await chrome.storage.local.set({ undoLog: next });
+  });
 }
 
 export function filterUndo(entries, now, retentionDays) {
@@ -17,8 +22,31 @@ export function filterUndo(entries, now, retentionDays) {
 }
 
 export async function pruneUndo(now, retentionDays) {
-  const log = await getUndoLog();
-  await chrome.storage.local.set({ undoLog: filterUndo(log, now, retentionDays) });
+  return withLock(LOCK, async () => {
+    const log = await getUndoLog();
+    await chrome.storage.local.set({ undoLog: filterUndo(log, now, retentionDays) });
+  });
+}
+
+// Atomically remove the named entries from the log and return them, so a
+// concurrent undo can't select (and double-reverse) the same entry.
+export async function claimUndoEntries(ids) {
+  return withLock(LOCK, async () => {
+    const log = await getUndoLog();
+    const idset = new Set(ids);
+    const claimed = log.filter((e) => idset.has(e.undoId));
+    if (claimed.length) await chrome.storage.local.set({ undoLog: log.filter((e) => !idset.has(e.undoId)) });
+    return claimed;
+  });
+}
+
+// Put back entries whose reversal failed, so the user can retry them.
+export async function restoreUndoEntries(entries) {
+  if (!entries.length) return;
+  return withLock(LOCK, async () => {
+    const log = await getUndoLog();
+    await chrome.storage.local.set({ undoLog: [...entries, ...log].slice(-MAX_ENTRIES) });
+  });
 }
 
 export async function reverseEntry(entry, chromeApi = chrome) {

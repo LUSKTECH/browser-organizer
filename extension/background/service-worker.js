@@ -3,21 +3,19 @@ import { installActivityListeners } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
 import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision } from '../lib/orchestrator.js';
 import { applyItem } from '../lib/executor.js';
-import { recordUndo, reverseEntry, pruneUndo, getUndoLog } from '../lib/undo-log.js';
-import { listSessions, saveCurrentWindowSession, restoreSession, removeSession, saveSessions, renameSession } from '../lib/sessions.js';
+import { recordUndo, reverseEntry, pruneUndo, getUndoLog, claimUndoEntries, restoreUndoEntries } from '../lib/undo-log.js';
+import { listSessions, saveCurrentWindowSession, restoreSession, removeSession, renameSession, mutateSessions } from '../lib/sessions.js';
 import { parseOmnibox } from '../lib/omnibox.js';
-import { digestText } from '../sidepanel/viewmodel.js';
+import { digestText } from '../lib/plan-summary.js';
+import { withLock } from '../lib/mutex.js';
+import { uniqueId } from '../lib/ids.js';
 
 const ALARM_SCAN = 'organizer-scan';
 const ALARM_PRUNE = 'organizer-prune';
 
 // Progress streaming: the panel opens a port named 'scan' before requesting a
-// run; runScan broadcasts {progress} to every connected scan port. Cancel is
-// a simple in-memory flag flipped by the {cmd:'cancel'} handler and read
-// synchronously by buildPlan's shouldCancel — the port keeps the worker alive
-// for the duration of the scan so the flag is not lost to worker teardown.
+// run; runScan broadcasts {progress} to every connected scan port.
 const scanPorts = new Set();
-let cancelRequested = false;
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'scan') return;
@@ -41,12 +39,17 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.alarms.create(ALARM_PRUNE, { periodInMinutes: 1440 });
 });
 
-// Keep the scheduled-scan cadence in sync when settings change (it's otherwise
-// frozen at the install-time default).
+// Keep the scheduled-scan cadence in sync when it changes — but ONLY when the
+// interval actually changed. chrome.alarms.create restarts the countdown, so
+// recreating on every settings write (incl. each ignore/decision update or a
+// remote sync echo) would perpetually defer the scan.
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'sync' || !changes.settings) return;
-  const settings = await getSettings();
-  await chrome.alarms.create(ALARM_SCAN, { periodInMinutes: settings.scanIntervalMinutes });
+  const newMin = changes.settings.newValue && changes.settings.newValue.scanIntervalMinutes;
+  if (newMin == null) return;
+  const oldMin = changes.settings.oldValue && changes.settings.oldValue.scanIntervalMinutes;
+  if (oldMin === newMin) return;
+  await chrome.alarms.create(ALARM_SCAN, { periodInMinutes: newMin });
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -76,7 +79,7 @@ chrome.omnibox.onInputEntered.addListener(async (text) => {
   const client = createNativeClient();
   try {
     const items = await runCommand(instruction, { nativeClient: client, windowId: win.id, settings });
-    await chrome.storage.local.set({ currentPlan: items });
+    await withLock('currentPlan', () => chrome.storage.local.set({ currentPlan: items }));
     await chrome.sidePanel.open({ windowId: win.id });
   } finally {
     client.disconnect();
@@ -94,31 +97,52 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-async function runScan(deps = {}) {
-  const settings = await getSettings();
-  const nativeClient = createNativeClient();
-  try {
-    const items = await buildPlan({ settings, nativeClient, onProgress: deps.onProgress, shouldCancel: deps.shouldCancel, features: deps.features, windowId: deps.windowId ?? null });
-    const { autoApply, needsReview } = partitionForApply(items, settings);
-    await chrome.storage.local.set({ currentPlan: needsReview });
-    if (autoApply.length) {
-      const runId = `run-${Date.now()}`;
-      const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
-      await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
-    } else if (needsReview.length && deps.background) {
-      // Only notify for background/scheduled scans; a foreground run already shows the panel.
-      await notify(digestText(needsReview));
+// Single-flight: three callers (panel, hotkey, 12h alarm) can trigger a scan.
+// Overlapping scans would interleave read-modify-write on deadCursor/deadStrikes/
+// currentPlan and corrupt them, so a second caller joins the in-flight run.
+// Each run gets its own cancel token so a Cancel targets exactly one scan.
+let scanInFlight = null;
+let currentScanCancel = null;
+
+function runScan(deps = {}) {
+  if (scanInFlight) return scanInFlight;
+  const token = { cancelled: false };
+  currentScanCancel = token;
+  const onProgress = deps.onProgress || broadcastProgress;
+  const shouldCancel = deps.shouldCancel || (() => token.cancelled);
+  scanInFlight = (async () => {
+    const settings = await getSettings();
+    const nativeClient = createNativeClient();
+    try {
+      const items = await buildPlan({ settings, nativeClient, onProgress, shouldCancel, features: deps.features, windowId: deps.windowId ?? null });
+      const { autoApply, needsReview } = partitionForApply(items, settings);
+      await withLock('currentPlan', () => chrome.storage.local.set({ currentPlan: needsReview }));
+      if (autoApply.length) {
+        const runId = uniqueId('run-');
+        const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
+        await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
+      } else if (needsReview.length && deps.background) {
+        // Only notify for background/scheduled scans; a foreground run already shows the panel.
+        await notify(digestText(needsReview));
+      }
+      return items;
+    } finally {
+      nativeClient.disconnect();
     }
-    return items;
-  } finally {
-    nativeClient.disconnect();
-  }
+  })().finally(() => { scanInFlight = null; currentScanCancel = null; });
+  return scanInFlight;
 }
 
-// Clicking a background digest notification opens the panel.
+// Clicking a background digest notification opens the panel. sidePanel.open may
+// require a user gesture that a notification click doesn't carry in every
+// browser, so fall back to opening the panel page as a tab.
 chrome.notifications.onClicked.addListener(async () => {
   const win = await chrome.windows.getLastFocused();
-  await chrome.sidePanel.open({ windowId: win.id });
+  try {
+    await chrome.sidePanel.open({ windowId: win.id });
+  } catch {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('sidepanel/sidepanel.html') });
+  }
 });
 
 // A `basic` notification requires an iconUrl (Edge rejects it otherwise). We
@@ -149,110 +173,177 @@ async function notify(message) {
   } catch { /* notifications are best-effort */ }
 }
 
+// ---- Message handlers (one function per command; dispatched by the map below) ----
+
+async function handleRun(m) {
+  const items = await runScan({ features: m.features, windowId: m.windowId ?? null });
+  return { ok: true, items };
+}
+
+function handleCancel() {
+  if (currentScanCancel) currentScanCancel.cancelled = true;
+  return { ok: true };
+}
+
+async function handleIgnore(m) {
+  // Serialize with other settings writers so concurrent rejects don't clobber.
+  return withLock('settings', async () => {
+    const settings = await getSettings();
+    const next = [...new Set([...(settings.ignore || []), ...(m.keys || [])])];
+    let decisions = settings.decisions || {};
+    for (const item of m.items || []) decisions = recordDecision(decisions, item, 'reject');
+    await setSettings({ ignore: next, decisions });
+    return { ok: true, ignore: next };
+  });
+}
+
+async function handleListOpenTabs(m) {
+  // Include browser pages (chrome://, edge://, about:) too — the panel tags them
+  // so the user can still bulk-close them; the AI send-path elsewhere still only
+  // ever sees http(s) URLs. Exclude our own extension pages, about:blank, and
+  // empty/loading tabs so the list stays meaningful.
+  const all = await chrome.tabs.query(m.windowId ? { windowId: m.windowId } : {});
+  const tabs = all
+    .filter((t) => t.id != null && t.url && t.url !== 'about:blank' && !/^chrome-extension:|^moz-extension:/i.test(t.url))
+    .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
+  return { ok: true, tabs };
+}
+
+async function handleFocusTab(m) {
+  const t = await chrome.tabs.get(m.tabId).catch(() => null);
+  if (t) { await chrome.tabs.update(t.id, { active: true }); await chrome.windows.update(t.windowId, { focused: true }); }
+  return { ok: !!t };
+}
+
+async function handleCloseTabs(m) {
+  // Manual, explicit bulk close (no AI). Records undo only for tabs that were
+  // actually removed, so "Undo" can't re-create still-open tabs.
+  const runId = uniqueId('run-');
+  const entries = [];
+  for (const id of m.tabIds || []) {
+    const t = await chrome.tabs.get(id).catch(() => null);
+    if (!t) continue;
+    try { await chrome.tabs.remove(id); } catch { continue; }
+    entries.push({ undoId: uniqueId(), runId, ts: Date.now(), action: 'closeTab', label: `Close tab: ${t.title || t.url}`, reverse: { url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } });
+  }
+  if (entries.length) await recordUndo(entries);
+  return { ok: true, closed: entries.length };
+}
+
+async function handleGetPlan() {
+  const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
+  return { ok: true, items: currentPlan };
+}
+
+async function handleUpdatePlan(m) {
+  return withLock('currentPlan', async () => {
+    await chrome.storage.local.set({ currentPlan: m.items || [] });
+    return { ok: true };
+  });
+}
+
+async function handleApply(m) {
+  // Serialize the read-modify-write on currentPlan so a double-clicked Apply
+  // (or an auto-scan writing the plan concurrently) can't double-execute an
+  // item or clobber the stored plan.
+  return withLock('currentPlan', async () => {
+    const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
+    const chosen = currentPlan.filter((i) => m.itemIds.includes(i.itemId));
+    const runId = uniqueId('run-');
+    const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
+    const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
+    await chrome.storage.local.set({ currentPlan: remaining });
+    return { ok: true, ...res };
+  });
+}
+
+async function handleUndo(m) {
+  // Claim (remove) the entries first so a concurrent undo can't select and
+  // double-reverse the same entry; restore only the ones that failed to reverse.
+  const chosen = await claimUndoEntries(m.undoIds);
+  const failed = [];
+  for (const entry of chosen) {
+    try { await reverseEntry(entry, chrome); } catch { failed.push(entry); }
+  }
+  await restoreUndoEntries(failed);
+  return { ok: true, undone: chosen.length - failed.length, failed: failed.length };
+}
+
+async function handleGetUndo() {
+  return { ok: true, entries: await getUndoLog() };
+}
+
+async function handleCommand(m) {
+  const settings = await getSettings();
+  const nativeClient = createNativeClient();
+  try {
+    const items = await runCommand(m.instruction, { nativeClient, windowId: m.windowId ?? null, settings });
+    await withLock('currentPlan', () => chrome.storage.local.set({ currentPlan: items }));
+    return { ok: true, items };
+  } finally {
+    nativeClient.disconnect();
+  }
+}
+
+async function handleSaveSession(m) {
+  const session = await saveCurrentWindowSession(m.name, { chrome, close: m.close !== false });
+  return { ok: true, session };
+}
+
+async function handleRenameSession(m) {
+  await mutateSessions((s) => renameSession(s, m.id, m.name));
+  return { ok: true };
+}
+
+async function handleListSessions() {
+  return { ok: true, sessions: await listSessions() };
+}
+
+async function handleRestoreSession(m) {
+  const session = await restoreSession(m.id, { chrome });
+  return { ok: true, session };
+}
+
+async function handleDeleteSession(m) {
+  await mutateSessions((s) => removeSession(s, m.id));
+  return { ok: true };
+}
+
+async function handleHealth() {
+  const settings = await getSettings();
+  const client = createNativeClient();
+  try { return { ok: true, health: await client.request({ type: 'health', adapter: settings.adapter }) }; }
+  catch (err) { return { ok: true, health: { ready: false, error: String((err && err.message) || err) } }; }
+  finally { client.disconnect(); }
+}
+
+const HANDLERS = {
+  run: handleRun,
+  cancel: handleCancel,
+  ignore: handleIgnore,
+  listOpenTabs: handleListOpenTabs,
+  focusTab: handleFocusTab,
+  closeTabs: handleCloseTabs,
+  getPlan: handleGetPlan,
+  updatePlan: handleUpdatePlan,
+  apply: handleApply,
+  undo: handleUndo,
+  getUndo: handleGetUndo,
+  command: handleCommand,
+  saveSession: handleSaveSession,
+  renameSession: handleRenameSession,
+  listSessions: handleListSessions,
+  restoreSession: handleRestoreSession,
+  deleteSession: handleDeleteSession,
+  health: handleHealth,
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const handler = HANDLERS[message && message.cmd];
+  if (!handler) { sendResponse({ ok: false, error: 'unknown command' }); return; }
   (async () => {
     try {
-      if (message.cmd === 'run') {
-        cancelRequested = false;
-        const items = await runScan({ onProgress: broadcastProgress, shouldCancel: () => cancelRequested, features: message.features, windowId: message.windowId ?? null });
-        sendResponse({ ok: true, items });
-      } else if (message.cmd === 'cancel') {
-        cancelRequested = true;
-        sendResponse({ ok: true });
-      } else if (message.cmd === 'ignore') {
-        const settings = await getSettings();
-        const next = [...new Set([...(settings.ignore || []), ...(message.keys || [])])];
-        let decisions = settings.decisions || {};
-        for (const item of message.items || []) decisions = recordDecision(decisions, item, 'reject');
-        await setSettings({ ignore: next, decisions });
-        sendResponse({ ok: true, ignore: next });
-      } else if (message.cmd === 'listOpenTabs') {
-        // Include browser pages (chrome://, edge://, about:) too — the panel tags
-        // them so the user can still bulk-close them; the AI send-path elsewhere
-        // still only ever sees http(s) URLs. Exclude our own extension pages,
-        // about:blank, and empty/loading tabs so the list stays meaningful.
-        const all = await chrome.tabs.query(message.windowId ? { windowId: message.windowId } : {});
-        const tabs = all
-          .filter((t) => t.id != null && t.url && t.url !== 'about:blank' && !/^chrome-extension:|^moz-extension:/i.test(t.url))
-          .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
-        sendResponse({ ok: true, tabs });
-      } else if (message.cmd === 'focusTab') {
-        const t = await chrome.tabs.get(message.tabId).catch(() => null);
-        if (t) { await chrome.tabs.update(t.id, { active: true }); await chrome.windows.update(t.windowId, { focused: true }); }
-        sendResponse({ ok: !!t });
-      } else if (message.cmd === 'closeTabs') {
-        // Manual, explicit bulk close (no AI). Records undo only for tabs that
-        // were actually removed, so "Undo" can't re-create still-open tabs.
-        const runId = `run-${Date.now()}`;
-        const entries = [];
-        for (const id of message.tabIds || []) {
-          const t = await chrome.tabs.get(id).catch(() => null);
-          if (!t) continue;
-          try { await chrome.tabs.remove(id); } catch { continue; }
-          entries.push({ undoId: `${Date.now()}-${id}-${Math.random().toString(36).slice(2)}`, runId, ts: Date.now(), action: 'closeTab', label: `Close tab: ${t.title || t.url}`, reverse: { url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } });
-        }
-        if (entries.length) await recordUndo(entries);
-        sendResponse({ ok: true, closed: entries.length });
-      } else if (message.cmd === 'getPlan') {
-        const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
-        sendResponse({ ok: true, items: currentPlan });
-      } else if (message.cmd === 'updatePlan') {
-        await chrome.storage.local.set({ currentPlan: message.items || [] });
-        sendResponse({ ok: true });
-      } else if (message.cmd === 'apply') {
-        const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
-        const chosen = currentPlan.filter((i) => message.itemIds.includes(i.itemId));
-        const runId = `run-${Date.now()}`;
-        const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
-        const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
-        await chrome.storage.local.set({ currentPlan: remaining });
-        sendResponse({ ok: true, ...res });
-      } else if (message.cmd === 'undo') {
-        const log = await getUndoLog();
-        const chosen = log.filter((e) => message.undoIds.includes(e.undoId));
-        const undoneIds = [];
-        for (const entry of chosen) {
-          try { await reverseEntry(entry, chrome); undoneIds.push(entry.undoId); } catch { /* keep entry so the user can retry */ }
-        }
-        // Only drop entries whose reversal actually succeeded.
-        const undoneSet = new Set(undoneIds);
-        await chrome.storage.local.set({ undoLog: log.filter((e) => !undoneSet.has(e.undoId)) });
-        sendResponse({ ok: true, undone: undoneIds.length, failed: chosen.length - undoneIds.length });
-      } else if (message.cmd === 'getUndo') {
-        sendResponse({ ok: true, entries: await getUndoLog() });
-      } else if (message.cmd === 'command') {
-        const settings = await getSettings();
-        const nativeClient = createNativeClient();
-        try {
-          const items = await runCommand(message.instruction, { nativeClient, windowId: message.windowId ?? null, settings });
-          await chrome.storage.local.set({ currentPlan: items });
-          sendResponse({ ok: true, items });
-        } finally {
-          nativeClient.disconnect();
-        }
-      } else if (message.cmd === 'saveSession') {
-        const session = await saveCurrentWindowSession(message.name, { chrome, close: message.close !== false });
-        sendResponse({ ok: true, session });
-      } else if (message.cmd === 'renameSession') {
-        await saveSessions(renameSession(await listSessions(), message.id, message.name));
-        sendResponse({ ok: true });
-      } else if (message.cmd === 'listSessions') {
-        sendResponse({ ok: true, sessions: await listSessions() });
-      } else if (message.cmd === 'restoreSession') {
-        const session = await restoreSession(message.id, { chrome });
-        sendResponse({ ok: true, session });
-      } else if (message.cmd === 'deleteSession') {
-        await saveSessions(removeSession(await listSessions(), message.id));
-        sendResponse({ ok: true });
-      } else if (message.cmd === 'health') {
-        const settings = await getSettings();
-        const client = createNativeClient();
-        try { sendResponse({ ok: true, health: await client.request({ type: 'health', adapter: settings.adapter }) }); }
-        catch (err) { sendResponse({ ok: true, health: { ready: false, error: String((err && err.message) || err) } }); }
-        finally { client.disconnect(); }
-      } else {
-        sendResponse({ ok: false, error: 'unknown command' });
-      }
+      sendResponse(await handler(message));
     } catch (err) {
       sendResponse({ ok: false, error: String((err && err.message) || err) });
     }

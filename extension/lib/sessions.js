@@ -1,4 +1,19 @@
-function newId() { return `s-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+import { withLock } from './mutex.js';
+import { uniqueId } from './ids.js';
+
+function newId() { return uniqueId('s-'); }
+
+// Serializes a read-modify-write over the single `sessions` key so concurrent
+// save/rename/delete can't clobber each other. `fn(sessions)` returns the next
+// array (or falsy to leave unchanged).
+export async function mutateSessions(fn) {
+  return withLock('sessions', async () => {
+    const sessions = await listSessions();
+    const next = await fn(sessions);
+    if (next) await saveSessions(next);
+    return next;
+  });
+}
 
 export function buildSession(name, tabs, now = Date.now()) {
   return {
@@ -46,7 +61,7 @@ export async function saveCurrentWindowSession(name, deps = {}) {
   const win = await c.windows.getCurrent({ populate: true });
   const httpTabs = win.tabs.filter((t) => /^https?:/i.test(t.url || ''));
   const session = buildSession(name || autoSessionName(httpTabs, now), httpTabs, now);
-  await saveSessions(addSession(await listSessions(), session));
+  await mutateSessions((sessions) => addSession(sessions, session));
   if (close) await c.tabs.remove(httpTabs.map((t) => t.id));
   return session;
 }

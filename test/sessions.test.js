@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
 import { buildSession, addSession, removeSession, renameSession, listSessions, saveSessions, saveCurrentWindowSession, autoSessionName } from '../extension/lib/sessions.js';
 
+test('mutateSessions serializes concurrent mutations (no lost update)', async () => {
+  installChromeMock();
+  const { mutateSessions, buildSession } = await import('../extension/lib/sessions.js');
+  await Promise.all([
+    mutateSessions((s) => [...s, buildSession('A', [], 1)]),
+    mutateSessions((s) => [...s, buildSession('B', [], 2)]),
+    mutateSessions((s) => [...s, buildSession('C', [], 3)]),
+  ]);
+  const names = (await listSessions()).map((s) => s.name).sort();
+  assert.deepEqual(names, ['A', 'B', 'C']); // all three survived, none clobbered
+});
+
 test('autoSessionName names by the most common host, falls back to timestamp', () => {
   const tabs = [
     { url: 'https://github.com/a' }, { url: 'https://www.github.com/b' }, { url: 'https://news.example/c' },

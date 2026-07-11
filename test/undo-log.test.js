@@ -1,10 +1,33 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
-import { recordUndo, getUndoLog, filterUndo, pruneUndo, reverseEntry } from '../extension/lib/undo-log.js';
+import { recordUndo, getUndoLog, filterUndo, pruneUndo, reverseEntry, claimUndoEntries, restoreUndoEntries } from '../extension/lib/undo-log.js';
 
 const DAY = 86400000;
 beforeEach(() => installChromeMock());
+
+test('claimUndoEntries removes and returns matching entries (so they cannot be re-reversed)', async () => {
+  await recordUndo([{ undoId: 'a', ts: 1, action: 'closeTab', reverse: {} }, { undoId: 'b', ts: 2, action: 'groupTabs', reverse: {} }]);
+  const claimed = await claimUndoEntries(['a']);
+  assert.deepEqual(claimed.map((e) => e.undoId), ['a']);
+  assert.deepEqual((await getUndoLog()).map((e) => e.undoId), ['b']); // 'a' removed
+  assert.deepEqual(await claimUndoEntries(['a']), []); // already claimed → nothing
+});
+
+test('restoreUndoEntries puts failed reversals back', async () => {
+  await claimUndoEntries([]); // no-op
+  await restoreUndoEntries([{ undoId: 'x', ts: 1, action: 'closeTab', reverse: {} }]);
+  assert.deepEqual((await getUndoLog()).map((e) => e.undoId), ['x']);
+});
+
+test('concurrent recordUndo calls do not lose entries (serialized writes)', async () => {
+  await Promise.all([
+    recordUndo([{ undoId: 'c1', ts: 1, action: 'closeTab', reverse: {} }]),
+    recordUndo([{ undoId: 'c2', ts: 2, action: 'closeTab', reverse: {} }]),
+    recordUndo([{ undoId: 'c3', ts: 3, action: 'closeTab', reverse: {} }]),
+  ]);
+  assert.deepEqual((await getUndoLog()).map((e) => e.undoId).sort(), ['c1', 'c2', 'c3']);
+});
 
 test('recordUndo appends and getUndoLog reads back', async () => {
   await recordUndo([{ undoId: 'a', ts: 1, action: 'closeTab', reverse: {} }]);
