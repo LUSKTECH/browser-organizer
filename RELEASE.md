@@ -9,7 +9,8 @@ Anything marked **(you)** needs a human — the rest is automated by the repo.
 - [x] `npm run lint` clean
 - [x] Icons present (`npm run icons`) and referenced in manifest
 - [x] `CHANGELOG.md` / version bumped in `extension/manifest.json`
-- [ ] **(you)** Fill the contact email in `PRIVACY.md` and `docs/privacy.html`
+- [x] Contact email wired in (`hello@lusk.app`) and privacy URL set
+      (`https://lusk.app/browser-organizer/privacy`)
 
 ## Path A — Self-hosted / unpacked (ready now)
 1. `npm run package:selfhost` → `dist/browser-organizer-selfhost-<version>.zip`
@@ -29,8 +30,8 @@ Prerequisites — **the real gate is the native-host installer** (see
 
 Submission steps once the installer exists:
 1. `npm run package` → `dist/browser-organizer-<version>.zip` (extension only).
-2. **(you)** Host the privacy policy — `docs/privacy.html` is GitHub-Pages-ready (enable Pages
-   on `/docs`); copy the resulting URL.
+2. **(you)** Deploy `docs/privacy.html` to https://lusk.app/browser-organizer/privacy
+   (it's also GitHub-Pages-ready if you'd rather serve from `/docs`).
 3. **(you)** Capture ≥1 screenshot at 1280×800 (side panel with suggestions).
 4. **(you)** Create accounts: Chrome Web Store developer ($5 one-time) / Edge Partner Center
    (free).

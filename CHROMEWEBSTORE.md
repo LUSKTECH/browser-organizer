@@ -35,7 +35,8 @@ ever sent to our servers — we operate none.
   The extension never reads page contents — it only checks the HTTP status.
 
 ## Privacy
-See PRIVACY.md (host it at a public URL and enter that URL in the store's privacy field).
+Privacy policy URL: **https://lusk.app/browser-organizer/privacy** (source: `docs/privacy.html`).
+Contact email: **hello@lusk.app**. Enter both in the store's privacy/contact fields.
 Tab titles and URLs (query strings/fragments stripped, private/loopback hosts coarsened to
 origin, embedded credentials removed) are sent to your AI provider under your own
 subscription, via your local helper. Bookmarks and history are never sent anywhere. No data
@@ -71,7 +72,8 @@ Key safety facts:
 - [x] Upload zip built from `extension/` only (`npm run package` → `dist/`)
 - [ ] Store icon shown on the listing page (128×128 — reuse `icons/icon-128.png`)
 - [ ] At least one screenshot at 1280×800 or 640×400 (side panel with suggestions)
-- [ ] Privacy policy hosted at a public URL; enter it in the store + fill the data-use form
+- [ ] Deploy `docs/privacy.html` to https://lusk.app/browser-organizer/privacy; enter it +
+      hello@lusk.app in the store, and fill the data-use form
 - [ ] Chrome Web Store developer account ($5 one-time) / Edge Partner Center account (free)
 - [ ] After first publish, confirm the store-assigned extension ID matches the `key`-derived ID
       so the native host `allowed_origins` remains correct

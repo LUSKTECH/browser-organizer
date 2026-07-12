@@ -22,4 +22,6 @@ extension operator receives none of this data and operates no server that stores
   browser's local storage on your device.
 - **What we never do:** sell data, run analytics, or transmit your data to the developer.
 
-Contact: <your-email-here>
+Contact: hello@lusk.app
+
+Policy URL: https://lusk.app/browser-organizer/privacy
