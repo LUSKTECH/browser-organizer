@@ -313,7 +313,7 @@ async function handleHealth() {
   const settings = await getSettings();
   const client = createNativeClient();
   try { return { ok: true, health: await client.request({ type: 'health', adapter: settings.adapter }) }; }
-  catch (err) { return { ok: true, health: { ready: false, error: String((err && err.message) || err) } }; }
+  catch (err) { return { ok: true, health: { adapter: settings.adapter, ready: false, error: String((err && err.message) || err) } }; }
   finally { client.disconnect(); }
 }
 

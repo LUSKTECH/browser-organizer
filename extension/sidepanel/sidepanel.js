@@ -524,7 +524,15 @@ function updateAdapterNote(value) {
   el.textContent = note;
   el.hidden = !note;
 }
-$('settingsForm').adapter.addEventListener('change', (e) => updateAdapterNote(e.target.value));
+// Switching the AI backend applies immediately (persist + re-check health), so the
+// banner reflects the chosen backend without also having to click "Save settings".
+$('settingsForm').adapter.addEventListener('change', async (e) => {
+  updateAdapterNote(e.target.value);
+  setStatus(`Switching to ${e.target.selectedOptions[0].text}…`);
+  await setSettings({ adapter: e.target.value });
+  await checkHealth();
+  setStatus('');
+});
 
 async function loadSettings() {
   const s = await getSettings();
