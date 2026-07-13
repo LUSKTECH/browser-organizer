@@ -174,9 +174,10 @@ function renderGroupItem(item) {
   return li;
 }
 
-function renderPlan() {
+function renderPlan(animate = false) {
   const container = $('plan');
   container.textContent = '';
+  let enterIdx = 0; // staggers the entrance animation for fresh results only
   const shown = filterPlan(plan, planFilter);
   const counts = summarize(shown);
   const summary = $('summary');
@@ -197,7 +198,9 @@ function renderPlan() {
     const ul = document.createElement('ul');
     for (const item of items) {
       if (action === 'groupTabs') {
-        ul.appendChild(renderGroupItem(item));
+        const gEl = renderGroupItem(item);
+        if (animate) { gEl.classList.add('enter'); gEl.style.setProperty('--i', Math.min(enterIdx++, 10)); }
+        ul.appendChild(gEl);
         continue;
       }
       const node = tpl.content.cloneNode(true);
@@ -218,6 +221,7 @@ function renderPlan() {
         goBtn.addEventListener('click', () => focusTab(item.data.tabId));
         node.querySelector('.item').appendChild(goBtn);
       }
+      if (animate) { const el = node.querySelector('.item'); el.classList.add('enter'); el.style.setProperty('--i', Math.min(enterIdx++, 10)); }
       ul.appendChild(node);
     }
     section.appendChild(ul);
@@ -328,7 +332,7 @@ async function startScan(features) {
   if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
   plan = (await send({ cmd: 'getPlan' })).items;
   selection = new Set();
-  renderPlan();
+  renderPlan(true);
   setStatus(plan.length ? `${plan.length} suggestions.` : 'Nothing to do — your browser looks tidy.');
 }
 
@@ -415,7 +419,7 @@ $('commandForm').addEventListener('submit', async (e) => {
   if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
   plan = res.items;
   selection = new Set();
-  renderPlan();
+  renderPlan(true);
   setStatus(plan.length ? `${plan.length} suggestions.` : 'No matching tabs found.');
   input.value = '';
 });
@@ -688,6 +692,6 @@ function applyI18n() {
   await loadSettings();
   await checkHealth();
   plan = (await send({ cmd: 'getPlan' })).items || [];
-  renderPlan();
+  renderPlan(true);
   await renderSessions();
 })();

@@ -318,13 +318,15 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 #undoToast[hidden] { display: none; }
 #undoToast button { padding: 5px 12px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); font-weight: 600; }
 
-/* ---------- Plan action bar (contextual — only shown when a plan exists) ---------- */
-#planActions { display: flex; gap: 6px; margin: 12px 0 4px; flex-wrap: wrap; }
+/* ---------- Plan action bar (contextual — only shown when a plan exists) ----------
+   2-col grid: primary Apply spans the row; Apply all + Clear list share the next row.
+   Wraps cleanly at narrow side-panel widths (~360px) with no clipping. */
+#planActions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0 4px; }
 #planActions[hidden] { display: none; }
-#planActions button { flex: 1 1 auto; font-size: 12px; }
-#planActions .apply-primary { color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; box-shadow: var(--shadow-1); }
+#planActions button { font-size: 12px; width: auto; min-width: 0; }
+#planActions .apply-primary { grid-column: 1 / -1; color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; box-shadow: var(--shadow-1); }
 #planActions .apply-primary:hover { background: var(--accent-hover); }
-#planActions #clearPlan { flex: 0 1 auto; color: var(--text-muted); }
+#planActions #clearPlan { color: var(--text-muted); }
 
 /* ---------- Open-tabs panel ---------- */
 #tabFilter { width: 100%; margin: 4px 12px 8px; width: calc(100% - 24px); }
@@ -472,6 +474,13 @@ li.nonHttp span:not(.tabTag) { color: var(--text-muted); }
 .commandForm button { justify-self: start; }
 #commandPanel .hint { padding: 0 12px 12px; margin: 0; }
 
+/* ---------- Plan item entrance (fresh results only; opacity/transform only) ---------- */
+@keyframes itemEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.item.enter { animation: itemEnter 220ms ease-out both; animation-delay: calc(var(--i, 0) * 35ms); }
+
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  * { animation: none !important; transition: none !important; }
 }
