@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 — 2026-07-14
+Metadata + tooling fix (host package only; no functional changes).
+- Corrected the npm package `homepage` (lusk.dev) and `repository` URL
+  (`LUSKTECH/browser-organizer`) — the 0.1.0 metadata pointed at the old domain/repo name.
+- Fixed CI: `esbuild`/`postject` are fetched on demand via `npx` in `build:sea`, so they were
+  removed from `devDependencies` (they had desynced `package-lock.json` and broken `npm ci`);
+  their versions are now pinned in `scripts/build-sea.mjs`.
+
 ## 0.1.0 — 2026-07-14
 First release.
 
