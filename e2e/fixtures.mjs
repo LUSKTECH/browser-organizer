@@ -54,10 +54,13 @@ export const test = base.extend({
 
   // Extension-loaded persistent context with the native host reachable.
   context: async ({}, use) => {
-    try { install({ extensionId: EXT_ID, browsers: ['chrome-for-testing'] }); } catch { /* best effort */ }
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-e2e-'));
     const xdgConfigHome = path.join(userDataDir, 'xdgcfg');
-    const launcher = path.join(repoRoot, 'native-host', process.platform === 'win32' ? 'run.bat' : 'run.sh');
+    // Install copies the host into an isolated temp home (never the tester's real ~),
+    // writing the launcher there; the manifest below points at that copied launcher.
+    const hostHomeDir = path.join(userDataDir, 'host-home');
+    try { install({ extensionId: EXT_ID, browsers: ['chrome-for-testing'], copyTo: hostHomeDir }); } catch { /* best effort */ }
+    const launcher = path.join(hostHomeDir, process.platform === 'win32' ? 'run.bat' : 'run.sh');
     const manifestJson = JSON.stringify(buildHostManifest({ execPath: launcher, extensionId: EXT_ID }), null, 2);
     // Place the host manifest deterministically where Chrome for Testing looks.
     for (const d of [
