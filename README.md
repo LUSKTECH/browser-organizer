@@ -63,10 +63,14 @@ this path is **metered/pay-per-token**; a local endpoint keeps data on-device.
    - Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → select `extension/`
    - Edge: `edge://extensions` → Developer mode → **Load unpacked** → select `extension/`
    Note the extension ID (identical in both browsers thanks to the pinned key).
-2. Register the native messaging host (lets the extension call your CLI):
+2. Register the native messaging host (lets the extension call your CLI). From any directory:
    ```
-   npm run install-host <EXTENSION_ID> chrome,edge
+   npx @lusktech/browser-organizer-host
    ```
+   or, from a clone, `node native-host/installer.js chrome,edge`. Either way the host is
+   copied into `~/.browser-organizer` (macOS/Linux) / `%LOCALAPPDATA%\BrowserOrganizer`
+   (Windows), so the repo/bundle can be deleted afterward. Non-technical users can instead run
+   the per-OS installer from the releases page (no Node required). See `INSTALL.md`.
 3. Open the side panel (toolbar icon) and click **Analyze my tabs & bookmarks**.
 
 ## How it works

@@ -16,7 +16,7 @@ test('describeIgnoreKey renders a human label', () => {
 });
 
 test('installCommand embeds the extension id', () => {
-  assert.equal(installCommand('abc123'), 'npm run install-host abc123 chrome,edge');
+  assert.equal(installCommand('abc123'), 'npx @lusktech/browser-organizer-host install chrome,edge abc123');
 });
 
 test('moveMember reassigns a tab between proposed groups', () => {
@@ -133,7 +133,7 @@ test('healthMessage reports connected vs not', () => {
   assert.deepEqual(healthMessage({ ready: true, version: '2.1.0' }), { ok: true, text: 'Claude CLI connected (2.1.0)' });
   const bad = healthMessage({ ready: false, error: 'not found' });
   assert.equal(bad.ok, false);
-  assert.match(bad.text, /install-host/);
+  assert.match(bad.text, /browser-organizer-host/);
 });
 
 test('healthMessage labels the connected adapter', () => {
@@ -151,13 +151,13 @@ test('healthMessage: openai adapter gives API-key guidance, not a CLI install st
   assert.match(m.text, /API key/i);
   assert.match(m.text, /Settings/);
   assert.match(m.text, /OpenAI-compatible API/);
-  assert.doesNotMatch(m.text, /install-host|--version/); // not CLI-flavored
+  assert.doesNotMatch(m.text, /browser-organizer-host|--version/); // not CLI-flavored
 });
 
-test('healthMessage: host-missing error gives the install-host step with the real extension id', () => {
+test('healthMessage: host-missing error gives the install step with the real extension id', () => {
   const m = healthMessage({ ready: false, error: 'Specified native messaging host not found.' }, 'abcdef123');
   assert.equal(m.ok, false);
-  assert.match(m.text, /install-host abcdef123 chrome,edge/);
+  assert.match(m.text, /browser-organizer-host install chrome,edge abcdef123/);
   assert.match(m.text, /reload/i);           // tells the user to reload
   assert.doesNotMatch(m.text, /<EXTENSION_ID>/); // no literal placeholder
 });
@@ -166,7 +166,7 @@ test('healthMessage: CLI-missing error points at the claude CLI, not install-hos
   const m = healthMessage({ ready: false, error: 'spawn claude ENOENT' }, 'abcdef123');
   assert.equal(m.ok, false);
   assert.match(m.text, /claude --version/);
-  assert.doesNotMatch(m.text, /install-host/); // wrong fix for this cause
+  assert.doesNotMatch(m.text, /browser-organizer-host/); // wrong fix for this cause
 });
 
 test('progressLabel formats phase progress', () => {

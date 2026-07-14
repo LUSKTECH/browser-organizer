@@ -24,20 +24,32 @@ _(When published, this step becomes a one-click install from the Web Store / Edg
 
 ## Step 2 — Install the local helper
 
-You need [Node.js 20+](https://nodejs.org) on your PATH for this step.
+Pick whichever fits you:
 
-From the project folder, run (substitute your extension ID from Step 1):
-
-```
-npm run install-host <EXTENSION_ID> chrome,edge
-```
-
-This registers the helper for the browsers you list (`chrome`, `edge`, `chromium`). To remove
-it later:
+**A. One command (needs [Node.js 20+](https://nodejs.org)) — works from any directory:**
 
 ```
-npm run install-host uninstall chrome,edge
+npx @lusktech/browser-organizer-host
 ```
+
+That copies the helper into a stable per-user location and registers it for Chrome and Edge
+using the published extension ID — no need to be inside any project folder. Target specific
+browsers with `npx @lusktech/browser-organizer-host install chrome`, repair a broken install
+with `… repair`, and remove it with `… uninstall`.
+
+**B. No Node / prefer a double-click:** download the installer for your OS from the
+[releases page](https://github.com/LUSKTECH/chrome-organize-ext/releases) and run it. It ships
+a self-contained helper (no Node required) and registers it for Chrome and Edge.
+
+**C. From a cloned repo / self-host bundle (developers):**
+
+```
+node native-host/installer.js [<EXTENSION_ID>] chrome,edge     # install (ID defaults to the pinned one)
+node native-host/installer.js uninstall chrome,edge            # remove
+```
+
+The helper is copied to `~/.browser-organizer` (macOS/Linux) or
+`%LOCALAPPDATA%\BrowserOrganizer` (Windows), so the repo or bundle can be deleted afterward.
 
 ## Step 3 — Choose and configure a backend
 
@@ -72,7 +84,8 @@ address bar, or enable scheduled auto-mode in Settings.
   extension. See `SECURITY.md`.
 
 ## Troubleshooting
-- **Panel says it can't reach the helper** — re-run Step 2 with the correct extension ID,
-  then click the reload icon on the extension and reopen the panel.
+- **Panel says it can't reach the helper** — re-run Step 2 (e.g.
+  `npx @lusktech/browser-organizer-host repair`), then click the reload icon on the extension
+  and reopen the panel.
 - **Panel says the backend didn't start** — for a CLI, confirm `"<cli> --version"` works in a
   terminal; for the API backend, confirm the env vars above are set where the browser launches.

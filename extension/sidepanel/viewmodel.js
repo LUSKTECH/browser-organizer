@@ -12,9 +12,11 @@ export function describeIgnoreKey(key) {
   return `${actionLabel(key.slice(0, idx))}: ${key.slice(idx + 1)}`;
 }
 
-// The exact host-registration command for the onboarding screen.
+// The exact host-registration command for the onboarding screen. Includes the
+// live extension id so it works for unpacked/dev installs too (where the id
+// differs from the pinned store id the package defaults to).
 export function installCommand(extensionId) {
-  return `npm run install-host ${extensionId} chrome,edge`;
+  return `npx @lusktech/browser-organizer-host install chrome,edge ${extensionId}`;
 }
 
 // Reassign a member tab from one proposed group to another (used by the editor).
@@ -152,8 +154,8 @@ export function healthMessage(health, extensionId = '<your-extension-id>') {
       ok: false,
       text: [
         `Can't reach the helper app that runs your AI CLI (${label}).`,
-        'Fix: open a terminal in the extension’s project folder and run:',
-        `    npm run install-host ${extensionId} chrome,edge`,
+        'Fix: open a terminal (Node 20+) and run:',
+        `    npx @lusktech/browser-organizer-host install chrome,edge ${extensionId}`,
         'Then click the reload icon on this extension and reopen this panel.',
       ].join('\n'),
     };

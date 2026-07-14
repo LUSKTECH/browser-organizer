@@ -26,7 +26,10 @@
 - **Native host is a local executable.** Any local process can, in principle, speak
   the native-messaging protocol to `run.sh`. The host can only run one of the fixed
   registered CLIs with fixed arguments over a private temp dir. Keep `run.sh`
-  permissions at 0700.
+  permissions at 0700. The host is installed into a per-user home
+  (`~/.browser-organizer`, or `%LOCALAPPDATA%\BrowserOrganizer` on Windows) and the
+  browser's host manifest points there — a stable, per-user, non-elevated location;
+  the install path change carries none of the message-surface invariants above.
 - **Agentic CLIs run tool-restricted.** Several backends are agentic (can run shell
   commands / edit files), so a prompt-injected tab title could otherwise escalate
   from "bad grouping" to real actions. Each is pinned to a tool-restricted mode:
