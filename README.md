@@ -77,10 +77,10 @@ this path is **metered/pay-per-token**; a local endpoint keeps data on-device.
 
 ## How it works
 The extension collects tab/bookmark metadata and sends it to a small local Node host
-over Chrome Native Messaging. The host runs `claude -p --output-format json` to get
-organization suggestions, then returns them. Nothing is sent to any server other than
-your own CLI's normal subscription traffic. Destructive actions require your approval
-(or, in auto mode, are logged for one-click undo).
+over Chrome Native Messaging. The host runs your selected backend (a local AI CLI, or an
+OpenAI-compatible API request) to get organization suggestions, then returns them. Nothing
+is sent to any server other than your chosen provider's normal subscription/API traffic.
+Destructive actions require your approval (or, in auto mode, are logged for one-click undo).
 
 ## Development
 - `npm test` — run the unit suite (`node --test`, no browser needed)

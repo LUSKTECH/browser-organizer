@@ -1,15 +1,14 @@
 # Chrome Web Store / Edge Add-ons Listing — Browser Organizer
 
-_Last updated: 2026-07-12_
+_Last updated: 2026-07-14_
 
 **Publisher:** Lusk Technologies · **Website:** https://lusk.tech ·
-**Privacy policy:** https://lusk.app/browser-organizer/privacy
-(served by `lusk.dev` repo — PR: LUSKTECH/lusk.dev#143) · **Contact:** hello@lusk.app
+**Privacy policy:** https://lusk.app/browser-organizer/privacy · **Contact:** hello@lusk.app
 
 ## Short description (≤132 chars)
-Organize tabs and bookmarks with your own local AI CLI: group tabs, close stale ones, tidy bookmarks. Review or auto-apply.
+Organize tabs & bookmarks with your own AI (local CLI or API): group tabs, close stale ones, tidy bookmarks. Review or auto-apply.
 
-<!-- 121 chars. The store "summary" field caps at 132. -->
+<!-- 130 chars. The store "summary" field caps at 132. -->
 
 ## Detailed description
 Browser Organizer turns a 200-tab mess into order. Click one button and it groups your
