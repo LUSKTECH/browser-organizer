@@ -202,7 +202,9 @@ export function install({
 // CLI entry (defaults extensionId to the pinned production id):
 //   node native-host/installer.js [<extensionId>] [chrome,edge]   → install
 //   node native-host/installer.js uninstall [chrome,edge]         → remove
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+// import.meta.url is undefined inside the SEA bundle, where this file is imported
+// (not run as the entry) — guard so importing installer.js never throws there.
+if (import.meta.url && process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const runRegistry = (cmds) => {
     for (const argv of cmds || []) {
       console.log('Running: ' + argv.join(' '));
