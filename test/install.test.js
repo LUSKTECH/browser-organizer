@@ -50,7 +50,7 @@ test('winManifestPath is under the native host dir', () => {
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { install, copyHostTo } from '../install/install.js';
+import { install, copyHostTo, uninstall, repair } from '../install/install.js';
 import { PROD_EXTENSION_ID } from '../native-host/paths.js';
 
 test('copyHostTo copies host sources but not generated launchers', () => {
@@ -81,5 +81,26 @@ test('install defaults extensionId to the pinned production id', () => {
   const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo: path.join(home, '.borg') });
   const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
   assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('uninstall removes the copied host home and the manifests', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-unins-'));
+  const copyTo = path.join(home, '.browser-organizer');
+  install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+  assert.ok(fs.existsSync(path.join(copyTo, 'host.js')));
+  const removed = uninstall({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+  assert.ok(!fs.existsSync(copyTo));                        // copied host gone
+  assert.ok(removed.some((f) => f.endsWith('.json')));      // manifest gone
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('repair is idempotent — re-running yields a working manifest', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-repair-'));
+  const copyTo = path.join(home, '.browser-organizer');
+  install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+  const written = repair({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+  const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
+  assert.ok(manifest.path.startsWith(copyTo));
   fs.rmSync(home, { recursive: true, force: true });
 });

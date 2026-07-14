@@ -121,22 +121,31 @@ export function copyHostTo(destDir, srcDir = defaultHostDir()) {
 
 // Removes the native-host manifests (and returns registry-delete argv on win32)
 // so users/installers can cleanly unregister. Returns the list of files removed.
-export function uninstall({ browsers, platform = process.platform, home = os.homedir(), hostDir } = {}) {
-  const nativeHostDir = hostDir || defaultHostDir();
+export function uninstall({
+  browsers,
+  platform = process.platform,
+  home = os.homedir(),
+  copyTo = hostHome(platform, process.env, home),
+} = {}) {
   const removed = [];
   if (platform === 'win32') {
-    const manifestPath = winManifestPath(nativeHostDir);
+    const manifestPath = winManifestPath(copyTo);
     if (fs.existsSync(manifestPath)) { fs.rmSync(manifestPath); removed.push(manifestPath); }
     removed._registryCommands = registryDeleteCommands(browsers || Object.keys(WIN_REG_ROOTS));
-    return removed;
+  } else {
+    const list = browsers || Object.keys(DIRS[platform] || {});
+    for (const browser of list) {
+      const file = path.join(manifestDir(browser, platform, home), `${HOST_NAME}.json`);
+      if (fs.existsSync(file)) { fs.rmSync(file); removed.push(file); }
+    }
   }
-  const list = browsers || Object.keys(DIRS[platform] || {});
-  for (const browser of list) {
-    const file = path.join(manifestDir(browser, platform, home), `${HOST_NAME}.json`);
-    if (fs.existsSync(file)) { fs.rmSync(file); removed.push(file); }
-  }
+  // Remove the copied host home so uninstall leaves nothing behind.
+  if (copyTo && fs.existsSync(copyTo)) { fs.rmSync(copyTo, { recursive: true, force: true }); removed.push(copyTo); }
   return removed;
 }
+
+// Re-run install: idempotent re-copy + re-register. Repairs a broken manifest.
+export function repair(opts = {}) { return install(opts); }
 
 export function install({
   extensionId = PROD_EXTENSION_ID,
