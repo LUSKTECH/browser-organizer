@@ -38,7 +38,7 @@ browsers with `npx @lusktech/browser-organizer-host install chrome`, repair a br
 with `… repair`, and remove it with `… uninstall`.
 
 **B. No Node / prefer a double-click:** download the installer for your OS from the
-[releases page](https://github.com/LUSKTECH/chrome-organize-ext/releases) and run it. It ships
+[releases page](https://github.com/LUSKTECH/browser-organizer/releases) and run it. It ships
 a self-contained helper (no Node required) and registers it for Chrome and Edge.
 
 **C. From a cloned repo / self-host bundle (developers):**

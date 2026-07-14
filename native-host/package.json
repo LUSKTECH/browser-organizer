@@ -10,8 +10,8 @@
   "license": "MIT",
   "author": "Lusk Technologies",
   "homepage": "https://lusk.dev/browser-organizer",
-  "repository": { "type": "git", "url": "git+https://github.com/LUSKTECH/chrome-organize-ext.git" },
-  "bugs": { "url": "https://github.com/LUSKTECH/chrome-organize-ext/issues" },
+  "repository": { "type": "git", "url": "git+https://github.com/LUSKTECH/browser-organizer.git" },
+  "bugs": { "url": "https://github.com/LUSKTECH/browser-organizer/issues" },
   "publishConfig": { "access": "public" },
   "scripts": { "prepublishOnly": "cd .. && node --test test/*.test.js" }
 }

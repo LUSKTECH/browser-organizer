@@ -67,7 +67,7 @@ jobs:
 
       # 3) Sign — tag pushes on this repo only (secrets absent on PRs/forks).
       - name: Sign (Windows Authenticode)
-        if: matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/chrome-organize-ext'
+        if: matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
         shell: pwsh
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
@@ -80,7 +80,7 @@ jobs:
           Remove-Item cert.pfx
 
       - name: Sign + notarize (macOS)
-        if: matrix.name == 'macos' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/chrome-organize-ext'
+        if: matrix.name == 'macos' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
         env:
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           MACOS_NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
@@ -126,7 +126,7 @@ jobs:
 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/chrome-organize-ext'
+    if: startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
