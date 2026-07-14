@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { CLI_ADAPTERS } from '../native-host/adapters/catalog.js';
+import { PROD_EXTENSION_ID, hostHome } from '../native-host/paths.js';
 
 export const HOST_NAME = 'com.browser_organizer.host';
 
@@ -97,6 +98,27 @@ export function defaultHostDir() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'native-host');
 }
 
+// Files under native-host/ that make up the runnable host. Copied verbatim into
+// the stable per-user home so the manifest can point at a permanent location
+// (not the repo, an npx cache, or a deletable bundle). Generated launchers are
+// re-created at install time, never copied.
+const HOST_COPY_SKIP = new Set(['run.sh', 'run.bat']);
+
+export function copyHostTo(destDir, srcDir = defaultHostDir()) {
+  const copyDir = (from, to) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const name of fs.readdirSync(from)) {
+      if (HOST_COPY_SKIP.has(name)) continue;
+      const src = path.join(from, name);
+      const dst = path.join(to, name);
+      if (fs.statSync(src).isDirectory()) copyDir(src, dst);
+      else fs.copyFileSync(src, dst);
+    }
+  };
+  copyDir(srcDir, destDir);
+  return path.join(destDir, 'host.js');
+}
+
 // Removes the native-host manifests (and returns registry-delete argv on win32)
 // so users/installers can cleanly unregister. Returns the list of files removed.
 export function uninstall({ browsers, platform = process.platform, home = os.homedir(), hostDir } = {}) {
@@ -116,10 +138,17 @@ export function uninstall({ browsers, platform = process.platform, home = os.hom
   return removed;
 }
 
-export function install({ extensionId, browsers, platform = process.platform, home = os.homedir(), hostDir, nodePath = process.execPath }) {
-  if (!extensionId) throw new Error('extensionId is required');
-  const nativeHostDir = hostDir || defaultHostDir();
-  const hostEntry = path.join(nativeHostDir, 'host.js');
+export function install({
+  extensionId = PROD_EXTENSION_ID,
+  browsers,
+  platform = process.platform,
+  home = os.homedir(),
+  copyTo = hostHome(platform, process.env, home),
+  nodePath = process.execPath,
+} = {}) {
+  const nativeHostDir = copyTo;
+  // Copy the host sources into the stable per-user home, then target that copy.
+  const hostEntry = copyHostTo(nativeHostDir);
 
   const isWin = platform === 'win32';
   // Resolve every catalogued adapter's binary path in one pass (declarative).

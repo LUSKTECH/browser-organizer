@@ -45,3 +45,41 @@ test('registryCommands builds HKCU reg add argv (no shell) for chrome and edge',
 test('winManifestPath is under the native host dir', () => {
   assert.match(winManifestPath('C:\\ext\\native-host'), /native-host.*com\.browser_organizer\.host\.json$/);
 });
+
+// --- stable-home install (Phase A) ---
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
+import { install, copyHostTo } from '../install/install.js';
+import { PROD_EXTENSION_ID } from '../native-host/paths.js';
+
+test('copyHostTo copies host sources but not generated launchers', () => {
+  const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-copy-'));
+  const entry = copyHostTo(dest);
+  assert.equal(entry, path.join(dest, 'host.js'));
+  assert.ok(fs.existsSync(path.join(dest, 'host.js')));
+  assert.ok(fs.existsSync(path.join(dest, 'dispatch.js')));
+  assert.ok(fs.existsSync(path.join(dest, 'adapters', 'catalog.js')));
+  assert.ok(!fs.existsSync(path.join(dest, 'run.sh')));  // generated, never copied
+  fs.rmSync(dest, { recursive: true, force: true });
+});
+
+test('install copies the host into a stable home and points the manifest there', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-home-'));
+  const copyTo = path.join(home, '.browser-organizer');
+  const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+  assert.ok(written.some((f) => f.startsWith(copyTo)));
+  const manifestFile = written.find((f) => f.endsWith('.json'));
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  assert.ok(manifest.path.startsWith(copyTo)); // points at the copy, not defaultHostDir()
+  assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('install defaults extensionId to the pinned production id', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-defid-'));
+  const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo: path.join(home, '.borg') });
+  const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
+  assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
+  fs.rmSync(home, { recursive: true, force: true });
+});
