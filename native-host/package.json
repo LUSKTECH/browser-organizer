@@ -6,9 +6,12 @@
   "engines": { "node": ">=20" },
   "bin": { "browser-organizer-host": "cli.js" },
   "files": ["*.js", "adapters/**/*.js"],
+  "keywords": ["chrome-extension", "native-messaging", "browser-organizer", "native-host"],
   "license": "MIT",
+  "author": "Lusk Technologies",
   "homepage": "https://lusk.app/browser-organizer",
-  "repository": { "type": "git", "url": "https://github.com/LUSKTECH/chrome-organize-ext" },
+  "repository": { "type": "git", "url": "git+https://github.com/LUSKTECH/chrome-organize-ext.git" },
+  "bugs": { "url": "https://github.com/LUSKTECH/chrome-organize-ext/issues" },
   "publishConfig": { "access": "public" },
   "scripts": { "prepublishOnly": "cd .. && node --test test/*.test.js" }
 }
