@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+**Native-host distribution**
+- The helper now installs into a stable per-user home (`~/.browser-organizer`,
+  `%LOCALAPPDATA%\BrowserOrganizer`) with the browser manifest pointing there — the
+  repo/bundle/npx cache can be deleted after install. Added `repair` alongside install/uninstall.
+- Directory-independent install for technical users: `npx @lusktech/browser-organizer-host`
+  (dependency-free npm package; the installer relocated to `native-host/installer.js`). The
+  extension ID is baked in (`native-host/paths.js`), so no arguments are needed.
+- Standalone path for non-technical users: a Node SEA binary (`npm run build:sea`) that
+  self-registers via `--install`/`--uninstall`, per-OS installer sources under `installer/`
+  (Inno Setup / `.pkg` / `.deb`/`.rpm` / portable `install.sh`), and a signed/notarized
+  release CI matrix (`.github/workflows/release-host.yml`).
+- 256 unit tests + 21 Playwright E2E.
+
 ## 0.1.0 — 2026-07-11
 First release.
 

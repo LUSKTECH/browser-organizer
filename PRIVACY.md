@@ -1,6 +1,6 @@
 # Privacy Policy — Browser Organizer
 
-_Last updated: 2026-07-11_
+_Last updated: 2026-07-14_
 
 Browser Organizer runs a helper program on your own computer, which invokes your
 locally-installed AI CLI (Claude Code, Antigravity, Kiro, Copilot, Codex, or local Ollama)
@@ -18,8 +18,9 @@ extension operator receives none of this data and operates no server that stores
   subscription/key and is subject to that provider's policy.
 - **What stays local:** bookmarks, browsing history, and dead-link HTTP checks are
   processed entirely on your machine and are never sent anywhere.
-- **What we store:** your settings, tab-activity timestamps, and an undo log — all in the
-  browser's local storage on your device.
+- **What we store:** your settings, tab-activity timestamps, an undo log, and — if you use
+  the OpenAI-compatible API backend — your API key **encrypted at rest** (AES-GCM). All of
+  this lives in the browser's local storage on your device and is never synced off it.
 - **What we never do:** sell data, run analytics, or transmit your data to the developer.
 
 Contact: hello@lusk.app

@@ -1,12 +1,14 @@
 # Browser Organizer
 
-A Chrome/Edge extension that uses your **local Claude CLI subscription** (no API key)
-to group open tabs by topic, close forgotten tabs, auto-bookmark important ones, and
-clean up stale/dead/duplicate bookmarks. All page/tab/bookmark data stays on your machine.
+A Chrome/Edge extension that uses your own AI backend — a **local AI CLI subscription**
+(no API key) or an **OpenAI-compatible API key** — to group open tabs by topic, close
+forgotten tabs, auto-bookmark important ones, and clean up stale/dead/duplicate bookmarks.
+All page/tab/bookmark data stays on your machine.
 
 ## Requirements
-- Node.js 20+
-- One supported AI CLI installed and signed in (see **AI backends** below)
+- A backend: an OpenAI-compatible API key (no CLI to install) **or** one supported AI CLI
+  installed and signed in (see **AI backends** below)
+- Node.js 20+ for the `npx`/CLI helper install — the standalone per-OS installer needs no Node
 - Chrome 116+ or Edge (Chromium)
 
 ## AI backends

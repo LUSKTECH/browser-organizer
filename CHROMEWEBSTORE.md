@@ -54,7 +54,9 @@ package, the helper is installed once, separately, by the user:
 1. Until the helper is installed, the side panel shows an onboarding card with the exact
    one-line command to run — the extension loads and is safe, but analysis is inactive.
 2. After the one-time install, all features work. To exercise functionality during review,
-   the helper must be installed per the project README (`npm run install-host <id> chrome,edge`).
+   install the helper the easy way — with Node 20+ present, run
+   `npx @lusktech/browser-organizer-host` (works from any directory) — or run the per-OS
+   installer from the releases page (no Node required). See `INSTALL.md`.
 
 Key safety facts:
 - **No developer servers exist.** Tab titles/URLs go only to the *user's own* AI provider via

@@ -17,8 +17,8 @@ API key** (no CLI to install); power users can point it at a local AI CLI instea
 2. Open `chrome://extensions` (or `edge://extensions`).
 3. Turn on **Developer mode** (top-right).
 4. Click **Load unpacked** and select the `extension/` folder.
-5. Note the extension **ID** shown on its card — you'll need it in Step 2.
-   (The ID is stable because the manifest pins it, so it won't change on reload.)
+5. The extension **ID** is fixed by the manifest's pinned key (same in Chrome and Edge, and
+   across reloads), so Step 2 already knows it — you don't need to copy it down.
 
 _(When published, this step becomes a one-click install from the Web Store / Edge Add-ons.)_
 
