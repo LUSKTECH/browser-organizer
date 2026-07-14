@@ -1,0 +1,14 @@
+{
+  "name": "@lusktech/browser-organizer-host",
+  "version": "0.1.0",
+  "description": "Native messaging host + installer for the Browser Organizer extension.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "bin": { "browser-organizer-host": "cli.js" },
+  "files": ["*.js", "adapters/**/*.js"],
+  "license": "MIT",
+  "homepage": "https://lusk.app/browser-organizer",
+  "repository": { "type": "git", "url": "https://github.com/LUSKTECH/chrome-organize-ext" },
+  "publishConfig": { "access": "public" },
+  "scripts": { "prepublishOnly": "cd .. && node --test test/*.test.js" }
+}
