@@ -60,8 +60,10 @@ jobs:
       - name: Package installers (Windows)
         if: matrix.name == 'windows'
         shell: pwsh
+        env:
+          VER: ${{ steps.ver.outputs.version }}
         run: |
-          $ver = "${{ steps.ver.outputs.version }}"
+          $ver = $env:VER
           # EXE (Inno Setup) — per-user installer for end users. Ships on the runner via Chocolatey.
           choco install innosetup --no-progress -y
           & "${Env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=$ver installer\windows\browser-organizer.iss

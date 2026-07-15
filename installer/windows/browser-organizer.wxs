@@ -63,6 +63,20 @@
           <RegistryValue Root="HKLM" Key="Software\Chromium\NativeMessagingHosts\com.browser_organizer.host"
                          Type="string" Value="[INSTALLFOLDER]com.browser_organizer.host.json" KeyPath="yes" />
         </Component>
+
+        <!-- Also write the 32-bit hive (WOW6432Node) so 32-bit Chrome/Edge/Chromium find it. -->
+        <Component Id="RegChrome32" Bitness="always32" Condition="CHROME = 1">
+          <RegistryValue Root="HKLM" Key="Software\Google\Chrome\NativeMessagingHosts\com.browser_organizer.host"
+                         Type="string" Value="[INSTALLFOLDER]com.browser_organizer.host.json" KeyPath="yes" />
+        </Component>
+        <Component Id="RegEdge32" Bitness="always32" Condition="EDGE = 1">
+          <RegistryValue Root="HKLM" Key="Software\Microsoft\Edge\NativeMessagingHosts\com.browser_organizer.host"
+                         Type="string" Value="[INSTALLFOLDER]com.browser_organizer.host.json" KeyPath="yes" />
+        </Component>
+        <Component Id="RegChromium32" Bitness="always32" Condition="CHROMIUM = 1">
+          <RegistryValue Root="HKLM" Key="Software\Chromium\NativeMessagingHosts\com.browser_organizer.host"
+                         Type="string" Value="[INSTALLFOLDER]com.browser_organizer.host.json" KeyPath="yes" />
+        </Component>
       </Directory>
     </StandardDirectory>
 
@@ -72,6 +86,9 @@
       <ComponentRef Id="RegChrome" />
       <ComponentRef Id="RegEdge" />
       <ComponentRef Id="RegChromium" />
+      <ComponentRef Id="RegChrome32" />
+      <ComponentRef Id="RegEdge32" />
+      <ComponentRef Id="RegChromium32" />
     </Feature>
   </Package>
 </Wix>
