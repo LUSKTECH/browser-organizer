@@ -34,7 +34,7 @@ Prefer a double-click, no-Node installer? Download the per-OS installer from the
 
 The host resolves the command, arguments, environment, and any API key **on your machine** —
 an extension message can only pick *which* known backend runs, never *what* runs. See
-[`SECURITY.md`](https://github.com/LUSKTECH/browser-organizer/blob/main/SECURITY.md).
+[`docs/security-model.md`](https://github.com/LUSKTECH/browser-organizer/blob/main/docs/security-model.md).
 
 ## License
 

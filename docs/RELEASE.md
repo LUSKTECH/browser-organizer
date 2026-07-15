@@ -21,7 +21,7 @@ the repo/bundle/npx-cache can be deleted afterward. The extension ID is baked
 
 ## Path A — Self-hosted / unpacked (ready now)
 1. `npm run package:selfhost` → `dist/browser-organizer-selfhost-<version>.zip`
-   (extension + native-host + INSTALL.md/README/PRIVACY/SECURITY).
+   (extension + native-host + INSTALL.md/README.md/PRIVACY.md/security-model.md).
 2. **(you)** Tag `v<version>` and attach the self-host zip to a GitHub Release; paste
    `CHANGELOG.md` notes.
 3. Users follow `INSTALL.md`: load unpacked → `node native-host/installer.js` (or the npx

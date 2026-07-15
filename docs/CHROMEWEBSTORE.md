@@ -63,7 +63,7 @@ Key safety facts:
 - `nativeMessaging` is used **solely** to talk to that local helper. The helper runs only a
   fixed set of known CLIs (or an HTTPS OpenAI-compatible endpoint); the command, arguments,
   and credentials are resolved host-side and can never be supplied by the extension/a web
-  page. See SECURITY.md.
+  page. See [`security-model.md`](security-model.md).
 - The `key` field pins the extension ID so the helper's `allowed_origins` stays valid across
   builds — please keep the assigned ID stable.
 
