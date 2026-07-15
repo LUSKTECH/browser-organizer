@@ -170,9 +170,6 @@ jobs:
             dist/browser-organizer-*
             dist/SHA256SUMS-*.txt
           if-no-files-found: ignore
-            dist/host/browser-organizer-host
-            dist/host/browser-organizer-host.exe
-          if-no-files-found: ignore
 
   release:
     needs: build
