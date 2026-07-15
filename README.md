@@ -72,7 +72,8 @@ this path is **metered/pay-per-token**; a local endpoint keeps data on-device.
    ```
    npx @lusktech/browser-organizer-host
    ```
-   or, from a clone, `node native-host/installer.js chrome,edge`. Either way the host is
+   or, from a clone, `node native-host/installer.js` (defaults to the pinned ID + Chrome/Edge).
+   Either way the host is
    copied into `~/.browser-organizer` (macOS/Linux) / `%LOCALAPPDATA%\BrowserOrganizer`
    (Windows), so the repo/bundle can be deleted afterward. Non-technical users can instead run
    the per-OS installer from the releases page (no Node required). See `INSTALL.md`.
