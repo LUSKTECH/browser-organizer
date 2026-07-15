@@ -35,8 +35,10 @@ AppComments=Local helper that lets the Browser Organizer extension run your AI b
 ; Per-user install — no admin rights required.
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\BrowserOrganizer
-; Show the destination-folder page so users see where it installs (the helper
-; self-registers wherever it lands, so changing the location is safe).
+; Always show the destination-folder page so users see where it installs (the
+; helper self-registers wherever it lands, so changing the location is safe).
+; Explicit "no" — the default "auto" would hide it on upgrades/re-installs.
+DisableDirPage=no
 DisableProgramGroupPage=yes
 Uninstallable=yes
 OutputDir=..\..\dist
