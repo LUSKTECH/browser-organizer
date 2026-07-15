@@ -1,0 +1,74 @@
+name: Bug report
+description: Report something that isn't working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+        **Do not use this for security issues** — see the Security Policy to report privately.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the side panel...
+        2. Click...
+        3. See...
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome
+        - Edge
+        - Chromium
+        - Other (note it below)
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: AI backend
+      options:
+        - Claude Code
+        - Antigravity
+        - Kiro
+        - GitHub Copilot
+        - OpenAI Codex
+        - Ollama
+        - OpenAI-compatible API
+        - Other / none
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Extension version and host install method
+      description: Extension version (from chrome://extensions) and how you installed the host (npx / per-OS installer / clone).
+      placeholder: "extension 0.1.0, host via npx"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console / error output
+      description: Relevant errors from the side panel's DevTools, the service worker, or the host.
+      render: shell

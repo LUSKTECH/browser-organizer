@@ -41,7 +41,7 @@ function collect() {
   for (const dir of ['extension', 'native-host']) {
     for (const f of walk(path.join(ROOT, dir))) files.push({ rel: `${dir}/${f.rel}`, full: f.full });
   }
-  for (const doc of ['INSTALL.md', 'README.md', 'PRIVACY.md', 'SECURITY.md']) {
+  for (const doc of ['INSTALL.md', 'README.md', 'PRIVACY.md', 'docs/security-model.md']) {
     const p = path.join(ROOT, doc);
     if (fs.existsSync(p)) files.push({ rel: doc, full: p });
   }

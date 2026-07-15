@@ -68,4 +68,4 @@ Click the reload/recheck icon in the panel; it should read "… connected". Then
   package / run `node native-host/installer.js uninstall`).
 - Remove the extension from `chrome://extensions` (or `edge://extensions`).
 
-For the full reference (per-OS installers, admin MSI, etc.) see [INSTALL.md](INSTALL.md).
+For the full reference (per-OS installers, admin MSI, etc.) see [INSTALL.md](../INSTALL.md).

@@ -107,7 +107,7 @@ address bar, or enable scheduled auto-mode in Settings.
   subscription/key. Bookmarks and history never leave your machine.
 - The helper only ever runs the fixed backend you selected; the command, arguments, and
   credentials are resolved on your machine and can't be supplied by a web page or the
-  extension. See `SECURITY.md`.
+  extension. See [`docs/security-model.md`](docs/security-model.md).
 
 ## Troubleshooting
 - **Panel says it can't reach the helper** — re-run Step 2 (e.g.
