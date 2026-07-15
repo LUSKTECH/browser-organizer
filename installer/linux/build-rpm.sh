@@ -43,21 +43,37 @@ URL:            https://lusk.tech
 BuildArch:      $ARCH
 %description
 Local helper that lets the Browser Organizer browser extension talk to your AI
-CLI or an OpenAI-compatible endpoint. After install, run
-'browser-organizer-host --install' to register it for Chrome/Edge (per-user).
+CLI or an OpenAI-compatible endpoint. Registered system-wide for Chrome,
+Chromium, and Edge on install (available to all users on this machine).
 
 %install
 mkdir -p %{buildroot}/usr/lib/browser-organizer %{buildroot}/usr/bin
 install -m 0755 %{_sourcedir}/usr/lib/browser-organizer/browser-organizer-host %{buildroot}/usr/lib/browser-organizer/browser-organizer-host
 ln -s ../lib/browser-organizer/browser-organizer-host %{buildroot}/usr/bin/browser-organizer-host
+# Static system-wide native-messaging manifests, staged into the payload so RPM
+# tracks them (rpm -ql) and removes them on uninstall. No %post/%postun needed.
+# \$d is escaped so it stays literal in the generated spec (runs during %install).
+for d in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts /etc/opt/edge/native-messaging-hosts; do
+  mkdir -p %{buildroot}\$d
+  cat > %{buildroot}\$d/com.browser_organizer.host.json <<'JSON'
+{
+  "name": "com.browser_organizer.host",
+  "description": "Browser Organizer native host",
+  "path": "/usr/lib/browser-organizer/browser-organizer-host",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://jjacbpnaekkhbfpncfhmignbiocddocc/"
+  ]
+}
+JSON
+done
 
 %files
 /usr/lib/browser-organizer/browser-organizer-host
 /usr/bin/browser-organizer-host
-
-%post
-echo "Browser Organizer host installed. Each user should run once:"
-echo "    browser-organizer-host --install chrome,edge"
+/etc/opt/chrome/native-messaging-hosts/com.browser_organizer.host.json
+/etc/chromium/native-messaging-hosts/com.browser_organizer.host.json
+/etc/opt/edge/native-messaging-hosts/com.browser_organizer.host.json
 EOF
 
 rpmbuild --define "_topdir $TOP" -bb "$TOP/SPECS/browser-organizer-host.spec"

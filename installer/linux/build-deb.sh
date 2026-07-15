@@ -46,18 +46,27 @@ Maintainer: Lusk Technologies <hello@lusk.dev>
 Homepage: https://lusk.tech
 Description: Browser Organizer native messaging host
  Local helper that lets the Browser Organizer browser extension talk to your
- AI CLI or an OpenAI-compatible endpoint. After install, run
- 'browser-organizer-host --install' to register it for Chrome/Edge (per-user).
+ AI CLI or an OpenAI-compatible endpoint. Registered system-wide for Chrome,
+ Chromium, and Edge on install (available to all users on this machine).
 EOF
 
-cat > "$STAGE/DEBIAN/postinst" <<'EOF'
-#!/bin/sh
-set -e
-echo "Browser Organizer host installed. Each user should run once:"
-echo "    browser-organizer-host --install chrome,edge"
-exit 0
-EOF
-chmod 755 "$STAGE/DEBIAN/postinst"
+# Static system-wide native-messaging manifests, shipped in the package payload so
+# dpkg tracks them (dpkg -L), removes them on uninstall, and cleans empty dirs it
+# created. Linux browsers read these /etc dirs for all users. No maintainer scripts.
+for dir in "$STAGE/etc/opt/chrome/native-messaging-hosts" "$STAGE/etc/chromium/native-messaging-hosts" "$STAGE/etc/opt/edge/native-messaging-hosts"; do
+  mkdir -p "$dir"
+  cat > "$dir/com.browser_organizer.host.json" <<'JSON'
+{
+  "name": "com.browser_organizer.host",
+  "description": "Browser Organizer native host",
+  "path": "/usr/lib/browser-organizer/browser-organizer-host",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://jjacbpnaekkhbfpncfhmignbiocddocc/"
+  ]
+}
+JSON
+done
 
 mkdir -p "$ROOT_DIR/dist"
 dpkg-deb --build --root-owner-group "$STAGE" "$OUT"
