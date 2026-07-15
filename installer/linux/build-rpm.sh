@@ -50,17 +50,12 @@ Chromium, and Edge on install (available to all users on this machine).
 mkdir -p %{buildroot}/usr/lib/browser-organizer %{buildroot}/usr/bin
 install -m 0755 %{_sourcedir}/usr/lib/browser-organizer/browser-organizer-host %{buildroot}/usr/lib/browser-organizer/browser-organizer-host
 ln -s ../lib/browser-organizer/browser-organizer-host %{buildroot}/usr/bin/browser-organizer-host
-
-%files
-/usr/lib/browser-organizer/browser-organizer-host
-/usr/bin/browser-organizer-host
-
-%post
-# Register the native host system-wide for all users (\$ escaped so these stay
-# literal in the generated spec, not expanded when this heredoc is written).
-for dir in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts /etc/opt/edge/native-messaging-hosts; do
-  mkdir -p "\$dir"
-  cat > "\$dir/com.browser_organizer.host.json" <<'JSON'
+# Static system-wide native-messaging manifests, staged into the payload so RPM
+# tracks them (rpm -ql) and removes them on uninstall. No %post/%postun needed.
+# \$d is escaped so it stays literal in the generated spec (runs during %install).
+for d in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts /etc/opt/edge/native-messaging-hosts; do
+  mkdir -p %{buildroot}\$d
+  cat > %{buildroot}\$d/com.browser_organizer.host.json <<'JSON'
 {
   "name": "com.browser_organizer.host",
   "description": "Browser Organizer native host",
@@ -72,14 +67,13 @@ for dir in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging
 }
 JSON
 done
-echo "Browser Organizer host registered system-wide (Chrome, Chromium, Edge)."
 
-%postun
-if [ "\$1" = 0 ]; then
-  for dir in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts /etc/opt/edge/native-messaging-hosts; do
-    rm -f "\$dir/com.browser_organizer.host.json"
-  done
-fi
+%files
+/usr/lib/browser-organizer/browser-organizer-host
+/usr/bin/browser-organizer-host
+/etc/opt/chrome/native-messaging-hosts/com.browser_organizer.host.json
+/etc/chromium/native-messaging-hosts/com.browser_organizer.host.json
+/etc/opt/edge/native-messaging-hosts/com.browser_organizer.host.json
 EOF
 
 rpmbuild --define "_topdir $TOP" -bb "$TOP/SPECS/browser-organizer-host.spec"

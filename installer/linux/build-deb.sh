@@ -50,12 +50,10 @@ Description: Browser Organizer native messaging host
  Chromium, and Edge on install (available to all users on this machine).
 EOF
 
-# postinst: register the native host system-wide for all users. Linux browsers
-# read these /etc locations in addition to each user's ~/.config.
-cat > "$STAGE/DEBIAN/postinst" <<'EOF'
-#!/bin/sh
-set -e
-for dir in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts /etc/opt/edge/native-messaging-hosts; do
+# Static system-wide native-messaging manifests, shipped in the package payload so
+# dpkg tracks them (dpkg -L), removes them on uninstall, and cleans empty dirs it
+# created. Linux browsers read these /etc dirs for all users. No maintainer scripts.
+for dir in "$STAGE/etc/opt/chrome/native-messaging-hosts" "$STAGE/etc/chromium/native-messaging-hosts" "$STAGE/etc/opt/edge/native-messaging-hosts"; do
   mkdir -p "$dir"
   cat > "$dir/com.browser_organizer.host.json" <<'JSON'
 {
@@ -69,21 +67,6 @@ for dir in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging
 }
 JSON
 done
-echo "Browser Organizer host registered system-wide (Chrome, Chromium, Edge)."
-exit 0
-EOF
-chmod 755 "$STAGE/DEBIAN/postinst"
-
-# postrm: remove the system-wide manifests when the package is removed.
-cat > "$STAGE/DEBIAN/postrm" <<'EOF'
-#!/bin/sh
-set -e
-for dir in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-hosts /etc/opt/edge/native-messaging-hosts; do
-  rm -f "$dir/com.browser_organizer.host.json"
-done
-exit 0
-EOF
-chmod 755 "$STAGE/DEBIAN/postrm"
 
 mkdir -p "$ROOT_DIR/dist"
 dpkg-deb --build --root-owner-group "$STAGE" "$OUT"
