@@ -2,8 +2,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
-import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand, applyFolderProtection } from '../extension/lib/orchestrator.js';
+import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand, applyFolderProtection, selectOrganizeCandidates, projectBookmarksForHost } from '../extension/lib/orchestrator.js';
 import { validatePlanItem } from '../extension/lib/plan.js';
+
+test('selectOrganizeCandidates: match/additive = unfiled only, full = all', () => {
+  const bms = [
+    { id: '1', parentId: '2' },  // unfiled (Other Bookmarks root)
+    { id: '2', parentId: '10' }, // filed
+    { id: '3', parentId: '1' },  // unfiled (bar root)
+  ];
+  assert.deepEqual(selectOrganizeCandidates(bms, 'match').map((b) => b.id), ['1', '3']);
+  assert.deepEqual(selectOrganizeCandidates(bms, 'additive').map((b) => b.id), ['1', '3']);
+  assert.deepEqual(selectOrganizeCandidates(bms, 'full').map((b) => b.id), ['1', '2', '3']);
+});
+
+test('projectBookmarksForHost redacts urls and flattens the folder path', () => {
+  const p = projectBookmarksForHost([{ id: '9', title: 'T', url: 'https://x.com/p?q=secret#h', path: ['Other Bookmarks', 'Dev'] }]);
+  assert.equal(p[0].id, '9');
+  assert.equal(p[0].folder, 'Other Bookmarks/Dev');
+  assert.ok(!p[0].url.includes('secret')); // query redacted before egress
+});
 
 test('applyFolderProtection drops moves/removes touching the bar or whitelisted folders', () => {
   const folders = [
