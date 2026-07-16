@@ -11,9 +11,10 @@ function labelFor(item) {
   return `${ACTION_LABELS[item.action] || item.action}: ${name}`.trim();
 }
 
-// Walk/create a folder path under the bookmarks bar (id '1'); returns the leaf folder id.
-export async function ensureFolder(pathParts, chromeApi) {
-  let parentId = '1';
+// Walk/create a folder path under `rootId` (default the bookmarks bar '1');
+// returns the leaf folder id.
+export async function ensureFolder(pathParts, chromeApi, rootId = '1') {
+  let parentId = rootId;
   for (const name of pathParts) {
     const children = await chromeApi.bookmarks.getChildren(parentId);
     let node = children.find((ch) => !ch.url && ch.title === name);
@@ -63,6 +64,22 @@ async function applyItemInner(item, c) {
       const { bookmarkId, parentId, index, title, url } = item.data;
       await c.bookmarks.remove(bookmarkId);
       return { undoId: undoId(), ts: Date.now(), action: 'deleteBookmark', reverse: { parentId, index, title, url } };
+    }
+    case 'moveBookmark': {
+      const { bookmarkId, fromParentId, fromIndex, toParentId, toFolderPath, toRootId } = item.data;
+      const parentId = toParentId || (await ensureFolder(toFolderPath || [], c, toRootId || '2')).id;
+      await c.bookmarks.move(bookmarkId, { parentId });
+      return { undoId: undoId(), ts: Date.now(), action: 'moveBookmark', reverse: { bookmarkId, parentId: fromParentId, index: fromIndex } };
+    }
+    case 'removeFolder': {
+      const { folderId, parentId, index, title } = item.data;
+      // Guards (independent of the planner): never touch a root, never remove a
+      // folder that still has children at apply time (keeps partial-apply safe).
+      if (['0', '1', '2', '3'].includes(folderId)) return { undoId: undoId(), ts: Date.now(), action: 'removeFolder', reverse: null, skipped: true };
+      const kids = await c.bookmarks.getChildren(folderId);
+      if (kids.length) return { undoId: undoId(), ts: Date.now(), action: 'removeFolder', reverse: null, skipped: true };
+      await c.bookmarks.remove(folderId);
+      return { undoId: undoId(), ts: Date.now(), action: 'removeFolder', reverse: { parentId, index, title } };
     }
     case 'discardTab': {
       await c.tabs.discard(item.data.tabId);
