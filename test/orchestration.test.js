@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
 import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand } from '../extension/lib/orchestrator.js';
+import { validatePlanItem } from '../extension/lib/plan.js';
+
+test('organize actions validate and are review-only in auto mode', () => {
+  assert.equal(validatePlanItem({ itemId: 'm', action: 'moveBookmark', status: 'pending', data: {} }), true);
+  assert.equal(validatePlanItem({ itemId: 'r', action: 'removeFolder', status: 'pending', data: {} }), true);
+  const { autoApply, needsReview } = partitionForApply(
+    [{ action: 'moveBookmark', data: {} }, { action: 'removeFolder', data: {} }, { action: 'closeTab', data: {} }],
+    { automationMode: 'auto' },
+  );
+  assert.deepEqual(autoApply.map((i) => i.action), ['closeTab']);
+  assert.equal(needsReview.length, 2);
+});
 
 test('runCommand applies whitelist + ignore-list via finalizePlan (safety controls hold on the command path)', async () => {
   const chromeApi = {

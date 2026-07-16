@@ -8,10 +8,13 @@ import { applyItem as defaultApplyItem } from './executor.js';
 import { recordUndo as defaultRecordUndo } from './undo-log.js';
 import { redactUrl, isPrivateHost } from './url-utils.js';
 
+// High-impact/destructive actions are never auto-applied — they always wait for
+// explicit review, even in auto mode.
+const REVIEW_ONLY = new Set(['deleteBookmark', 'moveBookmark', 'removeFolder']);
 export function partitionForApply(items, settings) {
   if (settings.automationMode !== 'auto') return { autoApply: [], needsReview: items };
-  const autoApply = items.filter((i) => i.action !== 'deleteBookmark');
-  const needsReview = items.filter((i) => i.action === 'deleteBookmark');
+  const autoApply = items.filter((i) => !REVIEW_ONLY.has(i.action));
+  const needsReview = items.filter((i) => REVIEW_ONLY.has(i.action));
   return { autoApply, needsReview };
 }
 
