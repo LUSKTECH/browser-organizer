@@ -42,6 +42,28 @@ export function projectBookmarksForHost(bookmarks) {
   return bookmarks.map((b) => ({ id: b.id, title: b.title, url: safeUrlForModel(b.url), folder: (b.path || []).join('/') }));
 }
 
+// Proposes removeFolder items for leaf folders (no subfolders) that are empty now
+// or would be emptied by `moves`. Skips roots. Bar/whitelist protection and the
+// executor's own empty-guard are applied downstream (one pass, no cascade).
+export function findEmptyFolders(folders, bookmarks, moves = []) {
+  const lost = new Map(), gained = new Map(), subfolders = new Map(), bmCount = new Map();
+  for (const m of moves) {
+    const d = m.data || {};
+    if (d.fromParentId) lost.set(d.fromParentId, (lost.get(d.fromParentId) || 0) + 1);
+    if (d.toParentId) gained.set(d.toParentId, (gained.get(d.toParentId) || 0) + 1); // newFolderPath targets aren't existing folders
+  }
+  for (const f of folders) subfolders.set(f.parentId, (subfolders.get(f.parentId) || 0) + 1);
+  for (const b of bookmarks) bmCount.set(b.parentId, (bmCount.get(b.parentId) || 0) + 1);
+  const items = [];
+  for (const f of folders) {
+    if (ROOT_IDS.has(f.id)) continue;
+    if ((subfolders.get(f.id) || 0) > 0) continue;
+    const remaining = (bmCount.get(f.id) || 0) - (lost.get(f.id) || 0) + (gained.get(f.id) || 0);
+    if (remaining <= 0) items.push({ itemId: `rf-${f.id}`, action: 'removeFolder', status: 'pending', reason: 'Empty folder', data: { folderId: f.id, parentId: f.parentId, index: f.index, title: f.title } });
+  }
+  return items;
+}
+
 // Builds the full plan for the enabled features. `deps` is injectable for tests;
 // in production it defaults to real collectors + a native client passed in.
 export async function buildPlan(deps) {
@@ -143,12 +165,15 @@ export async function buildPlan(deps) {
       folders = tree.folders; // captured for finalize protection (bar/whitelist)
       const mode = settings.organizeMode || 'additive';
       const candidates = selectOrganizeCandidates(tree.bookmarks, mode);
+      let moveItems = [];
       if (candidates.length) {
         const byId = new Map(candidates.map((b) => [b.id, b]));
         const folderInv = folders.map((fo) => ({ id: fo.id, path: (fo.path || []).join('/') }));
         const r = await nativeClient.request({ type: 'organize', task: 'organize-bookmarks', adapter, payload: { mode, folders: folderInv, bookmarks: projectBookmarksForHost(candidates), rules } });
-        items.push(...mapOrganizeResult(r.moves, byId, mode));
+        moveItems = mapOrganizeResult(r.moves, byId, mode);
+        items.push(...moveItems);
       }
+      if (settings.removeEmptyFolders) items.push(...findEmptyFolders(folders, tree.bookmarks, moveItems));
     } catch (e) { console.warn('[organizer] organize-bookmarks phase failed:', e); }
   }
 
