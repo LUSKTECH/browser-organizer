@@ -91,6 +91,14 @@ test('checkDeadLinks tags dead items with category + numeric httpStatus', async 
   assert.equal(byId['2'].data.httpStatus, 410);
 });
 
+test('checkDeadLinks treats opaqueredirect (manual redirect, status 0) as alive', async () => {
+  // Real browsers return { type: 'opaqueredirect', status: 0 } for a 3xx under
+  // redirect:'manual'. That must NOT be flagged unreachable/dead.
+  const fetchFn = async () => ({ status: 0, type: 'opaqueredirect' });
+  const items = await checkDeadLinks([{ id: '7', url: 'https://moved.example/', parentId: '1', index: 0, title: 'm' }], { fetchFn, concurrency: 1 });
+  assert.deepEqual(items, []);
+});
+
 test('checkDeadLinks marks connection failures unreachable (httpStatus 0)', async () => {
   const fetchFn = async () => { throw Object.assign(new Error('boom'), { name: 'TypeError' }); };
   const items = await checkDeadLinks([{ id: '9', url: 'https://x.com/', parentId: '1', index: 0, title: 'x' }], { fetchFn, concurrency: 1 });

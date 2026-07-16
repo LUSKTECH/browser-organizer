@@ -3,14 +3,15 @@ import { normalizeUrl, isHttpUrl, isPrivateHost } from './url-utils.js';
 // `opts.category` ('duplicate' | 'stale' | 'dead' | 'other') and `opts.httpStatus`
 // (numeric, dead links only) let the panel group cleanup proposals by reason/status.
 export function deleteItem(b, reason, opts = {}) {
+  const { category = 'other', httpStatus } = opts || {};
   const data = { bookmarkId: b.id, parentId: b.parentId, index: b.index, title: b.title, url: b.url };
-  if (opts.httpStatus != null) data.httpStatus = opts.httpStatus;
+  if (httpStatus != null) data.httpStatus = httpStatus;
   return {
     itemId: `del-${b.id}`,
     action: 'deleteBookmark',
     status: 'pending',
     reason,
-    category: opts.category || 'other',
+    category,
     data,
   };
 }
@@ -62,6 +63,10 @@ async function probeStatus(url, fetchFn, timeoutMs) {
     if (res.status === 405 || res.status === 501) {
       res = await fetchFn(url, { method: 'GET', redirect: 'manual', signal: controller.signal });
     }
+    // Under redirect:'manual' the browser returns an opaque-redirect response
+    // (type 'opaqueredirect', status 0). That's a live redirect, not a dead host,
+    // so report it as a redirect (302) rather than letting status 0 read as unreachable.
+    if (res.type === 'opaqueredirect') return 302;
     return res.status;
   } catch (err) {
     if (err && err.name === 'AbortError') return -1; // timeout

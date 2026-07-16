@@ -439,7 +439,7 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
 .planTools[hidden] { display: none; } /* author display:flex would otherwise override the hidden attr */
 .planTools input[type="search"] { flex: 1 1 140px; min-width: 120px; }
 .planTools button { padding: 4px 10px; font-size: 11px; }
-.planTool-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); }
+.planTool-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
 
 /* ---------- Click-to-focus affordances ---------- */
 .focusable { cursor: pointer; color: var(--link); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
