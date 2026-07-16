@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.2 — 2026-07-16
+Organize bookmarks into folders (AI), plus bookmark-cleanup status grouping.
+
+**Features**
+- **Organize/categorize bookmarks into folders** with your chosen method: *match* (sort into
+  existing folders only, no new folders), *additive* (keep existing folders, add category
+  folders, sort loose bookmarks), or *full* (reorganize everything, including already-filed
+  bookmarks). New folders are created under "Other Bookmarks".
+- Protections, enforced in code (not left to the model): the **Bookmarks Bar is never touched**
+  by default, whitelisted folders and their contents are never touched, and empty folders can
+  optionally be removed after sorting. Every move/removal is a reviewable, undoable suggestion.
+- Bookmark cleanup can now be **grouped by status** (Not found 404 / Gone 410 / Unreachable /
+  Duplicate / Not visited) via a panel toggle; the dead-link check records the real HTTP status.
+
+**Host**
+- New native-host task `organize-bookmarks` (prompt + parser). Additive: existing tasks are
+  unchanged. An older host paired with the new extension simply skips the organize scan.
+- New reversible actions `moveBookmark` and `removeFolder` (empty-guarded).
+
 ## 0.1.1 — 2026-07-15
 Host package fixes.
 - **Windows: `npx` install now registers the native host.** The `bin` (`cli.js`) skipped the
