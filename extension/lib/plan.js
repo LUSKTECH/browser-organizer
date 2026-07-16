@@ -78,6 +78,35 @@ export function mapImportantResult(important, tabsById) {
     .filter(Boolean);
 }
 
+// Maps model "moves" to moveBookmark items. `bookmarksById` is keyed by string
+// bookmark id (the candidates sent to the model). match mode forbids new folders;
+// new folders are created under Other Bookmarks ('2') so the bar stays untouched.
+export function mapOrganizeResult(moves, bookmarksById, mode = 'additive') {
+  return (moves || [])
+    .map((m) => {
+      const b = bookmarksById.get(m.bookmarkId);
+      if (!b) return null;
+      const item = {
+        itemId: `mv-${b.id}`,
+        action: 'moveBookmark',
+        status: 'pending',
+        reason: m.reason || 'Categorized',
+        data: { bookmarkId: b.id, fromParentId: b.parentId, fromIndex: b.index, title: b.title, url: b.url },
+      };
+      if (m.targetFolderId) {
+        if (m.targetFolderId === b.parentId) return null; // already there → no-op
+        item.data.toParentId = m.targetFolderId;
+      } else if (m.newFolderPath && m.newFolderPath.length && mode !== 'match') {
+        item.data.toFolderPath = m.newFolderPath;
+        item.data.toRootId = '2';
+      } else {
+        return null; // match mode + newFolderPath, or no usable destination
+      }
+      return item;
+    })
+    .filter(Boolean);
+}
+
 export function validatePlanItem(item) {
   return !!item
     && typeof item.itemId === 'string'

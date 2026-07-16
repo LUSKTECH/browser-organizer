@@ -2,8 +2,45 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
-import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand, applyFolderProtection } from '../extension/lib/orchestrator.js';
+import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand, applyFolderProtection, selectOrganizeCandidates, projectBookmarksForHost, findEmptyFolders } from '../extension/lib/orchestrator.js';
+
+test('findEmptyFolders proposes empty/emptied leaf folders; skips roots, non-empty, and folders with subfolders', () => {
+  const folders = [
+    { id: '1', parentId: '0', index: 0, title: 'Bar', path: ['Bar'], isRoot: true },
+    { id: '10', parentId: '2', index: 0, title: 'EmptyNow', path: ['Other', 'EmptyNow'] },
+    { id: '11', parentId: '2', index: 1, title: 'HasChild', path: ['Other', 'HasChild'] },
+    { id: '12', parentId: '2', index: 2, title: 'EmptiedByMove', path: ['Other', 'EmptiedByMove'] },
+    { id: '13', parentId: '2', index: 3, title: 'Parent', path: ['Other', 'Parent'] },
+    { id: '14', parentId: '13', index: 0, title: 'Sub', path: ['Other', 'Parent', 'Sub'] },
+  ];
+  const bookmarks = [
+    { id: 'a', parentId: '11' }, // HasChild stays non-empty
+    { id: 'b', parentId: '12' }, // moved out below
+  ];
+  const moves = [{ action: 'moveBookmark', data: { bookmarkId: 'b', fromParentId: '12', toParentId: '20' } }];
+  const out = findEmptyFolders(folders, bookmarks, moves);
+  assert.deepEqual(out.map((i) => i.data.folderId).sort(), ['10', '12', '14']);
+  assert.equal(out[0].action, 'removeFolder');
+});
 import { validatePlanItem } from '../extension/lib/plan.js';
+
+test('selectOrganizeCandidates: match/additive = unfiled only, full = all', () => {
+  const bms = [
+    { id: '1', parentId: '2' },  // unfiled (Other Bookmarks root)
+    { id: '2', parentId: '10' }, // filed
+    { id: '3', parentId: '1' },  // unfiled (bar root)
+  ];
+  assert.deepEqual(selectOrganizeCandidates(bms, 'match').map((b) => b.id), ['1', '3']);
+  assert.deepEqual(selectOrganizeCandidates(bms, 'additive').map((b) => b.id), ['1', '3']);
+  assert.deepEqual(selectOrganizeCandidates(bms, 'full').map((b) => b.id), ['1', '2', '3']);
+});
+
+test('projectBookmarksForHost redacts urls and flattens the folder path', () => {
+  const p = projectBookmarksForHost([{ id: '9', title: 'T', url: 'https://x.com/p?q=secret#h', path: ['Other Bookmarks', 'Dev'] }]);
+  assert.equal(p[0].id, '9');
+  assert.equal(p[0].folder, 'Other Bookmarks/Dev');
+  assert.ok(!p[0].url.includes('secret')); // query redacted before egress
+});
 
 test('applyFolderProtection drops moves/removes touching the bar or whitelisted folders', () => {
   const folders = [

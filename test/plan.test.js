@@ -1,6 +1,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapGroupResult, mapStaleResult, mapImportantResult, validatePlanItem, indexById } from '../extension/lib/plan.js';
+import { mapGroupResult, mapStaleResult, mapImportantResult, validatePlanItem, indexById, mapOrganizeResult } from '../extension/lib/plan.js';
+
+test('mapOrganizeResult maps existing-folder + new-folder moves and drops no-ops', () => {
+  const byId = new Map([
+    ['9', { id: '9', parentId: '2', index: 0, title: 'MDN', url: 'https://mdn.dev' }],
+    ['8', { id: '8', parentId: '2', index: 1, title: 'React', url: 'https://react.dev' }],
+    ['7', { id: '7', parentId: '5', index: 0, title: 'Kept', url: 'https://k.dev' }],
+  ]);
+  const moves = [
+    { bookmarkId: '9', targetFolderId: '5', reason: 'docs' },      // existing folder
+    { bookmarkId: '8', newFolderPath: ['Dev', 'React'] },          // new folder
+    { bookmarkId: '7', targetFolderId: '5' },                      // no-op (already in 5)
+    { bookmarkId: 'nope', targetFolderId: '5' },                   // unknown -> dropped
+  ];
+  const out = mapOrganizeResult(moves, byId, 'additive');
+  assert.equal(out.length, 2);
+  const nine = out.find((i) => i.data.bookmarkId === '9');
+  assert.equal(nine.action, 'moveBookmark');
+  assert.equal(nine.data.toParentId, '5');
+  assert.deepEqual(nine.data.fromParentId, '2');
+  const eight = out.find((i) => i.data.bookmarkId === '8');
+  assert.deepEqual(eight.data.toFolderPath, ['Dev', 'React']);
+  assert.equal(eight.data.toRootId, '2');
+});
+
+test('mapOrganizeResult in match mode rejects new-folder moves', () => {
+  const byId = new Map([['8', { id: '8', parentId: '2', index: 0, title: 'R', url: 'https://r.dev' }]]);
+  const out = mapOrganizeResult([{ bookmarkId: '8', newFolderPath: ['Dev'] }], byId, 'match');
+  assert.deepEqual(out, []);
+});
 
 const tabs = [
   { tabId: 1, title: 'A', url: 'https://a.com', windowId: 9, index: 0, pinned: false, idleDays: 40 },
