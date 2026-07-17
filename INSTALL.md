@@ -37,6 +37,19 @@ using the published extension ID — no need to be inside any project folder. Ta
 browsers with `npx @lusktech/browser-organizer-host install chrome`, repair a broken install
 with `… repair`, and remove it with `… uninstall`.
 
+> **`npm install -g` is not enough on its own.** A global (or local) `npm install` only puts
+> the `browser-organizer-host` command on your PATH — it does **not** register the helper
+> (there's no postinstall step). If you install that way, you must then run the command once to
+> register it:
+> ```
+> npm install -g @lusktech/browser-organizer-host
+> browser-organizer-host
+> ```
+> `npx` is simpler because it fetches **and runs** the installer in one step. Either way, the
+> register step copies the current version into the stable location the browser launches, so
+> after installing a new version you must re-run it (`browser-organizer-host` or
+> `npx @lusktech/browser-organizer-host`) to actually update the registered helper.
+
 **B. No Node / prefer a double-click:** download the installer for your OS from the
 [releases page](https://github.com/LUSKTECH/browser-organizer/releases) and run it. It ships
 a self-contained helper (no Node required) and registers it for Chrome and Edge. On Windows
