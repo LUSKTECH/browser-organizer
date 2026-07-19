@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.4 — 2026-07-19
+Organize fixes for Edge + Advanced settings.
+
+**Fixes**
+- **Organize now works on Edge (and any Chromium with non-Chrome root ids).** Root folder
+  ids are read from the live tree instead of assuming Chrome's `1/2/3` — Edge's "Other
+  favourites" is `203` (plus a `722` "Workspaces" root), so its loose bookmarks were being
+  skipped. New folders now land under the real "Other bookmarks" root.
+- Move suggestions show their **destination folder as a chip** (leaf name, full path on hover)
+  instead of a redundant sentence.
+- Organize no longer reports a misleading "looks tidy" when it actually produced nothing —
+  it says why (no candidates / model returned nothing / moves matched no bookmark / all moves
+  skipped by a protection / the helper is out of date).
+
+**Features**
+- **Advanced settings** (warning-gated): debug logging; Claude "Load MCP servers" / "Load
+  plugins & settings" toggles (default off = faster, side-effect-free, OAuth login intact);
+  and a per-backend **extra CLI flags** field for CLI flag changes or obscure CLIs. Flags are
+  validated host-side against a denylist (tool/file/permission grants, sandbox, mcp-config,
+  plugins/settings, `--bare`, etc. are rejected).
+
 ## 0.1.3 — 2026-07-16
 - **Show the host bridge version in the panel.** The connection banner now reads
   e.g. "Claude CLI connected (2.1.209) · bridge v0.1.3", so you can confirm which
