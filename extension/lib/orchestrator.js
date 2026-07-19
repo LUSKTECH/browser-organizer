@@ -172,14 +172,14 @@ export async function buildPlan(deps) {
       let moveItems = [];
       if (!candidates.length) {
         console.info(`[organizer] organize: 0 candidates (mode=${mode}, ${tree.bookmarks.length} bookmarks total, roots=[${[...tree.rootIds].join(',')}])`);
-        onWarning(`Nothing to sort: no loose bookmarks were found${settings.protectBookmarkBar ? ' outside the protected bookmarks bar' : ''}. "Match"/"Add folders" only move bookmarks that aren't already in a folder — try "Fully reorganize" in Settings to include filed ones.`);
+        onWarning(`Nothing to sort: no loose bookmarks were found${settings.protectBookmarkBar !== false ? ' outside the protected bookmarks bar' : ''}. "Match"/"Add folders" only move bookmarks that aren't already in a folder — try "Fully reorganize" in Settings to include filed ones.`);
       } else {
         const byId = new Map(candidates.map((b) => [b.id, b]));
         const folderPathById = new Map(folders.map((fo) => [fo.id, (fo.path || []).join('/')]));
         const folderInv = folders.map((fo) => ({ id: fo.id, path: folderPathById.get(fo.id) }));
         const r = await nativeClient.request({ type: 'organize', task: 'organize-bookmarks', adapter, payload: { mode, folders: folderInv, bookmarks: projectBookmarksForHost(candidates), rules } });
         const rawMoves = Array.isArray(r && r.moves) ? r.moves : [];
-        moveItems = mapOrganizeResult(r && r.moves, byId, mode, tree.otherId, folderPathById);
+        moveItems = mapOrganizeResult(rawMoves, byId, mode, tree.otherId, folderPathById);
         // How many survive the bar/whitelist protections (what actually reaches the plan)?
         const kept = applyFolderProtection(moveItems, { protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, rootIds: tree.rootIds, barId: tree.barId });
         console.info(`[organizer] organize: ${candidates.length} candidate(s), mode=${mode} → model ${rawMoves.length} move(s) → ${moveItems.length} mapped → ${kept.length} after protections`);
@@ -197,7 +197,7 @@ export async function buildPlan(deps) {
       console.warn('[organizer] organize-bookmarks phase failed:', e);
       // Never fall through to a silent "looks tidy": surface the failure. Call out
       // the out-of-date-host case specifically (it rejects the task as unknown).
-      onWarning(/unknown task/i.test(String((e && e.message) || e))
+      onWarning(/unknown task/i.test(String(e?.message || e))
         ? 'Your helper (native host) is out of date and can’t sort bookmarks yet. Update it — run `browser-organizer-host` in a terminal — then reload the extension.'
         : 'Sorting bookmarks failed (it may have timed out on a large collection). See the service-worker console for details, and try again with fewer bookmarks.');
     }
