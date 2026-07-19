@@ -175,10 +175,11 @@ export async function buildPlan(deps) {
         onWarning(`Nothing to sort: no loose bookmarks were found${settings.protectBookmarkBar ? ' outside the protected bookmarks bar' : ''}. "Match"/"Add folders" only move bookmarks that aren't already in a folder — try "Fully reorganize" in Settings to include filed ones.`);
       } else {
         const byId = new Map(candidates.map((b) => [b.id, b]));
-        const folderInv = folders.map((fo) => ({ id: fo.id, path: (fo.path || []).join('/') }));
+        const folderPathById = new Map(folders.map((fo) => [fo.id, (fo.path || []).join('/')]));
+        const folderInv = folders.map((fo) => ({ id: fo.id, path: folderPathById.get(fo.id) }));
         const r = await nativeClient.request({ type: 'organize', task: 'organize-bookmarks', adapter, payload: { mode, folders: folderInv, bookmarks: projectBookmarksForHost(candidates), rules } });
         const rawMoves = Array.isArray(r && r.moves) ? r.moves : [];
-        moveItems = mapOrganizeResult(r && r.moves, byId, mode, tree.otherId);
+        moveItems = mapOrganizeResult(r && r.moves, byId, mode, tree.otherId, folderPathById);
         // How many survive the bar/whitelist protections (what actually reaches the plan)?
         const kept = applyFolderProtection(moveItems, { protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, rootIds: tree.rootIds, barId: tree.barId });
         console.info(`[organizer] organize: ${candidates.length} candidate(s), mode=${mode} → model ${rawMoves.length} move(s) → ${moveItems.length} mapped → ${kept.length} after protections`);

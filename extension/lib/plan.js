@@ -82,7 +82,7 @@ export function mapImportantResult(important, tabsById) {
 // bookmark id (the candidates sent to the model). match mode forbids new folders;
 // new folders are created under `otherId` (the real "Other bookmarks" root,
 // which differs between Chrome and Edge) so the bar stays untouched.
-export function mapOrganizeResult(moves, bookmarksById, mode = 'additive', otherId = '2') {
+export function mapOrganizeResult(moves, bookmarksById, mode = 'additive', otherId = '2', folderPathById = new Map()) {
   return (moves || [])
     .map((m) => {
       const b = bookmarksById.get(m.bookmarkId);
@@ -91,18 +91,23 @@ export function mapOrganizeResult(moves, bookmarksById, mode = 'additive', other
         itemId: `mv-${b.id}`,
         action: 'moveBookmark',
         status: 'pending',
-        reason: m.reason || 'Categorized',
         data: { bookmarkId: b.id, fromParentId: b.parentId, fromIndex: b.index, title: b.title, url: b.url },
       };
+      let dest;
       if (m.targetFolderId) {
         if (m.targetFolderId === b.parentId) return null; // already there → no-op
         item.data.toParentId = m.targetFolderId;
+        dest = folderPathById.get(m.targetFolderId) || 'folder';
       } else if (m.newFolderPath && m.newFolderPath.length && mode !== 'match') {
         item.data.toFolderPath = m.newFolderPath;
         item.data.toRootId = otherId;
+        dest = `${m.newFolderPath.join('/')} (new folder)`;
       } else {
         return null; // match mode + newFolderPath, or no usable destination
       }
+      item.data.toLabel = dest; // human-readable destination for the panel
+      const why = String(m.reason || '').trim();
+      item.reason = `Move to "${dest}"${why ? ` — ${why}` : ''}`;
       return item;
     })
     .filter(Boolean);
