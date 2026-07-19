@@ -154,7 +154,7 @@ const API_ADAPTERS = new Set(['openai']);
 // starts relying on a newer host; the panel nudges an update when the installed
 // bridge is older. No network — this is a compatibility contract, not a "latest"
 // lookup (that's the opt-in checkHostUpdates path).
-export const MIN_HOST_VERSION = '0.1.4';
+export const MIN_HOST_VERSION = '0.1.5';
 
 // true if semver a < b (ignores any prerelease suffix; missing parts = 0).
 export function semverLt(a, b) {
