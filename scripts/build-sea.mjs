@@ -1,11 +1,13 @@
 // Builds a single-file executable of the native host for the current OS/arch
 // using Node's Single Executable Applications (SEA) support.
 //
-// Uses two build-time tools, fetched on demand via `npx --yes` (pinned below) so
-// they are NOT project dependencies and never touch the lockfile: esbuild bundles
-// the ESM host graph into one CJS file so SEA can consume it, and postject injects
-// the SEA blob into a copy of the Node binary. The runtime host and the published
-// npm package stay dependency-free.
+// Uses two build-time tools, fetched on demand via `npx --yes` at pinned versions
+// so they are NOT project dependencies and never touch the lockfile: esbuild
+// bundles the ESM host graph into one CJS file so SEA can consume it, and postject
+// injects the SEA blob into a copy of the Node binary. Keeping them out of the
+// lockfile keeps the runtime host and published npm package dependency-free and
+// avoids pulling postject's transitive deps (e.g. commander) into supply-chain
+// scans of this repo.
 //
 // Run: `npm run build:sea` (i.e. `node scripts/build-sea.mjs`).
 import { execFileSync } from 'node:child_process';

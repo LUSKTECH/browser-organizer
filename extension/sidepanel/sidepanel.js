@@ -1,4 +1,4 @@
-import { getSettings, setSettings } from '../lib/storage.js';
+import { getSettings } from '../lib/storage.js';
 import { setSecret, hasSecret } from '../lib/secret-store.js';
 import { ignoreKey } from '../lib/orchestrator.js';
 import {
@@ -10,6 +10,7 @@ import {
 } from './viewmodel.js';
 
 import { TAB_GROUP_COLORS as GROUP_COLORS } from '../lib/colors.js';
+import { STATUS_LABELS } from '../lib/labels.js';
 
 let plan = [];
 let selection = new Set();
@@ -19,8 +20,15 @@ let tabSelection = new Set();
 let planFilter = '';
 let groupBookmarksByStatus = false; // panel-local pref: bucket the Delete-bookmark group by status
 
-// Fixed display order for the bookmark status buckets (see viewmodel.statusBucket).
-const BUCKET_ORDER = ['http-404', 'http-410', 'unreachable', 'dead-other', 'duplicate', 'stale', 'other'];
+// Display order for the bookmark status buckets. The priority list fixes the
+// order of the known buckets; any bucket added to STATUS_LABELS later is appended
+// automatically so it can't silently fail to render (it just lands before 'other').
+const BUCKET_PRIORITY = ['http-404', 'http-410', 'unreachable', 'dead-other', 'duplicate', 'stale', 'other'];
+const BUCKET_ORDER = [
+  ...BUCKET_PRIORITY.filter((k) => k !== 'other'),
+  ...Object.keys(STATUS_LABELS).filter((k) => !BUCKET_PRIORITY.includes(k)),
+  'other',
+];
 const collapsedBuckets = new Set(); // status sub-groups the user has collapsed
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +41,24 @@ function flashStatus(t) {
   el.classList.remove('flash');
   void el.offsetWidth; // reflow so the CSS animation restarts even if text is unchanged
   el.classList.add('flash');
+}
+
+// All settings WRITES go through the service worker so they serialize under its
+// single 'settings' lock; writing chrome.storage directly from this context would
+// race SW-side writers (ignore/decisions) and clobber them. Reads stay local.
+async function setSettings(patch) {
+  const r = await send({ cmd: 'setSettings', patch });
+  // A dropped/failed write must not look like success (the SW may be asleep and
+  // the callback fires with no response). Throw so callers can surface it.
+  if (!r || !r.ok) throw new Error((r && r.error) || 'the background worker did not respond — settings were not saved');
+  return r.settings;
+}
+
+// Fetch the stored plan, tolerating a null response (SW asleep/no reply — the
+// callback fires with undefined and chrome.runtime.lastError set).
+async function fetchPlan() {
+  const r = await send({ cmd: 'getPlan' });
+  return (r && r.items) || [];
 }
 
 function send(message) {
@@ -99,6 +125,7 @@ function renderGroupItem(item) {
   nameInput.type = 'text';
   nameInput.className = 'groupName';
   nameInput.value = item.data.groupName;
+  nameInput.setAttribute('aria-label', `Rename group ${item.data.groupName}`);
   nameInput.addEventListener('click', (e) => e.stopPropagation());
   nameInput.addEventListener('change', () => {
     updatePlanItem(item.itemId, (it) => renameGroup(it, nameInput.value));
@@ -106,6 +133,7 @@ function renderGroupItem(item) {
 
   const colorSelect = document.createElement('select');
   colorSelect.className = 'groupColor';
+  colorSelect.setAttribute('aria-label', `Color for group ${item.data.groupName}`);
   for (const c of GROUP_COLORS) {
     const opt = document.createElement('option');
     opt.value = c;
@@ -141,6 +169,7 @@ function renderGroupItem(item) {
     // "Move to" another proposed group.
     const otherGroups = plan.filter((i) => i.action === 'groupTabs' && i.itemId !== item.itemId);
     const moveSel = document.createElement('select');
+    moveSel.setAttribute('aria-label', `Move "${m.title || m.url}" to another group`);
     const placeholder = document.createElement('option');
     placeholder.value = ''; placeholder.textContent = 'Move to…';
     moveSel.appendChild(placeholder);
@@ -394,8 +423,8 @@ async function startScan(features) {
   const res = await send({ cmd: 'run', features, windowId });
   stopScanClock();
   $('cancelRun').hidden = true;
-  if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
-  plan = (await send({ cmd: 'getPlan' })).items;
+  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+  plan = await fetchPlan();
   selection = new Set();
   renderPlan(true);
   // Surface actionable warnings (e.g. an out-of-date helper) instead of the
@@ -434,8 +463,8 @@ async function applyItems(itemIds) {
   }
   setStatus(`Applying ${itemIds.length}…`);
   const res = await send({ cmd: 'apply', itemIds });
-  if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
-  plan = (await send({ cmd: 'getPlan' })).items;
+  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+  plan = await fetchPlan();
   selection = new Set();
   renderPlan();
   setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}`);
@@ -501,8 +530,8 @@ $('commandForm').addEventListener('submit', async (e) => {
   setStatus('Running your command… (local Claude CLI)');
   const windowId = await currentScopeWindowId();
   const res = await send({ cmd: 'command', instruction, windowId });
-  if (!res.ok) { setStatus(`Error: ${res.error}`); return; }
-  plan = res.items;
+  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+  plan = res.items || [];
   selection = new Set();
   renderPlan(true);
   setStatus(plan.length ? `${plan.length} suggestions.` : 'No matching tabs found.');
@@ -656,9 +685,11 @@ $('settingsForm').adapter.addEventListener('change', async (e) => {
   updateAdapterNote(e.target.value);
   syncExtraArgsField(e.target.value); // show this backend's extra flags
   setStatus(`Switching to ${e.target.selectedOptions[0].text}…`);
-  await setSettings({ adapter: e.target.value });
-  await checkHealth();
-  setStatus('');
+  try {
+    await setSettings({ adapter: e.target.value });
+    await checkHealth();
+    setStatus('');
+  } catch (err) { setStatus(`Could not switch adapter: ${err.message}`); }
 });
 
 async function loadSettings() {
@@ -700,6 +731,7 @@ async function loadSettings() {
 $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
+  try {
   if (form.deadLinkScan.checked) {
     await chrome.permissions.request({ origins: ['<all_urls>'] });
   }
@@ -749,6 +781,7 @@ $('settingsForm').addEventListener('submit', async (e) => {
   // onboarding card + disables Analyze if the new backend isn't reachable.
   await checkHealth();
   flashStatus('Settings saved.');
+  } catch (err) { flashStatus(`Save failed: ${err.message}`); }
 });
 
 async function renderSessions() {
@@ -829,8 +862,8 @@ async function renderMuted() {
     unmute.textContent = 'Unmute';
     unmute.addEventListener('click', async () => {
       const cur = await getSettings();
-      await setSettings({ ignore: (cur.ignore || []).filter((k) => k !== key) });
-      renderMuted();
+      try { await setSettings({ ignore: (cur.ignore || []).filter((k) => k !== key) }); renderMuted(); }
+      catch (err) { setStatus(`Unmute failed: ${err.message}`); }
     });
     li.append(span, unmute);
     list.appendChild(li);
@@ -839,8 +872,8 @@ async function renderMuted() {
 
 $('mutedPanel').addEventListener('toggle', () => { if ($('mutedPanel').open) renderMuted(); });
 $('resetLearning').addEventListener('click', async () => {
-  await setSettings({ decisions: {} });
-  setStatus('Learning reset.');
+  try { await setSettings({ decisions: {} }); setStatus('Learning reset.'); }
+  catch (err) { setStatus(`Reset failed: ${err.message}`); }
 });
 
 $('saveSessionForm').addEventListener('submit', async (e) => {
