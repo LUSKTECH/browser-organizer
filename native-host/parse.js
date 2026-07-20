@@ -15,7 +15,7 @@ function extractBalancedAt(t, start, budget) {
   const close = open === '{' ? '}' : ']';
   let depth = 0, inStr = false, esc = false;
   for (let i = start; i < t.length; i++) {
-    if (budget && --budget.n < 0) return null;
+    if (--budget.n < 0) return null; // shared scan budget exhausted (always supplied)
     const c = t[i];
     if (inStr) {
       if (esc) esc = false;
