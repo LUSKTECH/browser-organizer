@@ -1,0 +1,420 @@
+// The suggestions feature: the plan list and everything that mutates it — render,
+// per-item edits, the run/command scans that produce a plan, and apply. These
+// share the plan/selection state so they live together; other panels talk to this
+// one only through initPlanView() (bootstrap) and showUndoToast() (undo module).
+import { $, setStatus, flashStatus, send, fetchPlan, focusTab, currentScopeWindowId } from './dom.js';
+import { startScanClock, stopScanClock, ensureScanPort } from './scan-clock.js';
+import { showUndoToast } from './undo.js';
+import { ignoreKey } from '../lib/orchestrator.js';
+import { TAB_GROUP_COLORS as GROUP_COLORS } from '../lib/colors.js';
+import { STATUS_LABELS } from '../lib/labels.js';
+import {
+  summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
+  excludeMember, renameGroup, recolorGroup, moveMember, toMarkdown,
+  allItemIds, filterPlan, needsBulkConfirm, destructiveCount, groupByStatus, statusLabel,
+} from './viewmodel.js';
+
+let plan = [];
+let selection = new Set();
+const expandedGroups = new Set();
+let planFilter = '';
+let groupBookmarksByStatus = false; // panel-local pref: bucket the Delete-bookmark group by status
+
+// Display order for the bookmark status buckets. The priority list fixes the
+// order of the known buckets; any bucket added to STATUS_LABELS later is appended
+// automatically so it can't silently fail to render (it just lands before 'other').
+const BUCKET_PRIORITY = ['http-404', 'http-410', 'unreachable', 'dead-other', 'duplicate', 'stale', 'other'];
+const BUCKET_ORDER = [
+  ...BUCKET_PRIORITY.filter((k) => k !== 'other'),
+  ...Object.keys(STATUS_LABELS).filter((k) => !BUCKET_PRIORITY.includes(k)),
+  'other',
+];
+const collapsedBuckets = new Set(); // status sub-groups the user has collapsed
+
+// Persists an edited plan item locally and pushes the full plan to the
+// service worker so it survives panel reloads.
+function updatePlanItem(itemId, updater) {
+  plan = plan.map((it) => (it.itemId === itemId ? updater(it) : it));
+  send({ cmd: 'updatePlan', items: plan });
+  renderPlan();
+}
+
+function renderGroupItem(item) {
+  const li = document.createElement('li');
+  li.className = 'item groupItem';
+
+  const details = document.createElement('details');
+  details.open = expandedGroups.has(item.itemId);
+  details.addEventListener('toggle', () => {
+    if (details.open) expandedGroups.add(item.itemId); else expandedGroups.delete(item.itemId);
+  });
+
+  const summaryEl = document.createElement('summary');
+
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.className = 'itemCheck';
+  check.checked = selection.has(item.itemId);
+  check.setAttribute('aria-label', `Select group ${item.data.groupName}`);
+  check.addEventListener('click', (e) => e.stopPropagation()); // don't toggle the <details>
+  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); });
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'groupName';
+  nameInput.value = item.data.groupName;
+  nameInput.setAttribute('aria-label', `Rename group ${item.data.groupName}`);
+  nameInput.addEventListener('click', (e) => e.stopPropagation());
+  nameInput.addEventListener('change', () => {
+    updatePlanItem(item.itemId, (it) => renameGroup(it, nameInput.value));
+  });
+
+  const colorSelect = document.createElement('select');
+  colorSelect.className = 'groupColor';
+  colorSelect.setAttribute('aria-label', `Color for group ${item.data.groupName}`);
+  for (const c of GROUP_COLORS) {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    if (c === item.data.color) opt.selected = true;
+    colorSelect.appendChild(opt);
+  }
+  colorSelect.addEventListener('click', (e) => e.stopPropagation());
+  colorSelect.addEventListener('change', () => {
+    updatePlanItem(item.itemId, (it) => recolorGroup(it, colorSelect.value));
+  });
+
+  const countSpan = document.createElement('span');
+  countSpan.className = 'itemReason';
+  countSpan.textContent = ` (${item.data.tabIds.length} tabs)`;
+
+  summaryEl.append(check, nameInput, colorSelect, countSpan);
+  details.appendChild(summaryEl);
+
+  const memberList = document.createElement('ul');
+  memberList.className = 'memberList';
+  for (const m of item.data.members) {
+    const mLi = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = m.title || m.url;
+    // Click a member to jump to that tab.
+    label.className = 'focusable';
+    label.setAttribute('role', 'link');
+    label.setAttribute('tabindex', '0');
+    label.title = 'Go to this tab';
+    label.addEventListener('click', () => focusTab(m.tabId));
+    label.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusTab(m.tabId); } });
+    // "Move to" another proposed group.
+    const otherGroups = plan.filter((i) => i.action === 'groupTabs' && i.itemId !== item.itemId);
+    const moveSel = document.createElement('select');
+    moveSel.setAttribute('aria-label', `Move "${m.title || m.url}" to another group`);
+    const placeholder = document.createElement('option');
+    placeholder.value = ''; placeholder.textContent = 'Move to…';
+    moveSel.appendChild(placeholder);
+    for (const g of otherGroups) {
+      const opt = document.createElement('option');
+      opt.value = g.itemId; opt.textContent = g.data.groupName;
+      moveSel.appendChild(opt);
+    }
+    moveSel.addEventListener('change', () => {
+      if (!moveSel.value) return;
+      expandedGroups.add(item.itemId);
+      expandedGroups.add(moveSel.value);
+      plan = moveMember(plan, item.itemId, moveSel.value, m.tabId);
+      send({ cmd: 'updatePlan', items: plan });
+      renderPlan();
+    });
+    if (!otherGroups.length) moveSel.style.display = 'none';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => {
+      expandedGroups.add(item.itemId);
+      updatePlanItem(item.itemId, (it) => excludeMember(it, m.tabId));
+    });
+    mLi.append(label, moveSel, removeBtn);
+    memberList.appendChild(mLi);
+  }
+  details.appendChild(memberList);
+
+  const applyBtn = document.createElement('button');
+  applyBtn.type = 'button';
+  applyBtn.className = 'applySection';
+  applyBtn.textContent = 'Apply this group';
+  applyBtn.addEventListener('click', () => applyItems([item.itemId]));
+  details.appendChild(applyBtn);
+
+  const ignoreBtn = document.createElement('button');
+  ignoreBtn.type = 'button';
+  ignoreBtn.className = 'itemIgnore';
+  ignoreBtn.title = 'Never suggest this again';
+  ignoreBtn.textContent = 'Never suggest this';
+  ignoreBtn.addEventListener('click', () => ignoreItem(item));
+  details.appendChild(ignoreBtn);
+
+  li.appendChild(details);
+  return li;
+}
+
+export function renderPlan(animate = false) {
+  const container = $('plan');
+  container.textContent = '';
+  let enterIdx = 0; // staggers the entrance animation for fresh results only
+  const shown = filterPlan(plan, planFilter);
+  const counts = summarize(shown);
+  const summary = $('summary');
+  summary.hidden = plan.length === 0;
+  const filterNote = planFilter && shown.length !== plan.length ? `  (filtered from ${plan.length})` : '';
+  summary.textContent = Object.entries(counts).map(([a, n]) => `${actionLabel(a)}: ${n}`).join('  •  ') + filterNote;
+  $('planTools').hidden = plan.length === 0;
+  $('planActions').hidden = plan.length === 0; // contextual: apply/clear only when there's a plan
+
+  const groups = groupByAction(shown);
+  const tpl = $('itemTemplate');
+  const stagger = (el) => {
+    if (!animate) return;
+    el.classList.add('enter');
+    el.style.setProperty('--i', Math.min(enterIdx++, 10));
+  };
+  const appendItem = (ul, item) => {
+    if (item.action === 'groupTabs') {
+      const gEl = renderGroupItem(item);
+      stagger(gEl);
+      ul.appendChild(gEl);
+      return;
+    }
+    const node = buildItemNode(item, tpl);
+    stagger(node.querySelector('.item'));
+    ul.appendChild(node);
+  };
+  for (const [action, items] of Object.entries(groups)) {
+    const section = document.createElement('div');
+    section.className = 'group';
+    const h = document.createElement('h2');
+    h.textContent = `${actionLabel(action)} (${items.length})`;
+    section.appendChild(h);
+    // Bookmark cleanup can optionally split into per-status sub-groups.
+    if (action === 'deleteBookmark' && groupBookmarksByStatus) {
+      const buckets = groupByStatus(items);
+      for (const key of BUCKET_ORDER) {
+        const bItems = buckets[key];
+        if (!bItems || !bItems.length) continue;
+        // <details> so each status sub-group collapses independently and the
+        // Expand/Collapse-groups buttons can drive it.
+        const sub = document.createElement('details');
+        sub.className = 'subgroup';
+        sub.open = !collapsedBuckets.has(key);
+        sub.addEventListener('toggle', () => { if (sub.open) collapsedBuckets.delete(key); else collapsedBuckets.add(key); });
+        const sm = document.createElement('summary');
+        sm.textContent = `${statusLabel(key)} (${bItems.length})`;
+        sub.appendChild(sm);
+        const subUl = document.createElement('ul');
+        for (const item of bItems) appendItem(subUl, item);
+        sub.appendChild(subUl);
+        section.appendChild(sub);
+      }
+    } else {
+      const ul = document.createElement('ul');
+      for (const item of items) appendItem(ul, item);
+      section.appendChild(ul);
+    }
+    container.appendChild(section);
+  }
+}
+
+// Builds one suggestion row (checkbox, title/reason/url, ignore, optional
+// go-to-tab) from the shared <template>. Returns the cloned fragment.
+function buildItemNode(item, tpl) {
+  const node = tpl.content.cloneNode(true);
+  const check = node.querySelector('.itemCheck');
+  check.checked = selection.has(item.itemId);
+  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); });
+  node.querySelector('.itemAction').textContent = item.data.groupName || item.data.title || item.data.url || '';
+  const reasonEl = node.querySelector('.itemReason');
+  if (item.action === 'moveBookmark' && item.data.toLabel) {
+    // Show the destination as a chip ("Move to [Folder]"), full path on hover.
+    reasonEl.textContent = '';
+    const lead = document.createElement('span');
+    lead.className = 'moveLead';
+    lead.textContent = 'Move to ';
+    const chip = document.createElement('span');
+    chip.className = item.data.toNew ? 'destChip destChip--new' : 'destChip';
+    chip.textContent = item.data.toLabel;
+    chip.title = (item.data.toNew ? 'New folder: ' : '') + (item.data.toPath || item.data.toLabel);
+    reasonEl.append(lead, chip);
+  } else {
+    reasonEl.textContent = item.reason || '';
+  }
+  node.querySelector('.itemUrl').textContent = item.data.url || (item.data.tabIds ? `${item.data.tabIds.length} tabs` : '');
+  node.querySelector('.itemIgnore').addEventListener('click', () => ignoreItem(item));
+  // Click-to-focus: only meaningful when the suggestion targets a live tab.
+  if (item.data.tabId != null) {
+    const goBtn = document.createElement('button');
+    goBtn.type = 'button';
+    goBtn.className = 'itemFocus';
+    goBtn.textContent = 'Go to tab';
+    goBtn.setAttribute('aria-label', `Go to tab: ${item.data.title || item.data.url || ''}`);
+    goBtn.addEventListener('click', () => focusTab(item.data.tabId));
+    node.querySelector('.item').appendChild(goBtn);
+  }
+  return node;
+}
+
+// Marks an item as "never suggest again": persists the key server-side and
+// drops it from the currently displayed plan immediately.
+async function ignoreItem(item) {
+  const key = ignoreKey(item);
+  await send({ cmd: 'ignore', keys: [key], items: [item] });
+  plan = plan.filter((it) => it.itemId !== item.itemId);
+  renderPlan();
+  setStatus('Won’t suggest that again.');
+}
+
+async function startScan(features) {
+  ensureScanPort();
+  $('cancelRun').hidden = false;
+  startScanClock('Analyzing… (running your local AI CLI)');
+  const windowId = await currentScopeWindowId();
+  const res = await send({ cmd: 'run', features, windowId });
+  stopScanClock();
+  $('cancelRun').hidden = true;
+  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+  plan = await fetchPlan();
+  selection = new Set();
+  renderPlan(true);
+  // Surface actionable warnings (e.g. an out-of-date helper) instead of the
+  // misleading "looks tidy" when a phase couldn't run.
+  if (res.warnings && res.warnings.length) { flashStatus(res.warnings[0]); return; }
+  setStatus(plan.length ? `${plan.length} suggestions.` : 'Nothing to do — your browser looks tidy.');
+}
+
+// Confirms a large destructive batch via a modal before applying. Resolves true
+// to proceed, false to cancel (Cancel button or Esc).
+function confirmBulk(items) {
+  const dlg = $('confirmDialog');
+  $('confirmMsg').textContent = `Apply ${items.length} changes — ${destructiveCount(items)} will close, suspend, or delete tabs/bookmarks. This can be undone, but continue?`;
+  return new Promise((resolve) => {
+    const onCancel = () => done(false); // Esc / backdrop dismiss
+    const done = (val) => {
+      dlg.removeEventListener('cancel', onCancel); // don't let listeners stack across calls
+      $('confirmOk').onclick = null;
+      $('confirmCancel').onclick = null;
+      dlg.close();
+      resolve(val);
+    };
+    $('confirmOk').onclick = () => done(true);
+    $('confirmCancel').onclick = () => done(false);
+    dlg.addEventListener('cancel', onCancel);
+    dlg.showModal();
+  });
+}
+
+async function applyItems(itemIds) {
+  if (!itemIds.length) { setStatus('Nothing selected.'); return; }
+  const chosen = selectedItems(new Set(itemIds), plan);
+  if (needsBulkConfirm(chosen)) {
+    const ok = await confirmBulk(chosen);
+    if (!ok) { setStatus('Cancelled — nothing applied.'); return; }
+  }
+  setStatus(`Applying ${itemIds.length}…`);
+  const res = await send({ cmd: 'apply', itemIds });
+  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+  plan = await fetchPlan();
+  selection = new Set();
+  renderPlan();
+  setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}`);
+  await showUndoToast();
+}
+
+// Per-action run buttons: run just one feature without touching settings.
+const ALL_FEATURES = ['groupTabs', 'staleTabs', 'importantBookmarks', 'cleanBookmarks', 'organizeBookmarks'];
+
+// Wire every control that reads or mutates the plan, load the panel-local
+// group-by-status pref, then paint the stored plan. Called once from the bootstrap.
+export async function initPlanView() {
+  $('run').addEventListener('click', () => startScan());
+  $('cancelRun').addEventListener('click', () => send({ cmd: 'cancel' }));
+  for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
+    btn.addEventListener('click', () => {
+      const only = btn.dataset.feature;
+      const features = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === only]));
+      startScan(features);
+    });
+  }
+
+  $('clearPlan').addEventListener('click', async () => {
+    plan = [];
+    selection = new Set();
+    planFilter = '';
+    $('planFilter').value = '';
+    await send({ cmd: 'updatePlan', items: [] }); // also clear the stored plan so it doesn't reappear on reload
+    renderPlan();
+    setStatus('Cleared.');
+  });
+
+  // Plan toolbar: filter, bulk-select, expand/collapse.
+  $('planFilter').addEventListener('input', (e) => { planFilter = e.target.value; renderPlan(); });
+  $('selectAll').addEventListener('click', () => { selection = new Set(allItemIds(filterPlan(plan, planFilter))); renderPlan(); });
+  $('selectNone').addEventListener('click', () => { selection = new Set(); renderPlan(); });
+  $('expandAll').addEventListener('click', () => {
+    for (const it of plan) if (it.action === 'groupTabs') expandedGroups.add(it.itemId);
+    collapsedBuckets.clear(); // status sub-groups all open
+    renderPlan();
+  });
+  $('collapseAll').addEventListener('click', () => {
+    expandedGroups.clear();
+    for (const key of BUCKET_ORDER) collapsedBuckets.add(key); // status sub-groups all closed
+    renderPlan();
+  });
+
+  // "Group bookmarks by status" toggle — panel-local pref persisted in storage.local.
+  $('groupByStatus').addEventListener('change', (e) => {
+    groupBookmarksByStatus = e.target.checked;
+    chrome.storage.local.set({ groupBookmarksByStatus });
+    renderPlan();
+  });
+
+  $('commandForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = $('commandInput');
+    const instruction = input.value.trim();
+    if (!instruction) return;
+    setStatus('Running your command… (local Claude CLI)');
+    const windowId = await currentScopeWindowId();
+    const res = await send({ cmd: 'command', instruction, windowId });
+    if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+    plan = res.items || [];
+    selection = new Set();
+    renderPlan(true);
+    setStatus(plan.length ? `${plan.length} suggestions.` : 'No matching tabs found.');
+    input.value = '';
+  });
+
+  $('approveSelected').addEventListener('click', () => applyItems([...selection]));
+  $('approveAll').addEventListener('click', () => applyItems(plan.map((i) => i.itemId)));
+
+  $('exportMarkdown').addEventListener('click', async () => {
+    const md = toMarkdown(plan);
+    try {
+      await navigator.clipboard.writeText(md);
+      setStatus('Markdown copied to clipboard.');
+    } catch {
+      const blob = new Blob([md], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'browser-organizer-export.md';
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus('Markdown downloaded.');
+    }
+  });
+
+  // Load the persisted group-by-status pref, then paint the stored plan.
+  const { groupBookmarksByStatus: pref } = await chrome.storage.local.get('groupBookmarksByStatus');
+  groupBookmarksByStatus = !!pref;
+  $('groupByStatus').checked = groupBookmarksByStatus;
+  plan = await fetchPlan();
+  renderPlan(true);
+}
