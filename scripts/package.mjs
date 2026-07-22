@@ -54,7 +54,15 @@ const parts = [];
 const central = [];
 let offset = 0;
 for (const f of files) {
-  const data = fs.readFileSync(f.full);
+  let data = fs.readFileSync(f.full);
+  // The Web Store rejects a manifest containing a `key` field (it's only for
+  // pinning a stable ID for the LOCAL unpacked build). Strip it from the store
+  // upload while leaving extension/manifest.json untouched for development.
+  if (mode === 'store' && f.rel === 'manifest.json') {
+    const m = JSON.parse(data.toString('utf8'));
+    delete m.key;
+    data = Buffer.from(JSON.stringify(m, null, 2) + '\n', 'utf8');
+  }
   const comp = zlib.deflateRawSync(data, { level: 9 });
   const name = Buffer.from(f.rel, 'utf8');
   const crc = crc32(data);
