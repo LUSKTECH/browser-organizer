@@ -82,18 +82,19 @@ export function initSettingsView() {
     e.preventDefault();
     const form = e.target;
     try {
-      if (form.deadLinkScan.checked) {
-        await chrome.permissions.request({ origins: ['<all_urls>'] });
-      }
-      // The npm update check is a network call, so ask for its (narrow) host
-      // permission the moment the user opts in — declining just leaves it inert.
-      if (form.checkHostUpdates.checked) {
-        await chrome.permissions.request({ origins: ['https://registry.npmjs.org/*'] });
-      }
-      // Persist the API key (encrypted, device-local) only if the user typed one;
-      // an empty field means "keep the saved key". Never round-trips the stored key.
+      // Request every newly-needed optional origin in a single prompt rather than
+      // one dialog per feature. dead-link scan needs <all_urls>; the opt-in npm
+      // update check needs the registry host.
+      const neededOrigins = [];
+      if (form.deadLinkScan.checked) neededOrigins.push('<all_urls>');
+      if (form.checkHostUpdates.checked) neededOrigins.push('https://registry.npmjs.org/*');
+      if (neededOrigins.length) await chrome.permissions.request({ origins: neededOrigins });
+      // Persist the API key (encrypted, device-local) only if the user typed one.
+      // Trim FIRST: a blank/whitespace-only field means "keep the saved key" — it
+      // must not fall through to setSecret('') which would clear the stored key.
       const apiKeyInput = $('openaiApiKey');
-      if (apiKeyInput.value) { await setSecret('openaiApiKey', apiKeyInput.value.trim()); apiKeyInput.value = ''; }
+      const apiKey = apiKeyInput.value.trim();
+      if (apiKey) { await setSecret('openaiApiKey', apiKey); apiKeyInput.value = ''; }
       await setSettings({
         adapter: form.adapter.value,
         openaiBaseUrl: form.openaiBaseUrl.value.trim(),
