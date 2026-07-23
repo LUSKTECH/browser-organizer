@@ -156,6 +156,21 @@ test('runRegistryCommands runs each argv via the injected spawn (no shell) and n
   assert.equal(c2.length, 0);
 });
 
+test('runRegistryCommands throws on a failed reg add but tolerates a missing key on delete', () => {
+  // reg add failing (denied / non-zero) must NOT be silently reported as success.
+  assert.throws(
+    () => runRegistryCommands([['reg', 'add', 'HKCU\\...\\host', '/f']], () => ({ status: 1 })),
+    /Registry command failed .*reg add/,
+  );
+  // A spawn error (e.g. reg.exe missing) also propagates.
+  assert.throws(
+    () => runRegistryCommands([['reg', 'add', 'HKCU\\...\\host', '/f']], () => ({ error: new Error('ENOENT') })),
+    /Registry command failed/,
+  );
+  // reg delete of an already-absent key during uninstall is expected → no throw.
+  assert.doesNotThrow(() => runRegistryCommands([['reg', 'delete', 'HKCU\\...\\host', '/f']], () => ({ status: 1 })));
+});
+
 test('uninstall of one browser keeps the shared host home for the other', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-uninstall-'));
   const copyTo = path.join(home, '.browser-organizer');
