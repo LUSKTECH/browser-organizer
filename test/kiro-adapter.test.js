@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { kiroAdapter, resolveCommand } from '../native-host/adapters/kiro.js';
 import { makeFakeSpawn } from './helpers/fake-spawn.js';
 
-test('run invokes `chat --no-interactive --trust-tools= <prompt>` (trust no tools)', async () => {
+test('run invokes `chat --no-interactive --trust-tools= -- <prompt>` (trust no tools)', async () => {
   let seen = null;
   const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: ' {"close":[]} \n' }; });
   const out = await kiroAdapter.run('PROMPT', { spawnFn });
@@ -11,7 +11,18 @@ test('run invokes `chat --no-interactive --trust-tools= <prompt>` (trust no tool
   assert.deepEqual(seen.args.slice(0, 2), ['chat', '--no-interactive']);
   assert.ok(seen.args.includes('--trust-tools='));       // explicitly trust no tools
   assert.ok(!seen.args.includes('--trust-all-tools'));
+  assert.equal(seen.args[seen.args.length - 2], '--');   // end-of-options marker precedes the prompt
   assert.equal(seen.args[seen.args.length - 1], 'PROMPT');
+});
+
+test('run inserts `--` before the prompt so a flag-shaped prompt (injection) can never be parsed as a flag', async () => {
+  let seen = null;
+  const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: 'ok' }; });
+  await kiroAdapter.run('--trust-all-tools', { spawnFn });
+  const idx = seen.args.indexOf('--');
+  assert.ok(idx >= 0, '`--` end-of-options marker must be present');
+  assert.equal(seen.args[idx + 1], '--trust-all-tools');
+  assert.equal(idx, seen.args.length - 2); // `--` immediately precedes the prompt
 });
 
 test('health returns the CLI version', async () => {

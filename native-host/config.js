@@ -39,8 +39,10 @@ const MAX_ARG_LEN = 200;
 const CONTROL_CHARS = /[\u0000-\u001f]/;
 
 function tokenizeExtraArgs(src) {
-  const list = Array.isArray(src) ? src : (typeof src === 'string' ? src.split(/\s+/) : []);
-  return list.map((s) => String(s == null ? '' : s)).filter(Boolean).slice(0, MAX_EXTRA_ARGS);
+  // Slice BEFORE map/filter so a huge caller-supplied array can't force O(n)
+  // work before it's bounded down to MAX_EXTRA_ARGS.
+  const list = (Array.isArray(src) ? src : (typeof src === 'string' ? src.split(/\s+/) : [])).slice(0, MAX_EXTRA_ARGS);
+  return list.map((s) => String(s == null ? '' : s)).filter(Boolean);
 }
 
 export function sanitizeCli(raw, allowed = {}) {

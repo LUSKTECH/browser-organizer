@@ -7,9 +7,10 @@ export function encodeMessage(obj) {
   return Buffer.concat([header, json]);
 }
 
-// Hard cap on a single frame's declared length. Chrome caps inbound native
-// messages at ~1 MB; anything past this means the framing is corrupt, so we
-// stop trusting the buffer rather than allocating unboundedly.
+// Hard cap on a single frame's declared length. Chrome's own inbound (extension
+// -> host) limit is 64 MiB — the 1 MB figure only applies to host -> extension
+// messages. This is a deliberate, independent cap well under that 64 MiB ceiling;
+// past it we stop trusting the buffer rather than allocating unboundedly.
 const MAX_FRAME_BYTES = 16 * 1024 * 1024;
 
 // Stateful reader: feed it raw stdin chunks; it returns any complete messages,

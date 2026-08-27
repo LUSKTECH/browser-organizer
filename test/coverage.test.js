@@ -243,28 +243,29 @@ test('dead-link check falls back to GET on 405 and flags 404', async () => {
 // ---- install() body: linux write + win32 registry ----
 test('install() writes launcher + manifest (linux) and returns registry commands (win32)', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-home-'));
-  const hostDir = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-host-'));
+  const copyTo = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-host-'));
   try {
-    const files = install({ extensionId: 'abc123', browsers: ['chrome'], platform: 'linux', home, hostDir, nodePath: '/usr/bin/node' });
+    const files = install({ extensionId: 'abc123', browsers: ['chrome'], platform: 'linux', home, copyTo, nodePath: '/usr/bin/node' });
     assert.ok(files.some((f) => f.endsWith('run.sh')));
     assert.ok(files.some((f) => f.includes('NativeMessagingHosts')));
     for (const f of files) assert.ok(fs.existsSync(f), `exists: ${f}`);
 
-    const win = install({ extensionId: 'abc123', browsers: ['chrome'], platform: 'win32', home, hostDir, nodePath: 'C:\\node.exe' });
+    const win = install({ extensionId: 'abc123', browsers: ['chrome'], platform: 'win32', home, copyTo, nodePath: 'C:\\node.exe' });
+    assert.ok(win.some((f) => f.startsWith(copyTo)), 'win32 install stays under the sandboxed copyTo');
     assert.ok(win.some((f) => f.endsWith('run.bat')));
     assert.equal(win._registryCommands.length, 1);
     assert.deepEqual(win._registryCommands[0].slice(0, 2), ['reg', 'add']);
 
     // uninstall removes the linux manifest and returns win32 registry-delete argv
     const { uninstall } = await import('../native-host/installer.js');
-    const removed = uninstall({ browsers: ['chrome'], platform: 'linux', home, hostDir });
+    const removed = uninstall({ browsers: ['chrome'], platform: 'linux', home, copyTo });
     assert.ok(removed.some((f) => f.includes('NativeMessagingHosts')));
     for (const f of removed) assert.ok(!fs.existsSync(f), `removed: ${f}`);
-    const winRemoved = uninstall({ browsers: ['chrome'], platform: 'win32', home, hostDir });
+    const winRemoved = uninstall({ browsers: ['chrome'], platform: 'win32', home, copyTo });
     assert.deepEqual(winRemoved._registryCommands[0].slice(0, 2), ['reg', 'delete']);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
-    fs.rmSync(hostDir, { recursive: true, force: true });
+    fs.rmSync(copyTo, { recursive: true, force: true });
   }
 });
 
