@@ -310,6 +310,12 @@ function confirmBulk(items) {
   });
 }
 
+// Disabled for the duration of an in-flight apply so a fast double-click can't
+// fire it twice and gives the same busy feedback the scan button already has.
+function setPlanActionsBusy(busy) {
+  for (const id of ['approveSelected', 'approveAll', 'clearPlan']) $(id).disabled = busy;
+}
+
 async function applyItems(itemIds) {
   if (!itemIds.length) { setStatus('Nothing selected.'); return; }
   const chosen = selectedItems(new Set(itemIds), plan);
@@ -318,13 +324,18 @@ async function applyItems(itemIds) {
     if (!ok) { setStatus('Cancelled — nothing applied.'); return; }
   }
   setStatus(`Applying ${itemIds.length}…`);
-  const res = await send({ cmd: 'apply', itemIds });
-  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
-  plan = await fetchPlan();
-  selection = new Set();
-  renderPlan();
-  setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}`);
-  await showUndoToast();
+  setPlanActionsBusy(true);
+  try {
+    const res = await send({ cmd: 'apply', itemIds });
+    if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+    plan = await fetchPlan();
+    selection = new Set();
+    renderPlan();
+    setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}`);
+    await showUndoToast();
+  } finally {
+    setPlanActionsBusy(false);
+  }
 }
 
 // Per-action run buttons: run just one feature without touching settings.

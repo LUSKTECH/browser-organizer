@@ -16,6 +16,13 @@ const PERM_FEATURES = [
   ['checkHostUpdates', 'https://registry.npmjs.org/*'],
 ];
 
+// Clamps a numeric field's raw string value to a minimum, so an emptied or
+// invalid field (Number('') === 0, Number('garbage') === NaN) can't silently
+// save as 0 or NaN — e.g. staleTabDays: 0 would flag every open tab as stale.
+function clampedInt(value, min = 1) {
+  return Math.max(min, Number(value) || min);
+}
+
 function isPermFeatureEnabled(settings, feature) {
   return feature === 'checkHostUpdates'
     ? !!(settings.advancedCli && settings.advancedCli.checkHostUpdates)
@@ -145,10 +152,10 @@ export function initSettingsView() {
         protectBookmarkBar: form.protectBookmarkBar.checked,
         removeEmptyFolders: form.removeEmptyFolders.checked,
         protectedFolders: form.protectedFolders.value.split('\n').map((s) => s.trim()).filter(Boolean),
-        staleTabDays: Number(form.staleTabDays.value),
-        staleBookmarkDays: Number(form.staleBookmarkDays.value),
-        scanIntervalMinutes: Math.max(1, Number(form.scanIntervalHours.value)) * 60,
-        undoRetentionDays: Number(form.undoRetentionDays.value),
+        staleTabDays: clampedInt(form.staleTabDays.value),
+        staleBookmarkDays: clampedInt(form.staleBookmarkDays.value),
+        scanIntervalMinutes: clampedInt(form.scanIntervalHours.value) * 60,
+        undoRetentionDays: clampedInt(form.undoRetentionDays.value),
         automationMode: form.autoMode.checked ? 'auto' : 'review',
         whitelist: form.whitelist.value.split('\n').map((s) => s.trim()).filter(Boolean),
         debugLogging: form.debugLogging.checked,
