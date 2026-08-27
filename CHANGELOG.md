@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.1.6-beta — 2026-08-27
+A systematic security/code audit across the extension and native host, plus a UX pass on the
+side panel. Pre-release.
+
+**Security**
+- Bookmark-folder/whitelist protections (`protectBookmarkBar`, `protectedFolders`, whitelist)
+  are now re-validated against *live* settings at apply time, not just when a plan is built — a
+  plan sitting unreviewed could previously execute a `moveBookmark`/`removeFolder` against a
+  protection the user added after the plan was generated.
+- The `codex`/`kiro` CLI adapters now insert a `--` end-of-options marker before a bare
+  positional prompt, so a flag-shaped prompt (via the `prompt` passthrough task) can no longer
+  be parsed as a real CLI flag and defeat their sandbox args.
+- `runtime.onMessage`/`onConnect` now reject anything not from the extension's own `sender.id`
+  (defense-in-depth ahead of any future content-script/`externally_connectable` surface).
+- An optional host permission (`<all_urls>`, npm registry) is now revoked once the feature that
+  needed it is turned off, instead of held indefinitely.
+- Generated native-host launcher scripts (`run.sh`/`run.bat`) reject resolved CLI paths
+  containing shell/batch metacharacters instead of interpolating them unescaped.
+- Bumped `js-yaml` and `brace-expansion` to close two high-severity DoS advisories in the dev
+  toolchain (eslint's config-resolution chain — not shipped in the packaged extension or host).
+
+**Fixes**
+- Fixed a sandbox-escape bug where a win32-simulated install/e2e test run could silently write
+  outside its isolated temp directory on non-Windows machines.
+- The settings panel's CSS grid had no explicit column sizing, so several fields (Extra CLI
+  flags, Never-touch folders, Protected domains) were silently clipped at real side-panel
+  widths. Fixed the underlying grid sizing, not just the symptom.
+- Numeric settings fields (stale-tab/bookmark days, undo retention) now clamp to a safe minimum
+  instead of silently saving `0` when the field is cleared.
+- Apply buttons now show a busy state during the apply call instead of remaining clickable with
+  no feedback.
+- The side panel's first-paint sequence is now fault-isolated per step, so one step failing
+  (e.g. a storage/crypto error) can't silently leave the rest of the panel uninitialized.
+
+**Internal**
+- `sidepanel.js` split into focused per-feature view modules (was a single 906-line file).
+- Extracted shared folder/whitelist protection logic into `extension/lib/protections.js` so
+  plan-build time and apply time enforce identical rules from one implementation.
+
 ## 0.1.5 — 2026-07-19
 Security hardening of the native host + an extension-only extensibility path.
 
