@@ -20,7 +20,10 @@ export function makeCliAdapter({ name, cmdEnv, defaultCmd, argsEnv, defaultArgs,
     allowedExtraFlags,
     resolveCommand,
     async run(prompt, opts = {}) {
-      const promptTail = promptFlag ? [promptFlag, prompt] : [prompt];
+      // A bare positional prompt is prefixed with `--` so the CLI's arg parser
+      // can never mistake a flag-shaped prompt (prompt injection) for a real
+      // flag — see codex.js/kiro.js's SECURITY notes on their sandboxing.
+      const promptTail = promptFlag ? [promptFlag, prompt] : ['--', prompt];
       const out = await runCli({
         command: resolveCommand(),
         args: [...overrideArgs(argsEnv, defaultArgs), ...extraArgs(opts), ...promptTail],

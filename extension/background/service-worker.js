@@ -3,6 +3,7 @@ import { installActivityListeners } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
 import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision } from '../lib/orchestrator.js';
 import { applyItem } from '../lib/executor.js';
+import { collectTree } from '../lib/bookmark-collector.js';
 import { recordUndo, reverseEntry, pruneUndo, getUndoLog, claimUndoEntries, restoreUndoEntries } from '../lib/undo-log.js';
 import { listSessions, saveCurrentWindowSession, restoreSession, removeSession, renameSession, mutateSessions } from '../lib/sessions.js';
 import { parseOmnibox } from '../lib/omnibox.js';
@@ -43,6 +44,7 @@ const ALARM_PRUNE = 'organizer-prune';
 const scanPorts = new Set();
 
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.sender?.id !== chrome.runtime.id) return; // ignore connections from anything but ourselves
   if (port.name !== 'scan') return;
   scanPorts.add(port);
   port.onDisconnect.addListener(() => scanPorts.delete(port));
@@ -304,7 +306,12 @@ async function handleApply(m) {
     const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
     const chosen = currentPlan.filter((i) => m.itemIds.includes(i.itemId));
     const runId = uniqueId('run-');
-    const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
+    // Fetch settings/folder structure fresh (not whatever was current when the
+    // plan was built) so a protection added while the plan sat unreviewed still
+    // blocks a now-stale moveBookmark/removeFolder item (see executor.js).
+    const settings = await getSettings();
+    const { folders, rootIds, barId } = await collectTree(chrome);
+    const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId }), recordUndo });
     const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
     await chrome.storage.local.set({ currentPlan: remaining });
     return { ok: true, ...res };
@@ -399,6 +406,7 @@ const HANDLERS = {
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id) return false; // ignore messages from anything but ourselves
   const handler = HANDLERS[message && message.cmd];
   if (!handler) { sendResponse({ ok: false, error: 'unknown command' }); return; }
   (async () => {

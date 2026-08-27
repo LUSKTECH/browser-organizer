@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyItem, ensureFolder } from '../extension/lib/executor.js';
+import { applyItem, ensureFolder, ProtectedTargetError } from '../extension/lib/executor.js';
 
 function makeChrome() {
   const removed = [];
@@ -76,6 +76,46 @@ test('removeFolder refuses a non-empty folder (no-op, skipped)', async () => {
   const entry = await applyItem({ action: 'removeFolder', data: { folderId: f.id, parentId: '2', index: 0, title: 'Full' } }, { chrome });
   assert.equal(entry.skipped, true);
   assert.ok(!chrome._removed.includes(`bm:${f.id}`));
+});
+
+test('moveBookmark throws when the target folder becomes protected between plan-build and apply (stale plan vs. live settings)', async () => {
+  const item = { action: 'moveBookmark', data: { bookmarkId: '9', fromParentId: '2', fromIndex: 0, toParentId: '10', title: 't', url: 'https://x.com' } };
+  const folders = [{ id: '10', parentId: '2', path: ['Other Bookmarks', 'Work'] }];
+
+  // At plan-build time "Work" wasn't protected — applying with those (stale)
+  // settings still succeeds.
+  const chromeOk = makeChrome();
+  const entry = await applyItem(item, { chrome: chromeOk, settings: { protectBookmarkBar: true, protectedFolders: [] }, folders });
+  assert.equal(entry.action, 'moveBookmark');
+  assert.deepEqual(chromeOk._moved.at(-1), { id: '9', dest: { parentId: '10' } });
+
+  // The user protects "Work" before clicking Apply. The executor must re-check
+  // LIVE settings/folders at apply time, not silently reuse the plan's snapshot.
+  const chromeBlocked = makeChrome();
+  await assert.rejects(
+    () => applyItem(item, { chrome: chromeBlocked, settings: { protectBookmarkBar: true, protectedFolders: ['Work'] }, folders }),
+    ProtectedTargetError,
+  );
+  assert.deepEqual(chromeBlocked._moved, []); // nothing actually moved
+});
+
+test('removeFolder throws when the folder becomes protected between plan-build and apply', async () => {
+  const chrome = makeChrome();
+  const f = await chrome.bookmarks.create({ parentId: '2', title: 'Work' });
+  const folders = [{ id: f.id, parentId: '2', path: ['Other Bookmarks', 'Work'] }];
+  const item = { action: 'removeFolder', data: { folderId: f.id, parentId: '2', index: 0, title: 'Work' } };
+  await assert.rejects(
+    () => applyItem(item, { chrome, settings: { protectBookmarkBar: true, protectedFolders: ['Work'] }, folders }),
+    ProtectedTargetError,
+  );
+  assert.ok(!chrome._removed.includes(`bm:${f.id}`)); // nothing actually removed
+});
+
+test('moveBookmark and removeFolder are unaffected by protections when no settings/folders deps are given (existing callers)', async () => {
+  const chrome = makeChrome();
+  const moveItem = { action: 'moveBookmark', data: { bookmarkId: '9', fromParentId: '2', fromIndex: 0, toParentId: '10', title: 't', url: 'https://x.com' } };
+  await applyItem(moveItem, { chrome }); // no settings/folders -> protection check skipped, as before
+  assert.deepEqual(chrome._moved.at(-1), { id: '9', dest: { parentId: '10' } });
 });
 
 test('closeTab removes the tab and returns a reopen undo entry', async () => {

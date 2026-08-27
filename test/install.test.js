@@ -33,6 +33,50 @@ test('unix launcher exports the CLI path and a PATH before exec', () => {
   assert.match(s, /exec "\/usr\/bin\/node" "\/x\/host\.js"/);
 });
 
+test('win32 launcher still works normally for an ordinary Windows path', () => {
+  const s = buildLauncherScript({ platform: 'win32', nodePath: 'C:\\node.exe', hostEntry: 'C:\\Users\\u\\host.js', vars: [['BROWSER_ORGANIZER_CLI', 'C:\\Users\\u\\claude.exe']] });
+  assert.match(s, /^@echo off/);
+  assert.match(s, /set "BROWSER_ORGANIZER_CLI=C:\\Users\\u\\claude\.exe"/);
+  assert.match(s, /"C:\\node\.exe" "C:\\Users\\u\\host\.js" %\*/);
+});
+
+test('buildLauncherScript rejects a CLI path containing shell metacharacters instead of interpolating it verbatim', () => {
+  const evil = '/usr/bin/claude"; rm -rf ~; echo "';
+  assert.throws(
+    () => buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js', vars: [['BROWSER_ORGANIZER_CLI', evil]] }),
+    /Unsafe launcher value/,
+  );
+});
+
+test('buildLauncherScript rejects shell-expansion metacharacters ($ and `) on POSIX', () => {
+  assert.throws(
+    () => buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js', vars: [['BROWSER_ORGANIZER_CLI', '/usr/bin/$(rm -rf ~)']] }),
+    /Unsafe launcher value/,
+  );
+  assert.throws(
+    () => buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js', vars: [['BROWSER_ORGANIZER_CLI', '/usr/bin/`rm -rf ~`']] }),
+    /Unsafe launcher value/,
+  );
+});
+
+test('buildLauncherScript rejects batch variable-expansion metacharacters (%) on win32', () => {
+  assert.throws(
+    () => buildLauncherScript({ platform: 'win32', nodePath: 'C:\\node.exe', hostEntry: 'C:\\host.js', vars: [['BROWSER_ORGANIZER_CLI', 'C:\\%WINDIR%\\evil.exe']] }),
+    /Unsafe launcher value/,
+  );
+});
+
+test('buildLauncherScript rejects an unsafe nodePath or hostEntry, not just vars', () => {
+  assert.throws(
+    () => buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node"; rm -rf ~; echo "', hostEntry: '/x/host.js', vars: [] }),
+    /Unsafe launcher value/,
+  );
+  assert.throws(
+    () => buildLauncherScript({ platform: 'linux', nodePath: '/usr/bin/node', hostEntry: '/x/host.js"; rm -rf ~; echo "', vars: [] }),
+    /Unsafe launcher value/,
+  );
+});
+
 test('registryCommands builds HKCU reg add argv (no shell) for chrome and edge', () => {
   const cmds = registryCommands(['chrome', 'edge'], 'C:\\hosts\\com.browser_organizer.host.json');
   assert.equal(cmds.length, 2);
@@ -55,87 +99,108 @@ import { PROD_EXTENSION_ID, hostBinName } from '../native-host/paths.js';
 
 test('copyHostTo copies host sources but not generated launchers', () => {
   const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-copy-'));
-  const entry = copyHostTo(dest);
-  assert.equal(entry, path.join(dest, 'host.js'));
-  assert.ok(fs.existsSync(path.join(dest, 'host.js')));
-  assert.ok(fs.existsSync(path.join(dest, 'dispatch.js')));
-  assert.ok(fs.existsSync(path.join(dest, 'adapters', 'catalog.js')));
-  assert.ok(!fs.existsSync(path.join(dest, 'run.sh')));  // generated, never copied
-  fs.rmSync(dest, { recursive: true, force: true });
+  try {
+    const entry = copyHostTo(dest);
+    assert.equal(entry, path.join(dest, 'host.js'));
+    assert.ok(fs.existsSync(path.join(dest, 'host.js')));
+    assert.ok(fs.existsSync(path.join(dest, 'dispatch.js')));
+    assert.ok(fs.existsSync(path.join(dest, 'adapters', 'catalog.js')));
+    assert.ok(!fs.existsSync(path.join(dest, 'run.sh')));  // generated, never copied
+  } finally {
+    fs.rmSync(dest, { recursive: true, force: true });
+  }
 });
 
 test('install copies the host into a stable home and points the manifest there', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-home-'));
-  const copyTo = path.join(home, '.browser-organizer');
-  const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  assert.ok(written.some((f) => f.startsWith(copyTo)));
-  const manifestFile = written.find((f) => f.endsWith('.json'));
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-  assert.ok(manifest.path.startsWith(copyTo)); // points at the copy, not defaultHostDir()
-  assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
-  fs.rmSync(home, { recursive: true, force: true });
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    assert.ok(written.some((f) => f.startsWith(copyTo)));
+    const manifestFile = written.find((f) => f.endsWith('.json'));
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    assert.ok(manifest.path.startsWith(copyTo)); // points at the copy, not defaultHostDir()
+    assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('install defaults extensionId to the pinned production id', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-defid-'));
-  const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo: path.join(home, '.borg') });
-  const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
-  assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
-  fs.rmSync(home, { recursive: true, force: true });
+  try {
+    const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo: path.join(home, '.borg') });
+    const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
+    assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${PROD_EXTENSION_ID}/`]);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('uninstall removes the copied host home and the manifests', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-unins-'));
-  const copyTo = path.join(home, '.browser-organizer');
-  install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  assert.ok(fs.existsSync(path.join(copyTo, 'host.js')));
-  const removed = uninstall({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  assert.ok(!fs.existsSync(copyTo));                        // copied host gone
-  assert.ok(removed.some((f) => f.endsWith('.json')));      // manifest gone
-  fs.rmSync(home, { recursive: true, force: true });
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    assert.ok(fs.existsSync(path.join(copyTo, 'host.js')));
+    const removed = uninstall({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    assert.ok(!fs.existsSync(copyTo));                        // copied host gone
+    assert.ok(removed.some((f) => f.endsWith('.json')));      // manifest gone
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('repair is idempotent — re-running yields a working manifest', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-repair-'));
-  const copyTo = path.join(home, '.browser-organizer');
-  install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  const written = repair({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
-  assert.ok(manifest.path.startsWith(copyTo));
-  fs.rmSync(home, { recursive: true, force: true });
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    const written = repair({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
+    assert.ok(manifest.path.startsWith(copyTo));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // --- SEA-binary install target (Phase C) ---
 
 test('install points the manifest at a pre-existing SEA binary and skips run.sh', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-sea-'));
-  const copyTo = path.join(home, '.browser-organizer');
-  // A packaged installer drops the binary into copyTo before registering it.
-  fs.mkdirSync(copyTo, { recursive: true });
-  const bin = path.join(copyTo, hostBinName('linux'));
-  fs.writeFileSync(bin, '#!/bin/sh\nexit 0\n');
-  fs.chmodSync(bin, 0o700);
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    // A packaged installer drops the binary into copyTo before registering it.
+    fs.mkdirSync(copyTo, { recursive: true });
+    const bin = path.join(copyTo, hostBinName('linux'));
+    fs.writeFileSync(bin, '#!/bin/sh\nexit 0\n');
+    fs.chmodSync(bin, 0o700);
 
-  const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  const manifestFile = written.find((f) => f.endsWith('.json'));
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-  assert.equal(manifest.path, bin);                       // manifest targets the binary directly
-  assert.ok(!fs.existsSync(path.join(copyTo, 'run.sh'))); // no launcher written
-  assert.ok(!written.includes(path.join(copyTo, 'run.sh')));
-  fs.rmSync(home, { recursive: true, force: true });
+    const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    const manifestFile = written.find((f) => f.endsWith('.json'));
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    assert.equal(manifest.path, bin);                       // manifest targets the binary directly
+    assert.ok(!fs.existsSync(path.join(copyTo, 'run.sh'))); // no launcher written
+    assert.ok(!written.includes(path.join(copyTo, 'run.sh')));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('install without a binary still copies sources and writes run.sh (npx path)', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-nosea-'));
-  const copyTo = path.join(home, '.browser-organizer');
-  const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  const launcher = path.join(copyTo, 'run.sh');
-  assert.ok(fs.existsSync(launcher));
-  assert.ok(written.includes(launcher));
-  const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
-  assert.equal(manifest.path, launcher);
-  assert.ok(fs.existsSync(path.join(copyTo, 'host.js')));
-  fs.rmSync(home, { recursive: true, force: true });
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    const written = install({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    const launcher = path.join(copyTo, 'run.sh');
+    assert.ok(fs.existsSync(launcher));
+    assert.ok(written.includes(launcher));
+    const manifest = JSON.parse(fs.readFileSync(written.find((f) => f.endsWith('.json')), 'utf8'));
+    assert.equal(manifest.path, launcher);
+    assert.ok(fs.existsSync(path.join(copyTo, 'host.js')));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('runRegistryCommands runs each argv via the injected spawn (no shell) and no-ops on none', () => {
@@ -192,21 +257,24 @@ test('runRegistryCommands tolerates an already-absent key on delete, but not oth
 
 test('uninstall of one browser keeps the shared host home for the other', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-uninstall-'));
-  const copyTo = path.join(home, '.browser-organizer');
-  fs.mkdirSync(copyTo, { recursive: true });
-  fs.writeFileSync(path.join(copyTo, 'host.js'), '// stub');
-  for (const b of ['chrome', 'edge']) {
-    const dir = manifestDir(b, 'linux', home);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `${HOST_NAME}.json`), '{}');
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    fs.mkdirSync(copyTo, { recursive: true });
+    fs.writeFileSync(path.join(copyTo, 'host.js'), '// stub');
+    for (const b of ['chrome', 'edge']) {
+      const dir = manifestDir(b, 'linux', home);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `${HOST_NAME}.json`), '{}');
+    }
+    // Uninstalling only chrome must not delete the shared home Edge still uses.
+    uninstall({ browsers: ['chrome'], platform: 'linux', home, copyTo });
+    assert.equal(fs.existsSync(path.join(manifestDir('chrome', 'linux', home), `${HOST_NAME}.json`)), false);
+    assert.equal(fs.existsSync(path.join(manifestDir('edge', 'linux', home), `${HOST_NAME}.json`)), true);
+    assert.equal(fs.existsSync(copyTo), true, 'shared home kept while edge still registered');
+    // Removing the last browser cleans up the shared home.
+    uninstall({ browsers: ['edge'], platform: 'linux', home, copyTo });
+    assert.equal(fs.existsSync(copyTo), false, 'shared home removed after last browser');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
   }
-  // Uninstalling only chrome must not delete the shared home Edge still uses.
-  uninstall({ browsers: ['chrome'], platform: 'linux', home, copyTo });
-  assert.equal(fs.existsSync(path.join(manifestDir('chrome', 'linux', home), `${HOST_NAME}.json`)), false);
-  assert.equal(fs.existsSync(path.join(manifestDir('edge', 'linux', home), `${HOST_NAME}.json`)), true);
-  assert.equal(fs.existsSync(copyTo), true, 'shared home kept while edge still registered');
-  // Removing the last browser cleans up the shared home.
-  uninstall({ browsers: ['edge'], platform: 'linux', home, copyTo });
-  assert.equal(fs.existsSync(copyTo), false, 'shared home removed after last browser');
-  fs.rmSync(home, { recursive: true, force: true });
 });

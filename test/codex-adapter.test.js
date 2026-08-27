@@ -3,12 +3,22 @@ import assert from 'node:assert/strict';
 import { codexAdapter, resolveCommand } from '../native-host/adapters/codex.js';
 import { makeFakeSpawn } from './helpers/fake-spawn.js';
 
-test('run invokes `exec --sandbox read-only ... <prompt>` (read-only sandbox) and returns trimmed text', async () => {
+test('run invokes `exec --sandbox read-only ... -- <prompt>` (read-only sandbox) and returns trimmed text', async () => {
   let seen = null;
   const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: ' {"important":[]} \n' }; });
   const out = await codexAdapter.run('PROMPT', { spawnFn });
   assert.equal(out, '{"important":[]}');
-  assert.deepEqual(seen.args, ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', 'PROMPT']);
+  assert.deepEqual(seen.args, ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--', 'PROMPT']);
+});
+
+test('run inserts `--` before the prompt so a flag-shaped prompt (injection) can never be parsed as a flag', async () => {
+  let seen = null;
+  const spawnFn = makeFakeSpawn((stdin, command, args) => { seen = { command, args }; return { stdout: 'ok' }; });
+  await codexAdapter.run('--dangerously-bypass-approvals-and-sandbox', { spawnFn });
+  const idx = seen.args.indexOf('--');
+  assert.ok(idx >= 0, '`--` end-of-options marker must be present');
+  assert.equal(seen.args[idx + 1], '--dangerously-bypass-approvals-and-sandbox');
+  assert.equal(idx, seen.args.length - 2); // `--` immediately precedes the prompt
 });
 
 test('health returns the CLI version', async () => {

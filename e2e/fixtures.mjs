@@ -61,8 +61,11 @@ export const test = base.extend({
     const xdgConfigHome = path.join(userDataDir, 'xdgcfg');
     // Install copies the host into an isolated temp home (never the tester's real ~),
     // writing the launcher there; the manifest below points at that copied launcher.
+    // `home` must also be sandboxed — install() independently writes a real manifest
+    // under manifestDir(browser, platform, home), which defaults to the real os.homedir().
     const hostHomeDir = path.join(userDataDir, 'host-home');
-    try { install({ extensionId: EXT_ID, browsers: ['chrome-for-testing'], copyTo: hostHomeDir }); } catch { /* best effort */ }
+    const isolatedHome = path.join(userDataDir, 'home');
+    try { install({ extensionId: EXT_ID, browsers: ['chrome-for-testing'], copyTo: hostHomeDir, home: isolatedHome }); } catch { /* best effort */ }
     const launcher = path.join(hostHomeDir, process.platform === 'win32' ? 'run.bat' : 'run.sh');
     const manifestJson = JSON.stringify(buildHostManifest({ execPath: launcher, extensionId: EXT_ID }), null, 2);
     // Place the host manifest deterministically where Chrome for Testing looks.

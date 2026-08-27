@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
 import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand, applyFolderProtection, selectOrganizeCandidates, projectBookmarksForHost, findEmptyFolders } from '../extension/lib/orchestrator.js';
+import { applyItem } from '../extension/lib/executor.js';
 
 test('findEmptyFolders proposes empty/emptied leaf folders; skips roots, non-empty, and folders with subfolders', () => {
   const folders = [
@@ -223,6 +224,34 @@ test('partitionForApply auto-applies in auto mode', () => {
   const r = partitionForApply(items, { automationMode: 'auto' });
   assert.equal(r.autoApply.length, 1);
   assert.equal(r.needsReview.length, 0);
+});
+
+test('applyItems (as wired by handleApply) fails a moveBookmark whose target became protected after the plan was built, without moving it', async () => {
+  const removed = [], moved = [];
+  const chrome = {
+    bookmarks: {
+      async get(id) { return [{ id, parentId: '2', index: 0 }]; },
+      async getChildren() { return []; },
+      async create(n) { return { id: 'new', ...n }; },
+      async move(id, dest) { moved.push({ id, dest }); return { id, ...dest }; },
+      async remove(id) { removed.push(id); },
+    },
+  };
+  const folders = [{ id: '10', parentId: '2', path: ['Other Bookmarks', 'Work'] }];
+  const item = { itemId: 'm1', action: 'moveBookmark', data: { bookmarkId: '9', fromParentId: '2', fromIndex: 0, toParentId: '10', title: 't', url: 'https://x.com' } };
+  const recorded = [];
+  // Simulates handleApply: settings/folders are fetched fresh (here: post-change,
+  // now protecting "Work"), not whatever was current when the plan was built.
+  const settings = { protectBookmarkBar: true, protectedFolders: ['Work'] };
+  const res = await applyItems([item], {
+    runId: 'run-1',
+    applyItem: (i) => applyItem(i, { chrome, runId: 'run-1', settings, folders }),
+    recordUndo: async (entries) => { recorded.push(...entries); },
+  });
+  assert.deepEqual(res.applied, []);
+  assert.deepEqual(res.failed, ['m1']);
+  assert.deepEqual(moved, []); // nothing actually moved
+  assert.equal(recorded.length, 0); // no undo recorded for a skipped/failed item
 });
 
 test('applyItems applies each item, records undo, and reports failures', async () => {

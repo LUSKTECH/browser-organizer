@@ -1,11 +1,27 @@
 import { TAB_GROUP_COLORS } from './colors.js';
 import { ACTION_LABELS } from './labels.js';
 import { uniqueId as undoId } from './ids.js';
-import { ROOT_IDS } from './bookmark-collector.js';
+import { ROOT_IDS, BAR_ID } from './bookmark-collector.js';
+import { applyFolderProtection } from './protections.js';
 
 const COLORS = new Set(TAB_GROUP_COLORS);
 
 export class StaleTabError extends Error {}
+// Settings/folder structure changed (a new "never touch" protection) between
+// when the plan was built and when it's applied — mirrors StaleTabError so it
+// flows through the same applyItems try/catch -> failed bucket.
+export class ProtectedTargetError extends Error {}
+
+// Re-checks a moveBookmark/removeFolder item against LIVE settings and folder
+// structure (deps.settings/folders/rootIds/barId, fetched fresh by the caller
+// at apply time) — a stale plan item that was fine when built can violate a
+// protection the user added since. Skipped when deps.settings isn't provided.
+function isProtectedNow(item, deps) {
+  if (!deps.settings) return false;
+  const { settings, folders = [], rootIds = ROOT_IDS, barId = BAR_ID } = deps;
+  const opts = { protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, rootIds, barId };
+  return applyFolderProtection([item], opts).length === 0;
+}
 
 function labelFor(item) {
   const name = item.data.title || item.data.groupName || item.data.url || '';
@@ -28,11 +44,11 @@ export async function ensureFolder(pathParts, chromeApi, rootId = '1') {
 export async function applyItem(item, deps = {}) {
   const c = deps.chrome || chrome;
   const runId = deps.runId || 'run';
-  const entry = await applyItemInner(item, c);
+  const entry = await applyItemInner(item, c, deps);
   return entry ? { ...entry, runId, label: labelFor(item) } : entry;
 }
 
-async function applyItemInner(item, c) {
+async function applyItemInner(item, c, deps = {}) {
   switch (item.action) {
     case 'closeTab': {
       const { tabId, url, title, windowId, index, pinned, bookmarkFirst } = item.data;
@@ -73,6 +89,9 @@ async function applyItemInner(item, c) {
     }
     case 'moveBookmark': {
       const { bookmarkId, fromParentId, fromIndex, toParentId, toFolderPath, toRootId } = item.data;
+      // Settings/protected-folders may have changed since the plan was built —
+      // re-check now, not just at plan-build time (see ProtectedTargetError).
+      if (isProtectedNow(item, deps)) throw new ProtectedTargetError(`Move of bookmark ${bookmarkId} is now blocked by folder protections`);
       // Capture the live origin so undo restores correctly even if the plan's
       // fromParentId/fromIndex are stale or missing.
       const cur = await c.bookmarks.get(bookmarkId).then((r) => r && r[0]).catch(() => null) || {};
@@ -86,6 +105,9 @@ async function applyItemInner(item, c) {
       // OR any top-level node — Edge's roots aren't 0/1/2/3), never remove a
       // folder that still has children at apply time (keeps partial-apply safe).
       if (ROOT_IDS.has(folderId) || parentId === '0') return { undoId: undoId(), ts: Date.now(), action: 'removeFolder', reverse: null, skipped: true };
+      // Settings/protected-folders may have changed since the plan was built —
+      // re-check now, not just at plan-build time (see ProtectedTargetError).
+      if (isProtectedNow(item, deps)) throw new ProtectedTargetError(`Removal of folder ${folderId} is now blocked by folder protections`);
       // The folder may already be gone (user deleted it before apply) — treat a
       // failed lookup as a skip so the batch keeps going.
       const kids = await c.bookmarks.getChildren(folderId).catch(() => null);

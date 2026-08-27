@@ -106,10 +106,23 @@ export function resolveCliPath(platform = process.platform, spawnSyncFn = spawnS
   } catch { return null; }
 }
 
+// Values are baked verbatim into a double-quoted string in a generated,
+// executable script. Reject (never silently mangle a path) anything that could
+// break out of that quoting: `"` and newlines on both platforms, plus shell
+// metachars ($ `) on POSIX and the batch variable-expansion char (%) on win32.
+function assertSafeForLauncher(value, platform) {
+  if (/["\r\n]/.test(value)) throw new Error(`Unsafe launcher value (quote/newline): ${JSON.stringify(value)}`);
+  const bad = platform === 'win32' ? /%/ : /[`$]/;
+  if (bad.test(value)) throw new Error(`Unsafe launcher value: ${JSON.stringify(value)}`);
+}
+
 export function buildLauncherScript({ platform, nodePath, hostEntry, vars = [] }) {
   // `vars` is [[ENV_NAME, absolutePath], …] for each CLI found; bake them so the
   // host resolves each adapter's binary even under a bare browser launch env.
   vars = vars.filter(([, v]) => v);
+  assertSafeForLauncher(nodePath, platform);
+  assertSafeForLauncher(hostEntry, platform);
+  for (const [, v] of vars) assertSafeForLauncher(v, platform);
   if (platform === 'win32') {
     const sets = vars.map(([k, v]) => `set "${k}=${v}"\r\n`).join('');
     return `@echo off\r\n${sets}"${nodePath}" "${hostEntry}" %*\r\n`;

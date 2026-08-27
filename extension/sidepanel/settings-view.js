@@ -10,6 +10,29 @@ import { checkHealth } from './health-view.js';
 
 let advancedExtraArgs = {}; // per-adapter extra CLI flags, loaded from settings
 
+// Features gated behind an optional host permission, and the origin each needs.
+const PERM_FEATURES = [
+  ['deadLinkScan', '<all_urls>'],
+  ['checkHostUpdates', 'https://registry.npmjs.org/*'],
+];
+
+function isPermFeatureEnabled(settings, feature) {
+  return feature === 'checkHostUpdates'
+    ? !!(settings.advancedCli && settings.advancedCli.checkHostUpdates)
+    : !!(settings.enabledFeatures && settings.enabledFeatures[feature]);
+}
+
+// Least-privilege: an origin is safe to revoke once every feature that needed it
+// has gone from enabled (in `prevSettings`) to unchecked (per `isChecked`) — a
+// still-checked feature sharing the origin keeps it granted. Pure/exported so
+// the decision can be tested without a DOM.
+export function originsToRevoke(prevSettings, isChecked) {
+  const dropped = PERM_FEATURES.filter(([f]) => isPermFeatureEnabled(prevSettings, f) && !isChecked(f));
+  return dropped
+    .map(([, origin]) => origin)
+    .filter((origin) => !PERM_FEATURES.some(([f2, o2]) => o2 === origin && isChecked(f2)));
+}
+
 // Point the "extra CLI flags" field at the currently-selected backend.
 function syncExtraArgsField(adapter) {
   const form = $('settingsForm');
@@ -82,14 +105,12 @@ export function initSettingsView() {
     e.preventDefault();
     const form = e.target;
     try {
+      const prevSettings = await getSettings(); // snapshot before this save, to detect on->off transitions below
       // Features that need an optional host permission: dead-link scan (<all_urls>)
       // and the opt-in npm update check (registry host). Prompt only for the ones
       // not already granted, in a single dialog. If the user DECLINES, untick those
       // features so we never persist an enabled setting whose permission is missing.
-      const permFeatures = [
-        ['deadLinkScan', '<all_urls>'],
-        ['checkHostUpdates', 'https://registry.npmjs.org/*'],
-      ].filter(([f]) => form[f].checked);
+      const permFeatures = PERM_FEATURES.filter(([f]) => form[f].checked);
       const toRequest = [];
       for (const [feature, origin] of permFeatures) {
         if (!(await chrome.permissions.contains({ origins: [origin] }))) toRequest.push([feature, origin]);
@@ -139,6 +160,12 @@ export function initSettingsView() {
         },
       });
       advancedExtraArgs = { ...advancedExtraArgs, [form.adapter.value]: form.extraArgs.value.trim() };
+      // Least-privilege: a feature that just went from on to off no longer needs
+      // its optional host permission — revoke it, unless another still-enabled
+      // feature needs the same origin.
+      for (const origin of originsToRevoke(prevSettings, (f) => form[f].checked)) {
+        await chrome.permissions.remove({ origins: [origin] });
+      }
       // Re-check health so the banner reflects the (possibly changed) AI backend —
       // it queries the newly-saved adapter and updates connected/version or the
       // onboarding card + disables Analyze if the new backend isn't reachable.
