@@ -29,8 +29,9 @@ function applyI18n() {
   initHealthView();
   initUndoHistory();
   // First paint: plan (loads the stored plan), then settings + health + sessions.
-  await initPlanView();
-  await loadSettings();
-  await checkHealth();
-  await renderSessions();
+  // Each step is independent — one throwing (e.g. loadSettings' direct storage/
+  // crypto calls) must not leave the rest of the panel silently uninitialized.
+  for (const step of [initPlanView, loadSettings, checkHealth, renderSessions]) {
+    try { await step(); } catch (err) { console.error('[organizer] bootstrap step failed:', step.name, err); }
+  }
 })();
