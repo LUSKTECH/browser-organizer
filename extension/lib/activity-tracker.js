@@ -37,8 +37,18 @@ export function installActivityListeners(chromeApi = chrome) {
     const { tabActivity = {} } = await chromeApi.storage.local.get('tabActivity');
     await chromeApi.storage.local.set({ tabActivity: markActive(tabActivity, tabId, Date.now()) });
   });
+  const remove = (tabId) => withLock('tabActivity', async () => {
+    const { tabActivity = {} } = await chromeApi.storage.local.get('tabActivity');
+    if (!(tabId in tabActivity)) return;
+    const next = { ...tabActivity };
+    delete next[tabId];
+    await chromeApi.storage.local.set({ tabActivity: next });
+  });
   chromeApi.tabs.onActivated.addListener(({ tabId }) => { update(tabId); });
   chromeApi.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (changeInfo.status === 'complete') update(tabId);
   });
+  if (chromeApi.tabs.onRemoved?.addListener) {
+    chromeApi.tabs.onRemoved.addListener((tabId) => { remove(tabId); });
+  }
 }

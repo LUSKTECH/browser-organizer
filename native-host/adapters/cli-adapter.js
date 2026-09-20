@@ -20,9 +20,13 @@ export function makeCliAdapter({ name, cmdEnv, defaultCmd, argsEnv, defaultArgs,
     allowedExtraFlags,
     resolveCommand,
     async run(prompt, opts = {}) {
-      // A bare positional prompt is prefixed with `--` so the CLI's arg parser
-      // can never mistake a flag-shaped prompt (prompt injection) for a real
-      // flag — see codex.js/kiro.js's SECURITY notes on their sandboxing.
+      // Windows CreateProcess enforces a 32,767 character total command-line limit.
+      // Bound the prompt on win32 so large tab/bookmark collections produce an
+      // actionable error rather than an unhandled OS-level spawn EINVAL crash.
+      const maxPromptLen = (opts.platform || process.platform) === 'win32' ? 28000 : 2000000;
+      if (prompt.length > maxPromptLen) {
+        throw new Error(`Prompt length (${prompt.length} chars) exceeds the command-line limit on this platform. Please analyze fewer tabs/bookmarks at a time.`);
+      }
       const promptTail = promptFlag ? [promptFlag, prompt] : ['--', prompt];
       const out = await runCli({
         command: resolveCommand(),

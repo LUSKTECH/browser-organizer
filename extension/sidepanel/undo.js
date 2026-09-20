@@ -31,7 +31,7 @@ export async function showUndoToast() {
 }
 
 // The undo-history dialog: every applied run, each expandable to its entries,
-// with per-run undo and a per-entry checked-subset undo on close.
+// with per-run undo and a per-entry checked-subset undo button.
 export function initUndoHistory() {
   $('showUndo').addEventListener('click', async () => {
     const undoRes = await send({ cmd: 'getUndo' });
@@ -73,10 +73,16 @@ export function initUndoHistory() {
       list.appendChild(runLi);
     }
     dlg.showModal();
-    dlg.querySelector('#closeUndo').onclick = async () => {
-      const undoIds = [...list.querySelectorAll('input:checked')].map((c) => c.value);
-      if (undoIds.length) { await send({ cmd: 'undo', undoIds }); setStatus(`Reverted ${undoIds.length}.`); }
+    dlg.querySelector('#closeUndo').onclick = () => {
       dlg.close();
+    };
+    dlg.querySelector('#undoSelected').onclick = async () => {
+      const undoIds = [...list.querySelectorAll('input:checked')].map((c) => c.value);
+      if (undoIds.length) {
+        await send({ cmd: 'undo', undoIds });
+        setStatus(`Reverted ${undoIds.length}.`);
+        dlg.close();
+      }
     };
   });
 }

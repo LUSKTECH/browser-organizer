@@ -58,7 +58,10 @@ export async function saveCurrentWindowSession(name, deps = {}) {
   const c = deps.chrome || chrome;
   const now = deps.now || Date.now();
   const close = deps.close !== false;
-  const win = await c.windows.getCurrent({ populate: true });
+  const win = deps.windowId != null
+    ? await c.windows.get(deps.windowId, { populate: true }).catch(() => null)
+    : await (c.windows.getLastFocused ? c.windows.getLastFocused({ populate: true }) : c.windows.getCurrent({ populate: true })).catch(() => null);
+  if (!win || !Array.isArray(win.tabs)) throw new Error('No active window found to save session');
   const httpTabs = win.tabs.filter((t) => /^https?:/i.test(t.url || ''));
   const session = buildSession(name || autoSessionName(httpTabs, now), httpTabs, now);
   await mutateSessions((sessions) => addSession(sessions, session));

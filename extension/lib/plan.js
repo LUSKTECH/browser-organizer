@@ -1,3 +1,5 @@
+import { OTHER_ID } from './bookmark-collector.js';
+
 const ACTIONS = new Set(['closeTab', 'groupTabs', 'createBookmark', 'deleteBookmark', 'discardTab', 'moveBookmark', 'removeFolder']);
 
 export function indexById(snapshots) {
@@ -82,7 +84,7 @@ export function mapImportantResult(important, tabsById) {
 // bookmark id (the candidates sent to the model). match mode forbids new folders;
 // new folders are created under `otherId` (the real "Other bookmarks" root,
 // which differs between Chrome and Edge) so the bar stays untouched.
-export function mapOrganizeResult(moves, bookmarksById, mode = 'additive', otherId = '2', folderPathById = new Map()) {
+export function mapOrganizeResult(moves, bookmarksById, mode = 'additive', otherId = OTHER_ID, folderPathById = new Map()) {
   return (moves || [])
     .map((m) => {
       const b = bookmarksById.get(m.bookmarkId);

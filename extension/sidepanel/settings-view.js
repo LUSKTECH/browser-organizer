@@ -4,7 +4,7 @@
 // user types one. loadSettings() is exported for the bootstrap's first paint.
 import { $, setStatus, flashStatus, setSettings } from './dom.js';
 import { getSettings } from '../lib/storage.js';
-import { setSecret, hasSecret } from '../lib/secret-store.js';
+import { setSecret, hasSecret, clearSecret } from '../lib/secret-store.js';
 import { adapterNote } from './viewmodel.js';
 import { checkHealth } from './health-view.js';
 
@@ -63,10 +63,12 @@ export async function loadSettings() {
   updateAdapterNote(s.adapter);
   form.openaiBaseUrl.value = s.openaiBaseUrl || '';
   form.openaiModel.value = s.openaiModel || '';
+  const hasKey = await hasSecret('openaiApiKey');
   $('openaiApiKey').value = '';
-  $('openaiApiKey').placeholder = (await hasSecret('openaiApiKey'))
+  $('openaiApiKey').placeholder = hasKey
     ? '•••••••• saved — leave blank to keep'
     : 'sk-… (stored encrypted on this device)';
+  $('openaiKeyClear').disabled = !hasKey;
   form.groupTabs.checked = s.enabledFeatures.groupTabs;
   form.staleTabs.checked = s.enabledFeatures.staleTabs;
   form.importantBookmarks.checked = s.enabledFeatures.importantBookmarks;
@@ -94,6 +96,14 @@ export async function loadSettings() {
 
 export function initSettingsView() {
   $('openaiKeyShow').addEventListener('change', (e) => { $('openaiApiKey').type = e.target.checked ? 'text' : 'password'; });
+  $('openaiKeyClear').addEventListener('click', async () => {
+    await clearSecret('openaiApiKey');
+    $('openaiApiKey').value = '';
+    $('openaiApiKey').placeholder = 'sk-… (stored encrypted on this device)';
+    $('openaiKeyClear').disabled = true;
+    flashStatus('API key cleared.');
+    await checkHealth();
+  });
 
   // Switching the AI backend applies immediately (persist + re-check health), so the
   // banner reflects the chosen backend without also having to click "Save settings".
@@ -134,7 +144,12 @@ export function initSettingsView() {
       // must not fall through to setSecret('') which would clear the stored key.
       const apiKeyInput = $('openaiApiKey');
       const apiKey = apiKeyInput.value.trim();
-      if (apiKey) { await setSecret('openaiApiKey', apiKey); apiKeyInput.value = ''; }
+      if (apiKey) {
+        await setSecret('openaiApiKey', apiKey);
+        apiKeyInput.value = '';
+        apiKeyInput.placeholder = '•••••••• saved — leave blank to keep';
+        $('openaiKeyClear').disabled = false;
+      }
       await setSettings({
         adapter: form.adapter.value,
         openaiBaseUrl: form.openaiBaseUrl.value.trim(),

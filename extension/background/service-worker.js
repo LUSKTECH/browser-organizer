@@ -166,7 +166,8 @@ function runScan(deps = {}) {
       await withLock('currentPlan', () => chrome.storage.local.set({ currentPlan: needsReview }));
       if (autoApply.length) {
         const runId = uniqueId('run-');
-        const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId }), recordUndo });
+        const { folders, rootIds, barId, otherId } = await collectTree(chrome);
+        const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId, otherId }), recordUndo });
         await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
       } else if (needsReview.length && deps.background) {
         // Only notify for background/scheduled scans; a foreground run already shows the panel.
@@ -310,8 +311,8 @@ async function handleApply(m) {
     // plan was built) so a protection added while the plan sat unreviewed still
     // blocks a now-stale moveBookmark/removeFolder item (see executor.js).
     const settings = await getSettings();
-    const { folders, rootIds, barId } = await collectTree(chrome);
-    const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId }), recordUndo });
+    const { folders, rootIds, barId, otherId } = await collectTree(chrome);
+    const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId, otherId }), recordUndo });
     const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
     await chrome.storage.local.set({ currentPlan: remaining });
     return { ok: true, ...res };
@@ -352,7 +353,7 @@ async function handleCommand(m) {
 }
 
 async function handleSaveSession(m) {
-  const session = await saveCurrentWindowSession(m.name, { chrome, close: m.close !== false });
+  const session = await saveCurrentWindowSession(m.name, { chrome, close: m.close !== false, windowId: m.windowId });
   return { ok: true, session };
 }
 
