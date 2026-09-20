@@ -498,8 +498,8 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
 .undoRun ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
 .undoRun ul li { font-size: 12px; }
 .undoRun label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
-#closeUndo { color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; }
-#closeUndo:hover { background: var(--accent-hover); }
+#undoSelected { color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; }
+#undoSelected:hover { background: var(--accent-hover); }
 
 /* ---------- Plan toolbar (filter / bulk-select / expand) ---------- */
 .planTools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
@@ -521,6 +521,8 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
 #openaiConfig[hidden] { display: none; }
 #openaiConfig label:not(.inlineCheck) { display: grid; gap: 4px; align-items: start; }
 #openaiConfig input[type="text"], #openaiConfig input[type="password"] { width: 100%; }
+.apiKeyRow { display: flex; align-items: center; justify-content: space-between; }
+#openaiKeyClear { padding: 3px 9px; font-size: 11px; }
 .fieldHint { color: var(--text-faint); font-weight: 400; font-size: 12px; }
 
 /* ---------- Non-http (browser page) tabs ---------- */

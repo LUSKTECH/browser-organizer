@@ -66,7 +66,16 @@ export async function setSettings(patch) {
   if (patch.decisions !== undefined) await chrome.storage.local.set({ decisions: capDecisions(patch.decisions) });
   const next = { ...current, ...patch };
   if (patch.enabledFeatures) next.enabledFeatures = { ...current.enabledFeatures, ...patch.enabledFeatures };
-  if (patch.advancedCli) next.advancedCli = { ...current.advancedCli, ...patch.advancedCli };
+  if (patch.advancedCli) {
+    next.advancedCli = {
+      ...current.advancedCli,
+      ...patch.advancedCli,
+      extraArgs: {
+        ...(current.advancedCli && current.advancedCli.extraArgs),
+        ...(patch.advancedCli && patch.advancedCli.extraArgs),
+      },
+    };
+  }
   // Keep the two unbounded fields out of the synced item.
   const { ignore, decisions, ...syncable } = next;
   await chrome.storage.sync.set({ settings: syncable });

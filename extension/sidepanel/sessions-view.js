@@ -70,7 +70,8 @@ export function initSessionsView() {
     e.preventDefault();
     const nameInput = $('sessionName');
     const keepOpen = $('keepTabsOpen').checked;
-    await send({ cmd: 'saveSession', name: nameInput.value.trim(), close: !keepOpen });
+    const win = await chrome.windows.getCurrent().catch(() => null);
+    await send({ cmd: 'saveSession', name: nameInput.value.trim(), close: !keepOpen, windowId: win?.id });
     nameInput.value = '';
     setStatus(keepOpen ? 'Session saved (tabs kept open).' : 'Session saved and tabs closed.');
     await renderSessions();

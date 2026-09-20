@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
-import { dedupeTabActions, finalizePlan, applyWhitelist, runCommand, applyFolderProtection, selectOrganizeCandidates, projectBookmarksForHost, findEmptyFolders } from '../extension/lib/orchestrator.js';
+import { dedupeTabActions, finalizePlan, runCommand, selectOrganizeCandidates, projectBookmarksForHost, findEmptyFolders } from '../extension/lib/orchestrator.js';
+import { applyWhitelist, applyFolderProtection } from '../extension/lib/protections.js';
 import { applyItem } from '../extension/lib/executor.js';
 
 test('findEmptyFolders proposes empty/emptied leaf folders; skips roots, non-empty, and folders with subfolders', () => {

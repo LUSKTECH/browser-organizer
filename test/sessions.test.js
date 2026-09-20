@@ -58,6 +58,28 @@ test('saveCurrentWindowSession with close:false keeps tabs open', async () => {
   assert.deepEqual(removed, []);           // nothing closed
 });
 
+test('saveCurrentWindowSession supports windowId and throws when window is missing', async () => {
+  installChromeMock();
+  const chromeApi = {
+    windows: {
+      async get(id) {
+        if (id === 42) return { id: 42, tabs: [{ id: 10, url: 'https://test.com', title: 'T' }] };
+        return null;
+      },
+      async getCurrent() { return null; },
+    },
+    tabs: { async remove() {} },
+  };
+  const s = await saveCurrentWindowSession('Targeted', { chrome: chromeApi, windowId: 42, close: false, now: 1 });
+  assert.equal(s.tabs.length, 1);
+  assert.equal(s.tabs[0].url, 'https://test.com');
+
+  await assert.rejects(
+    () => saveCurrentWindowSession('Fail', { chrome: chromeApi, windowId: 999 }),
+    /No active window found/,
+  );
+});
+
 beforeEach(() => installChromeMock());
 
 test('buildSession captures url/title/pinned', () => {

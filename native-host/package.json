@@ -1,6 +1,6 @@
 {
   "name": "@lusktech/browser-organizer-host",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Native messaging host + installer for the Browser Organizer extension.",
   "type": "module",
   "engines": { "node": ">=20" },

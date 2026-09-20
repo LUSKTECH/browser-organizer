@@ -161,7 +161,29 @@ test('createBookmark builds folder path then creates the bookmark', async () => 
   const item = { action: 'createBookmark', data: { url: 'https://b.com', title: 'B', folderPath: ['Dev', 'React'] } };
   const undo = await applyItem(item, { chrome });
   assert.equal(chrome._created.length, 3); // Dev, React, bookmark
+  assert.equal(chrome._created[0].parentId, '2'); // defaults to Other Bookmarks (bar protected)
   assert.ok(undo.reverse.bookmarkId);
+});
+
+test('createBookmark honors protectBookmarkBar: false and targets barId', async () => {
+  const chrome = makeChrome();
+  const item = { action: 'createBookmark', data: { url: 'https://b.com', title: 'B', folderPath: ['Dev'] } };
+  await applyItem(item, { chrome, settings: { protectBookmarkBar: false }, barId: 'bar-root', otherId: 'other-root' });
+  assert.equal(chrome._created[0].parentId, 'bar-root');
+});
+
+test('createBookmark targets otherId when protectBookmarkBar is true', async () => {
+  const chrome = makeChrome();
+  const item = { action: 'createBookmark', data: { url: 'https://b.com', title: 'B', folderPath: ['Dev'] } };
+  await applyItem(item, { chrome, settings: { protectBookmarkBar: true }, barId: 'bar-root', otherId: 'other-root' });
+  assert.equal(chrome._created[0].parentId, 'other-root');
+});
+
+test('createBookmark honors explicit rootId in data', async () => {
+  const chrome = makeChrome();
+  const item = { action: 'createBookmark', data: { url: 'https://b.com', title: 'B', folderPath: ['Dev'], rootId: 'custom-root' } };
+  await applyItem(item, { chrome, settings: { protectBookmarkBar: true }, barId: 'bar-root', otherId: 'other-root' });
+  assert.equal(chrome._created[0].parentId, 'custom-root');
 });
 
 test('deleteBookmark removes and returns a recreate entry (url still matches)', async () => {

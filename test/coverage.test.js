@@ -158,10 +158,14 @@ test('runCli rejects when the CLI exceeds the timeout', async () => {
 // ---- activity-tracker listeners ----
 test('installActivityListeners persists activity on tab events', async () => {
   const stored = {};
-  let onActivated; let onUpdated;
+  let onActivated; let onUpdated; let onRemoved;
   const chromeApi = {
     storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: stored[k] } : { ...stored }; }, async set(o) { Object.assign(stored, o); } } },
-    tabs: { onActivated: { addListener: (fn) => { onActivated = fn; } }, onUpdated: { addListener: (fn) => { onUpdated = fn; } } },
+    tabs: {
+      onActivated: { addListener: (fn) => { onActivated = fn; } },
+      onUpdated: { addListener: (fn) => { onUpdated = fn; } },
+      onRemoved: { addListener: (fn) => { onRemoved = fn; } },
+    },
   };
   installActivityListeners(chromeApi);
   onActivated({ tabId: 7 });
@@ -173,6 +177,9 @@ test('installActivityListeners persists activity on tab events', async () => {
   onUpdated(9, { status: 'loading' }); // not "complete" → ignored
   await new Promise((r) => setTimeout(r, 5));
   assert.ok(!stored.tabActivity[9]);
+  onRemoved(7);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(stored.tabActivity[7], undefined);
 });
 
 // ---- native-client disconnect ----

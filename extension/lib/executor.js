@@ -1,7 +1,7 @@
 import { TAB_GROUP_COLORS } from './colors.js';
 import { ACTION_LABELS } from './labels.js';
 import { uniqueId as undoId } from './ids.js';
-import { ROOT_IDS, BAR_ID } from './bookmark-collector.js';
+import { ROOT_IDS, BAR_ID, OTHER_ID } from './bookmark-collector.js';
 import { applyFolderProtection } from './protections.js';
 
 const COLORS = new Set(TAB_GROUP_COLORS);
@@ -57,7 +57,8 @@ async function applyItemInner(item, c, deps = {}) {
       if (live.pinned) throw new StaleTabError(`Tab ${tabId} is pinned (protected)`); // never close a pinned tab
       let savedBookmarkId = null;
       if (bookmarkFirst) {
-        const folder = await ensureFolder(['Browser Organizer', 'Saved before closing'], c);
+        const targetRoot = (deps.settings?.protectBookmarkBar !== false && (deps.otherId || OTHER_ID)) ? (deps.otherId || OTHER_ID) : (deps.barId || BAR_ID);
+        const folder = await ensureFolder(['Browser Organizer', 'Saved before closing'], c, targetRoot);
         const bm = await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
         savedBookmarkId = bm && bm.id;
       }
@@ -72,8 +73,9 @@ async function applyItemInner(item, c, deps = {}) {
       return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds } };
     }
     case 'createBookmark': {
-      const { url, title, folderPath } = item.data;
-      const folder = await ensureFolder(folderPath, c);
+      const { url, title, folderPath, rootId } = item.data;
+      const targetRoot = rootId || (deps.settings?.protectBookmarkBar !== false && (deps.otherId || OTHER_ID) ? (deps.otherId || OTHER_ID) : (deps.barId || BAR_ID));
+      const folder = await ensureFolder(folderPath, c, targetRoot);
       const bm = await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
       return { undoId: undoId(), ts: Date.now(), action: 'createBookmark', reverse: { bookmarkId: bm.id } };
     }
@@ -95,7 +97,7 @@ async function applyItemInner(item, c, deps = {}) {
       // Capture the live origin so undo restores correctly even if the plan's
       // fromParentId/fromIndex are stale or missing.
       const cur = await c.bookmarks.get(bookmarkId).then((r) => r && r[0]).catch(() => null) || {};
-      const parentId = toParentId || (await ensureFolder(toFolderPath || [], c, toRootId || '2')).id;
+      const parentId = toParentId || (await ensureFolder(toFolderPath || [], c, toRootId || deps.otherId || OTHER_ID)).id;
       await c.bookmarks.move(bookmarkId, { parentId });
       return { undoId: undoId(), ts: Date.now(), action: 'moveBookmark', reverse: { bookmarkId, parentId: fromParentId ?? cur.parentId, index: fromIndex ?? cur.index } };
     }

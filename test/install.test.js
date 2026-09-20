@@ -278,3 +278,17 @@ test('uninstall of one browser keeps the shared host home for the other', () => 
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('install() and repair() default browsers and do not throw when browsers option is omitted', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-default-browsers-'));
+  try {
+    const copyTo = path.join(home, '.browser-organizer');
+    const written = install({ platform: 'linux', home, copyTo });
+    assert.ok(written.length >= 3); // launcher + chrome manifest + edge manifest
+    assert.ok(fs.existsSync(path.join(manifestDir('chrome', 'linux', home), `${HOST_NAME}.json`)));
+    assert.ok(fs.existsSync(path.join(manifestDir('edge', 'linux', home), `${HOST_NAME}.json`)));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+

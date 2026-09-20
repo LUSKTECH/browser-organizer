@@ -208,6 +208,8 @@ export function install({
 } = {}) {
   const nativeHostDir = copyTo;
   const isWin = platform === 'win32';
+  const known = isWin ? Object.keys(WIN_REG_ROOTS) : Object.keys(DIRS[platform] || {});
+  const requested = browsers || (isWin ? known : ['chrome', 'edge']);
 
   // Two install shapes point the manifest at different targets:
   //  1) SEA binary present in copyTo → point the manifest straight at the binary
@@ -233,13 +235,13 @@ export function install({
     const manifestPath = winManifestPath(nativeHostDir);
     fs.writeFileSync(manifestPath, JSON.stringify(buildHostManifest({ execPath: launcher, extensionId }), null, 2));
     const written = [launcher, manifestPath];
-    written._registryCommands = registryCommands(browsers, manifestPath);
+    written._registryCommands = registryCommands(requested, manifestPath);
     return written;
   }
 
   const manifest = buildHostManifest({ execPath: launcher, extensionId });
   const written = [launcher];
-  for (const browser of browsers) {
+  for (const browser of requested) {
     const dir = manifestDir(browser, platform, home);
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `${HOST_NAME}.json`);
@@ -256,13 +258,25 @@ export function install({
 // (not run as the entry) — guard so importing installer.js never throws there.
 if (import.meta.url && process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   if (process.argv[2] === 'uninstall') {
-    const browsers = (process.argv[3] || 'chrome,edge').split(',');
+    const browsers = (process.argv[3] || 'chrome,edge').split(',').filter(Boolean);
     const removed = uninstall({ browsers });
     console.log(removed.length ? 'Removed:\n' + removed.map((f) => '  ' + f).join('\n') : 'Nothing to remove.');
     runRegistryCommands(removed._registryCommands);
   } else {
-    const extensionId = process.argv[2] || PROD_EXTENSION_ID;
-    const browsers = (process.argv[3] || 'chrome,edge').split(',');
+    // Support both `node installer.js [extensionId] [browsers]` and
+    // `node installer.js [browsers] [extensionId]` (matching cli.js)
+    const arg1 = process.argv[2];
+    const arg2 = process.argv[3];
+    let extensionId = PROD_EXTENSION_ID;
+    let browsers = (arg2 || 'chrome,edge').split(',').filter(Boolean);
+    if (arg1) {
+      if (/^[a-z]{32}$/.test(arg1)) {
+        extensionId = arg1;
+      } else {
+        browsers = arg1.split(',').filter(Boolean);
+        if (arg2) extensionId = arg2;
+      }
+    }
     const files = install({ extensionId, browsers });
     console.log('Wrote:\n' + files.map((f) => '  ' + f).join('\n'));
     runRegistryCommands(files._registryCommands);

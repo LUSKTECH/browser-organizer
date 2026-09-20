@@ -56,3 +56,14 @@ test('decisions are capped to prevent unbounded growth', async () => {
   assert.ok(Object.keys(decisions).length <= 500);
   assert.ok(decisions.k599, 'highest-reject entries are kept');
 });
+
+test('setSettings deep merges advancedCli.extraArgs across multiple adapter updates', async () => {
+  await setSettings({ advancedCli: { extraArgs: { claude: '--temp 0' } } });
+  let s = await getSettings();
+  assert.equal(s.advancedCli.extraArgs.claude, '--temp 0');
+
+  await setSettings({ advancedCli: { extraArgs: { ollama: '--num-ctx 4096' } } });
+  s = await getSettings();
+  assert.equal(s.advancedCli.extraArgs.claude, '--temp 0');
+  assert.equal(s.advancedCli.extraArgs.ollama, '--num-ctx 4096');
+});

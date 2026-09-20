@@ -10,8 +10,6 @@ import { redactUrl, isPrivateHost } from './url-utils.js';
 import { withLock } from './mutex.js';
 import { applyWhitelist, applyFolderProtection } from './protections.js';
 
-export { applyWhitelist, applyFolderProtection };
-
 // High-impact/destructive actions are never auto-applied — they always wait for
 // explicit review, even in auto mode.
 const REVIEW_ONLY = new Set(['deleteBookmark', 'moveBookmark', 'removeFolder']);

@@ -113,7 +113,10 @@
           <label>API key
             <input type="password" id="openaiApiKey" autocomplete="off" spellcheck="false" placeholder="sk-… (stored encrypted on this device)" />
           </label>
-          <label class="inlineCheck"><input type="checkbox" id="openaiKeyShow" /> Show key</label>
+          <div class="apiKeyRow">
+            <label class="inlineCheck"><input type="checkbox" id="openaiKeyShow" /> Show key</label>
+            <button type="button" id="openaiKeyClear">Clear key</button>
+          </div>
           <label>Base URL <span class="fieldHint">(optional)</span>
             <input type="text" name="openaiBaseUrl" spellcheck="false" placeholder="https://api.openai.com/v1" />
           </label>
@@ -195,7 +198,10 @@
     <dialog id="undoDialog" aria-labelledby="undoDialogTitle">
       <h2 id="undoDialogTitle">Undo history</h2>
       <ul id="undoList"></ul>
-      <button id="closeUndo">Close</button>
+      <div class="dialogActions">
+        <button type="button" id="closeUndo">Close</button>
+        <button type="button" id="undoSelected" class="primary">Undo selected</button>
+      </div>
     </dialog>
 
     <dialog id="confirmDialog" aria-labelledby="confirmTitle" aria-describedby="confirmMsg">
