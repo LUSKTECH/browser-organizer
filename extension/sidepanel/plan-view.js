@@ -95,13 +95,15 @@ function renderGroupItem(item) {
   memberList.className = 'memberList';
   for (const m of item.data.members) {
     const mLi = document.createElement('li');
-    const label = document.createElement('button');
-    label.type = 'button';
-    label.className = 'tabFocusBtn focusable';
+    const label = document.createElement('span');
+    label.className = 'focusable';
+    label.setAttribute('role', 'link');
+    label.setAttribute('tabindex', '0');
     label.textContent = m.title || m.url;
     label.title = 'Go to this tab';
     label.setAttribute('aria-label', `Go to tab: ${m.title || m.url}`);
     label.addEventListener('click', () => focusTab(m.tabId));
+    label.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusTab(m.tabId); } });
     // "Move to" another proposed group.
     const otherGroups = plan.filter((i) => i.action === 'groupTabs' && i.itemId !== item.itemId);
     const moveSel = document.createElement('select');
