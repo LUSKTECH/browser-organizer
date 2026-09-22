@@ -2,7 +2,7 @@
 // per-item edits, the run/command scans that produce a plan, and apply. These
 // share the plan/selection state so they live together; other panels talk to this
 // one only through initPlanView() (bootstrap) and showUndoToast() (undo module).
-import { $, setStatus, flashStatus, send, fetchPlan, focusTab, currentScopeWindowId } from './dom.js';
+import { $, setStatus, flashStatus, send, fetchPlan, focusTab, currentScopeWindowId, confirmAction } from './dom.js';
 import { startScanClock, stopScanClock, ensureScanPort } from './scan-clock.js';
 import { showUndoToast } from './undo.js';
 import { ignoreKey } from '../lib/orchestrator.js';
@@ -96,12 +96,12 @@ function renderGroupItem(item) {
   for (const m of item.data.members) {
     const mLi = document.createElement('li');
     const label = document.createElement('span');
-    label.textContent = m.title || m.url;
-    // Click a member to jump to that tab.
     label.className = 'focusable';
     label.setAttribute('role', 'link');
     label.setAttribute('tabindex', '0');
+    label.textContent = m.title || m.url;
     label.title = 'Go to this tab';
+    label.setAttribute('aria-label', `Go to tab: ${m.title || m.url}`);
     label.addEventListener('click', () => focusTab(m.tabId));
     label.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusTab(m.tabId); } });
     // "Move to" another proposed group.
@@ -169,6 +169,19 @@ export function renderPlan(animate = false) {
   summary.textContent = Object.entries(counts).map(([a, n]) => `${actionLabel(a)}: ${n}`).join('  •  ') + filterNote;
   $('planTools').hidden = plan.length === 0;
   $('planActions').hidden = plan.length === 0; // contextual: apply/clear only when there's a plan
+
+  const emptyEl = $('planEmptyState');
+  if (emptyEl) {
+    const onboarding = $('onboarding');
+    const isOnboarding = onboarding && !onboarding.hidden;
+    emptyEl.hidden = plan.length > 0 || isOnboarding;
+  }
+  const approveSelBtn = $('approveSelected');
+  if (approveSelBtn) {
+    approveSelBtn.textContent = selection.size
+      ? `Apply selected (${selection.size})`
+      : 'Apply selected';
+  }
 
   const groups = groupByAction(shown);
   const tpl = $('itemTemplate');
@@ -292,28 +305,20 @@ async function startScan(features) {
 // Confirms a large destructive batch via a modal before applying. Resolves true
 // to proceed, false to cancel (Cancel button or Esc).
 function confirmBulk(items) {
-  const dlg = $('confirmDialog');
-  $('confirmMsg').textContent = `Apply ${items.length} changes — ${destructiveCount(items)} will close, suspend, or delete tabs/bookmarks. This can be undone, but continue?`;
-  return new Promise((resolve) => {
-    const onCancel = () => done(false); // Esc / backdrop dismiss
-    const done = (val) => {
-      dlg.removeEventListener('cancel', onCancel); // don't let listeners stack across calls
-      $('confirmOk').onclick = null;
-      $('confirmCancel').onclick = null;
-      dlg.close();
-      resolve(val);
-    };
-    $('confirmOk').onclick = () => done(true);
-    $('confirmCancel').onclick = () => done(false);
-    dlg.addEventListener('cancel', onCancel);
-    dlg.showModal();
+  return confirmAction({
+    title: 'Apply changes?',
+    message: `Apply ${items.length} changes — ${destructiveCount(items)} will close, suspend, or delete tabs/bookmarks. This can be undone, but continue?`,
+    confirmLabel: 'Apply',
   });
 }
 
 // Disabled for the duration of an in-flight apply so a fast double-click can't
 // fire it twice and gives the same busy feedback the scan button already has.
 function setPlanActionsBusy(busy) {
-  for (const id of ['approveSelected', 'approveAll', 'clearPlan']) $(id).disabled = busy;
+  for (const id of ['approveSelected', 'approveAll', 'exportMarkdown', 'clearPlan']) {
+    const el = $(id);
+    if (el) el.disabled = busy;
+  }
 }
 
 async function applyItems(itemIds) {

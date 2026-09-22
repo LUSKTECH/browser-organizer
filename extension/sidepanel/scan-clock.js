@@ -1,24 +1,33 @@
 // The live scan heartbeat: a once-a-second elapsed clock appended to the current
 // phase label, and the port that streams {progress} updates from the service
 // worker during a run. Kept separate so the plan view just calls start/stop.
-import { setStatus } from './dom.js';
+import { setStatusWithClock, $ } from './dom.js';
 import { progressLabel, formatElapsed } from './viewmodel.js';
 
 let scanTimer = null;
 let scanStartTs = 0;
 let lastScanLabel = '';
 
-function tickScan() { setStatus(`${lastScanLabel} · ${formatElapsed(Date.now() - scanStartTs)}`); }
+function tickScan() {
+  setStatusWithClock(lastScanLabel, formatElapsed(Date.now() - scanStartTs));
+}
 
 export function startScanClock(label) {
   scanStartTs = Date.now();
   lastScanLabel = label;
+  const bar = $('scanProgressBar');
+  if (bar) bar.hidden = false;
   tickScan();
   clearInterval(scanTimer);
   scanTimer = setInterval(tickScan, 1000);
 }
 
-export function stopScanClock() { clearInterval(scanTimer); scanTimer = null; }
+export function stopScanClock() {
+  clearInterval(scanTimer);
+  scanTimer = null;
+  const bar = $('scanProgressBar');
+  if (bar) bar.hidden = true;
+}
 
 let scanPort = null;
 export function ensureScanPort() {

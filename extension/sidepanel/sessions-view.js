@@ -1,6 +1,6 @@
 // Saved window sessions: list with restore/rename/delete, JSON export, and the
 // save form. renderSessions() is exported so the bootstrap can paint it on load.
-import { $, send, setStatus } from './dom.js';
+import { $, send, setStatus, confirmAction } from './dom.js';
 
 export async function renderSessions() {
   const sessRes = await send({ cmd: 'listSessions' });
@@ -36,7 +36,16 @@ export async function renderSessions() {
         if (name && name !== s.name) await send({ cmd: 'renameSession', id: s.sessionId, name });
         renderSessions();
       };
-      input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } });
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          commit();
+        } else if (ev.key === 'Escape') {
+          ev.preventDefault();
+          committed = true;
+          renderSessions();
+        }
+      });
       input.addEventListener('blur', commit);
       li.replaceChild(input, label);
       input.focus();
@@ -44,9 +53,18 @@ export async function renderSessions() {
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.textContent = 'Delete';
+    deleteBtn.className = 'sessionDeleteBtn';
     deleteBtn.addEventListener('click', async () => {
+      const ok = await confirmAction({
+        title: 'Delete session?',
+        message: `Permanently delete "${s.name}" (${s.tabs.length} tabs)? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
       await send({ cmd: 'deleteSession', id: s.sessionId });
       renderSessions();
+      setStatus(`Deleted session "${s.name}".`);
     });
     li.append(label, restoreBtn, renameBtn, deleteBtn);
     list.appendChild(li);

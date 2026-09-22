@@ -79,22 +79,66 @@ body {
 }
 
 /* ---------- Header ---------- */
-header {
+header.appHeader {
   position: sticky;
   top: 0;
   z-index: 20;
   margin: 0 -14px 12px;
-  padding: 12px 14px 14px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(8px);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.brandMark { width: 26px; height: 26px; flex: none; color: var(--accent); }
-h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
+.brandMark { width: 22px; height: 22px; flex: none; color: var(--accent); }
+h1 { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
 
-.scopeRow, header > label { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text-muted); font-size: 12px; }
+.headerActions { display: flex; align-items: center; gap: 6px; }
+.headerIconBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.headerIconBtn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.scanProgressBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: scanShimmer 1.5s infinite linear;
+}
+@keyframes scanShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanProgressBar { background: var(--accent); animation: none; }
+}
+
+.heroControls {
+  margin-bottom: 14px;
+}
+
+.runGroup { display: grid; gap: 6px; }
+.scopeRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text-muted); font-size: 12px; }
 
 /* ---------- Controls ---------- */
 button {
@@ -181,7 +225,9 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   color: var(--text-muted);
 }
 #health.healthOk { background: var(--accent-soft); color: var(--accent-soft-text); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+#health.healthOk::before { content: "✓ "; font-weight: 700; }
 #health.healthBad { background: var(--warn-soft); color: var(--warn-soft-text); border-color: color-mix(in srgb, var(--warn-soft-text) 30%, transparent); }
+#health.healthBad::before { content: "⚠ "; font-weight: 700; }
 #health:empty { display: none; }
 
 #hostUpdate {
@@ -302,17 +348,21 @@ ul { margin: 0; padding: 0; }
 }
 .itemIgnore {
   margin-top: 8px;
-  padding: 3px 8px;
+  padding: 4px 9px;
+  min-height: 26px;
   font-size: 11px;
-  color: var(--text-faint);
-  background: transparent;
-  border: 1px solid transparent;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  opacity: 0;
-  transition: opacity var(--dur) ease, color var(--dur) ease, background var(--dur) ease;
+  opacity: 0.85;
+  transition: opacity var(--dur) ease, color var(--dur) ease, background var(--dur) ease, border-color var(--dur) ease;
 }
-.item:hover .itemIgnore, .groupItem:hover .itemIgnore, .itemIgnore:focus-visible { opacity: 1; }
-.itemIgnore:hover { color: var(--danger); background: var(--danger-soft); }
+.item:hover .itemIgnore, .groupItem:hover .itemIgnore, .itemIgnore:focus-visible, .itemIgnore:hover { opacity: 1; }
+.itemIgnore:hover { color: var(--danger); background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+@media (hover: none) {
+  .itemIgnore { opacity: 1; min-height: 32px; }
+}
 
 /* Group item (expandable) */
 .groupItem { padding: 0; overflow: hidden; }
@@ -350,7 +400,29 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 .memberList { list-style: none; margin: 0; padding: 2px 11px 8px 25px; display: grid; gap: 4px; }
 .memberList li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
 .memberList li span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.memberList li button { padding: 2px 8px; font-size: 11px; border-radius: var(--r-sm); }
+.tabFocusBtn {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--link);
+  cursor: pointer;
+  min-height: 26px;
+}
+.tabFocusBtn:hover {
+  text-decoration: underline;
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+.memberList li button { padding: 3px 8px; font-size: 11px; border-radius: var(--r-sm); min-height: 26px; }
+.memberList li select { padding: 3px 6px; font-size: 11px; min-height: 26px; }
 .applySection {
   margin: 0 11px 11px;
   color: var(--accent);
@@ -382,22 +454,40 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 #undoToast button { padding: 5px 12px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); font-weight: 600; }
 
 /* ---------- Plan action bar (contextual — only shown when a plan exists) ----------
-   2-col grid: primary Apply spans the row; Apply all + Clear list share the next row.
+   2-col grid: primary Apply spans row 1; Apply all + Export share row 2; Clear list spans row 3.
    Wraps cleanly at narrow side-panel widths (~360px) with no clipping. */
 #planActions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0 4px; }
 #planActions[hidden] { display: none; }
 #planActions button { font-size: 12px; width: auto; min-width: 0; }
 #planActions .apply-primary { grid-column: 1 / -1; color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; box-shadow: var(--shadow-1); }
 #planActions .apply-primary:hover { background: var(--accent-hover); }
-#planActions #clearPlan { color: var(--text-muted); }
+#planActions #clearPlan { grid-column: 1 / -1; color: var(--text-muted); }
+
+/* ---------- Empty state for suggestions ---------- */
+.emptyPlan {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r);
+  padding: 16px 14px;
+  text-align: center;
+  background: var(--surface);
+  margin: 12px 0;
+}
+.emptyPlan[hidden] { display: none; }
+.emptyPlanTitle { font-weight: 600; font-size: 13px; margin: 0 0 4px; color: var(--text); }
+.emptyPlanDesc { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.4; }
 
 /* ---------- Open-tabs panel ---------- */
-#tabFilter { width: 100%; margin: 4px 12px 8px; width: calc(100% - 24px); }
+.tabsToolbar { padding: 6px 12px 8px; display: grid; gap: 6px; }
+.tabsToolbar input[type="text"] { width: 100%; }
+.tabsActions { display: flex; align-items: center; gap: 6px; padding: 0; }
+.tabsActions button { padding: 3px 8px; font-size: 11px; }
+.tabsActions button.danger-btn { color: var(--danger); }
+.tabsActions button.danger-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
+#tabFilter { width: 100%; margin: 0; }
 #tabList { list-style: none; margin: 0; padding: 0 12px; display: grid; gap: 2px; max-height: 40vh; overflow: auto; }
 #tabList li label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--r-sm); cursor: pointer; font-size: 12px; }
 #tabList li label:hover { background: var(--surface-hover); }
 #tabList li span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tabsActions { display: flex; align-items: center; gap: 10px; padding: 8px 12px 12px; }
 .hint { color: var(--text-faint); font-size: 12px; margin: 6px 2px; }
 kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
 
@@ -449,19 +539,36 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
    the panel — clipped invisibly by #settings' overflow: hidden. */
 #settingsForm { display: grid; grid-template-columns: minmax(0, 1fr); gap: 11px; padding: 4px 12px 14px; }
 #settingsForm label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
+.settingsGroup {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 8px 10px 10px;
+  margin: 0 0 4px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.settingsGroup legend {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  padding: 0 4px;
+}
 .advanced { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
 .advanced > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); list-style: revert; }
 .advanced[open] > summary { margin-bottom: 8px; }
 .advancedWarn { font-size: 11px; line-height: 1.4; color: var(--warn-soft-text); background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn-soft-text) 25%, transparent); border-radius: var(--r-sm); padding: 6px 8px; margin: 0 0 8px; }
 .advanced textarea { width: 100%; font-family: var(--mono); font-size: 11px; }
 #settingsForm input[type="number"] { width: 68px; margin: 0 4px; }
-#settingsForm > label:has(input[type="number"]) { flex-wrap: wrap; }
+#settingsForm label:has(input[type="number"]) { flex-wrap: wrap; }
 /* Labels wrapping a textarea (multi-line fields) stack instead of squeezing
    into the row layout — a row textarea has no room and gets clipped by
    #settings' overflow: hidden at panel width. */
 #settingsForm label:has(textarea) { flex-direction: column; align-items: stretch; gap: 4px; }
 #settingsForm label:has(textarea) textarea { width: 100%; }
-#settingsForm button[type="submit"] { justify-self: start; margin-top: 2px; }
+#settingsForm button[type="submit"] { justify-self: stretch; margin-top: 4px; }
 
 /* ---------- Sessions ---------- */
 #saveSessionForm { display: flex; gap: 6px; padding: 4px 12px 10px; }
@@ -477,6 +584,11 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
 }
 #sessionList li span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #sessionList li button { padding: 3px 9px; font-size: 11px; }
+.sessionDeleteBtn:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
 
 /* ---------- Undo dialog ---------- */
 #undoDialog {
@@ -502,11 +614,41 @@ kbd { font-family: var(--mono); font-size: 10px; background: var(--surface-2); b
 #undoSelected:hover { background: var(--accent-hover); }
 
 /* ---------- Plan toolbar (filter / bulk-select / expand) ---------- */
-.planTools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.planTools { display: grid; gap: 6px; margin: 8px 0; }
 .planTools[hidden] { display: none; } /* author display:flex would otherwise override the hidden attr */
-.planTools input[type="search"] { flex: 1 1 140px; min-width: 120px; }
-.planTools button { padding: 4px 10px; font-size: 11px; }
-.planTool-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
+.planTools-filterRow input[type="search"] { width: 100%; }
+.planTools-actionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.btnGroup {
+  display: inline-flex;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.btnGroup button {
+  border-radius: 0;
+  margin: 0;
+  padding: 4px 9px;
+  font-size: 11px;
+  border-right-width: 0;
+}
+.btnGroup button:last-child {
+  border-right-width: 1px;
+}
+.planTool-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer; }
+
+button.danger {
+  color: #fff;
+  background: var(--danger);
+  border-color: transparent;
+}
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 85%, #000);
+}
 
 /* ---------- Click-to-focus affordances ---------- */
 .focusable { cursor: pointer; color: var(--link); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }

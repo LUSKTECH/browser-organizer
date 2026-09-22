@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.8 — 2026-09-22
+UX/UI refresh, accessibility enhancements (WCAG 2.1 AA), and native host packaging for npm.
+
+**User Experience & Layout**
+- **Slim sticky app header**: Compact 44px sticky top bar preserving brand identity, undo shortcut, and animated progress bar while freeing vertical viewing space for suggestions.
+- **Plan controls & export**: Reorganized `#planTools` into a responsive 2-row layout with segmented button controls and moved "Export as Markdown" into the contextual action bar.
+- **Categorized settings**: Structured 15+ flat settings into carded `<fieldset>` groups with clean section legends.
+- **Open tabs bulk management**: Added "Select all" and "None" bulk controls above the open tabs list.
+- **Empty state guidance**: Added friendly suggestion placeholder when no items are queued.
+
+**Accessibility & Safety**
+- **Touch device discoverability**: Made `.itemIgnore` ("Never suggest this") discoverable with a visible baseline (0.85 opacity, 32px touch target) on touchscreens.
+- **Screen reader protection**: Separated live status announcer from 1-second interval elapsed timer to prevent speech flooding (WCAG 4.1.3).
+- **Destructive action confirmations**: Added modal confirmations to session deletion and "Reset learning" wipes, plus Escape key support in inline session renaming.
+- **Non-color state encoding**: Added icon prefixes (`✓` and `⚠`) to backend health banners (WCAG 1.4.1).
+- **Toast timing**: Added pause-on-hover and pause-on-focus to the undo toast auto-dismiss timer (WCAG 2.2.1).
+
 ## 0.1.7 — 2026-09-20
 Comprehensive reliability and bug-fix release addressing 11 findings from a systematic codebase audit across the extension and native host.
 

@@ -51,6 +51,15 @@ async function renderTabs() {
 export function initTabsView() {
   $('tabsPanel').addEventListener('toggle', () => { if ($('tabsPanel').open) renderTabs(); });
   $('tabFilter').addEventListener('input', drawTabs);
+  $('selectAllTabs')?.addEventListener('click', () => {
+    const shown = filterTabs(openTabs, $('tabFilter').value);
+    for (const t of shown) tabSelection.add(t.id);
+    drawTabs();
+  });
+  $('selectNoneTabs')?.addEventListener('click', () => {
+    tabSelection.clear();
+    drawTabs();
+  });
   $('closeTabsBtn').addEventListener('click', async () => {
     const ids = [...tabSelection];
     if (!ids.length) { setStatus('No tabs selected.'); return; }
