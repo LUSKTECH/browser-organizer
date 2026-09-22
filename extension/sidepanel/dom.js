@@ -5,16 +5,61 @@
 
 export const $ = (id) => document.getElementById(id);
 
-export const setStatus = (t) => { $('status').textContent = t; };
+export const setStatus = (t) => {
+  const textEl = $('statusText');
+  if (textEl) textEl.textContent = t;
+  else if ($('status')) $('status').textContent = t;
+  const clock = $('statusClock');
+  if (clock) clock.textContent = '';
+};
+
+export const setStatusWithClock = (text, elapsedText) => {
+  const textEl = $('statusText');
+  if (textEl) {
+    if (textEl.textContent !== text) textEl.textContent = text;
+  } else if ($('status')) {
+    $('status').textContent = elapsedText ? `${text} · ${elapsedText}` : text;
+  }
+  const clock = $('statusClock');
+  if (clock) clock.textContent = elapsedText ? ` · ${elapsedText}` : '';
+};
 
 // Like setStatus but re-triggers a brief highlight on every call, so a repeated
 // confirmation (e.g. pressing Save twice) is still visibly acknowledged.
 export function flashStatus(t) {
+  setStatus(t);
   const el = $('status');
-  el.textContent = t;
-  el.classList.remove('flash');
-  void el.offsetWidth; // reflow so the CSS animation restarts even if text is unchanged
-  el.classList.add('flash');
+  if (el) {
+    el.classList.remove('flash');
+    void el.offsetWidth; // reflow so the CSS animation restarts even if text is unchanged
+    el.classList.add('flash');
+  }
+}
+
+// Confirms an action via the native <dialog id="confirmDialog"> modal.
+// Resolves true to proceed, false to cancel (Cancel button, backdrop dismiss, or Esc).
+export function confirmAction({ title = 'Apply changes?', message = 'Are you sure?', confirmLabel = 'Confirm', danger = false } = {}) {
+  const dlg = $('confirmDialog');
+  if (!dlg) return Promise.resolve(true);
+  $('confirmTitle').textContent = title;
+  $('confirmMsg').textContent = message;
+  const okBtn = $('confirmOk');
+  okBtn.textContent = confirmLabel;
+  okBtn.classList.toggle('danger', danger);
+  return new Promise((resolve) => {
+    const onCancel = () => done(false);
+    const done = (val) => {
+      dlg.removeEventListener('cancel', onCancel);
+      okBtn.onclick = null;
+      $('confirmCancel').onclick = null;
+      dlg.close();
+      resolve(val);
+    };
+    okBtn.onclick = () => done(true);
+    $('confirmCancel').onclick = () => done(false);
+    dlg.addEventListener('cancel', onCancel);
+    dlg.showModal();
+  });
 }
 
 // One request/response round-trip to the service worker. Resolves with whatever

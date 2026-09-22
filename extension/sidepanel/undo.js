@@ -26,14 +26,21 @@ export async function showUndoToast() {
   });
   toast.append(msg, undoBtn);
   toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 8000);
+  const scheduleDismiss = (ms = 8000) => {
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
+  };
+  scheduleDismiss(8000);
+  toast.onmouseenter = () => clearTimeout(toastTimer);
+  toast.onfocusin = () => clearTimeout(toastTimer);
+  toast.onmouseleave = () => scheduleDismiss(3000);
+  toast.onfocusout = () => scheduleDismiss(3000);
 }
 
 // The undo-history dialog: every applied run, each expandable to its entries,
 // with per-run undo and a per-entry checked-subset undo button.
 export function initUndoHistory() {
-  $('showUndo').addEventListener('click', async () => {
+  const openUndo = async () => {
     const undoRes = await send({ cmd: 'getUndo' });
     if (!undoRes || !undoRes.ok) { setStatus('Could not load undo history.'); return; }
     const runs = groupUndoByRun(undoRes.entries);
@@ -84,5 +91,7 @@ export function initUndoHistory() {
         dlg.close();
       }
     };
-  });
+  };
+  $('showUndo')?.addEventListener('click', openUndo);
+  $('headerUndoBtn')?.addEventListener('click', openUndo);
 }

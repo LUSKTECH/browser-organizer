@@ -1,7 +1,7 @@
 // "Muted & learned" management: the list of never-suggest-again keys with unmute,
 // plus the reset-learning button. Reads settings directly; writes go through
 // setSettings (SW-serialized).
-import { $, setStatus, setSettings } from './dom.js';
+import { $, setStatus, setSettings, confirmAction } from './dom.js';
 import { getSettings } from '../lib/storage.js';
 import { describeIgnoreKey } from './viewmodel.js';
 
@@ -37,6 +37,13 @@ async function renderMuted() {
 export function initMutedView() {
   $('mutedPanel').addEventListener('toggle', () => { if ($('mutedPanel').open) renderMuted(); });
   $('resetLearning').addEventListener('click', async () => {
+    const ok = await confirmAction({
+      title: 'Reset learning?',
+      message: 'This will reset all learned tab grouping rules and decision history. Continue?',
+      confirmLabel: 'Reset',
+      danger: true,
+    });
+    if (!ok) return;
     try { await setSettings({ decisions: {} }); setStatus('Learning reset.'); }
     catch (err) { setStatus(`Reset failed: ${err.message}`); }
   });

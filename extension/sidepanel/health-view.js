@@ -24,6 +24,8 @@ export async function checkHealth() {
   $('commandForm').querySelector('button[type="submit"]').disabled = !ok;
   // First-run onboarding: show the connect card until the CLI is reachable.
   $('onboarding').hidden = ok;
+  const emptyEl = $('planEmptyState');
+  if (emptyEl && !ok) emptyEl.hidden = true;
   if (!ok) $('installCmd').textContent = installCommand(chrome.runtime.id);
   lastHostVersion = (res && res.health && res.health.hostVersion) || null;
   // Update nudge: the baked-in MIN_HOST_VERSION check (offline) always wins; if
