@@ -1,6 +1,6 @@
 # Chrome Web Store / Edge Add-ons Listing — Browser Organizer
 
-_Last updated: 2026-07-14_
+_Last updated: 2026-09-23_
 
 **Publisher:** Lusk Technologies · **Website:** https://lusk.tech ·
 **Privacy policy:** https://lusk.dev/browser-organizer/privacy · **Contact:** hello@lusk.dev
@@ -28,7 +28,8 @@ ever sent to our servers — we operate none.
 - **tabGroups**: Create and label tab groups when organizing open tabs in place.
 - **bookmarks**: Read your bookmarks to find duplicates/stale entries and create new ones.
 - **history**: Check when a bookmarked page was last visited, to identify stale bookmarks.
-- **storage**: Save your settings, tab-activity timestamps, and the undo log locally.
+- **storage**: Save your settings (synced via Chrome's own account sync), plus tab-activity
+  timestamps and the undo log (kept local-only).
 - **alarms**: Run scheduled organization passes and prune the undo log in auto mode.
 - **sidePanel**: Show the review dashboard where you approve suggested changes.
 - **nativeMessaging**: Communicate with the local helper that runs your AI CLI (see reviewer note).
@@ -48,6 +49,12 @@ Tab titles and URLs (query strings/fragments stripped, private/loopback hosts co
 origin, embedded credentials removed) are sent to your AI provider under your own
 subscription, via your local helper. Bookmarks and history are never sent anywhere. No data
 ever reaches the extension developer's servers; we operate none.
+
+**Data-safety form note:** settings (feature toggles, protected folders/domains, chosen AI
+backend) are stored via `chrome.storage.sync`, so check whatever box the dashboard's data-use
+questionnaire uses for data synced through the browser's own account sync — this is Chrome
+Sync, not a developer-operated server. Tab-activity timestamps, the undo log, and the
+(encrypted) OpenAI-compatible API key use `chrome.storage.local` and are never synced.
 
 ## Notes for reviewers (IMPORTANT — read before testing)
 This extension is the front-end for a **local companion helper** ("native messaging host")
@@ -72,6 +79,23 @@ Key safety facts:
   builds — please keep the assigned ID stable.
 
 ## Version history
+- **0.1.8** (2026-09-22) — UX/UI refresh and accessibility enhancements (WCAG 2.1 AA); native
+  host packaged for npm.
+- **0.1.7** (2026-09-20) — Reliability/bug-fix release addressing 11 findings from a systematic
+  codebase audit across the extension and native host.
+- **0.1.6-beta** (2026-08-27) — Security/code audit across the extension and native host
+  (stale-plan protections re-validated at apply time, CLI-adapter sandbox hardening,
+  message-sender validation, permission cleanup), plus a side-panel UX pass.
+- **0.1.5** (2026-07-19) — Native-host security hardening (per-adapter flag allowlist, OpenAI
+  SSRF fix, host crash-hardening) and an extension-only `prompt` passthrough extensibility path.
+- **0.1.4** (2026-07-19) — Organize fixes for Edge (non-Chrome root bookmark folder ids) plus
+  Advanced settings (CLI control, debug logging).
+- **0.1.3** (2026-07-16) — The connection banner now shows the installed native-host bridge
+  version alongside the CLI version, so a stale helper install is visible at a glance.
+- **0.1.2** (2026-07-16) — Organize bookmarks into folders (AI-driven), plus bookmark-cleanup
+  status grouping.
+- **0.1.1** (2026-07-15) — Host package fixes: Windows `npx` install now registers the native
+  host (was silently unregistered); corrected npm package metadata.
 - **0.1.0** (2026-07-11) — Initial submission. Tab grouping, stale-tab detection, bookmark
   cleanup (duplicate/stale/dead-link), auto-bookmarking, per-window scope, natural-language
   commands, sessions, scheduled auto-mode with undo. Six CLI backends + OpenAI-compatible API.
@@ -79,10 +103,11 @@ Key safety facts:
 ## Store assets still required (not in this repo)
 - [x] Real 16/48/128 px icons in `extension/icons/` and referenced in manifest (`npm run icons`)
 - [x] Upload zip built from `extension/` only (`npm run package` → `dist/`)
-- [ ] Store icon shown on the listing page (128×128 — reuse `icons/icon-128.png`)
-- [ ] At least one screenshot at 1280×800 or 640×400 (side panel with suggestions)
-- [ ] Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy; enter it +
-      hello@lusk.dev in the store, and fill the data-use form
+- [x] Store icon shown on the listing page (128×128 — reuse `icons/icon-128.png`)
+- [x] At least one screenshot at 1280×800 (`docs/screenshots/` — overview, bookmark-cleanup,
+      settings; refreshed 2026-09-23 against the current UI)
+- [x] Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy — live, verified
+      2026-09-23. Enter it + hello@lusk.dev in the store, and fill the data-use form.
 - [ ] Chrome Web Store developer account ($5 one-time) / Edge Partner Center account (free)
 - [ ] After first publish, confirm the store-assigned extension ID matches the `key`-derived ID
       so the native host `allowed_origins` remains correct
