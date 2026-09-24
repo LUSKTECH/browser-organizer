@@ -29,8 +29,8 @@ ever sent to our servers — we operate none.
 - **bookmarks**: Read your bookmarks to find duplicates/stale entries and create new ones.
 - **history**: Check when a bookmarked page was last visited, to identify stale bookmarks.
 - **storage**: Save your settings (synced via Chrome's own account sync when the user has
-  Chrome Sync turned on; otherwise local-only), plus tab-activity timestamps and the undo log
-  (always local-only).
+  Chrome Sync turned on and hasn't excluded Extensions from what syncs; otherwise local-only),
+  plus tab-activity timestamps and the undo log (always local-only).
 - **alarms**: Run scheduled organization passes and prune the undo log in auto mode.
 - **sidePanel**: Show the review dashboard where you approve suggested changes.
 - **nativeMessaging**: Communicate with the local helper that runs your AI CLI (see reviewer note).
@@ -53,9 +53,10 @@ ever reaches the extension developer's servers; we operate none.
 
 **Data-safety form note:** settings (feature toggles, protected folders/domains, chosen AI
 backend) are stored via `chrome.storage.sync`, which only actually leaves the device when the
-user has Chrome Sync turned on (otherwise it behaves like local storage) — check whatever box
-the dashboard's data-use questionnaire uses for data synced through the browser's own account
-sync in that case; this is Chrome Sync, not a developer-operated server. Tab-activity
+user has Chrome Sync turned on and hasn't excluded Extensions from what syncs (otherwise it
+behaves like local storage) — check whatever box the dashboard's data-use questionnaire uses
+for data synced through the browser's own account sync in that case; this is Chrome Sync, not
+a developer-operated server. Tab-activity
 timestamps, the undo log, and the
 (encrypted) OpenAI-compatible API key use `chrome.storage.local` and are never synced.
 
