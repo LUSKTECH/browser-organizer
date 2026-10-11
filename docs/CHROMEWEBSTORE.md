@@ -79,8 +79,8 @@ Key safety facts:
   fixed set of known CLIs (or an HTTPS OpenAI-compatible endpoint); the command, arguments,
   and credentials are resolved host-side and can never be supplied by the extension/a web
   page. See [`security-model.md`](security-model.md).
-- The `key` field pins the extension ID so the helper's `allowed_origins` stays valid across
-  builds — please keep the assigned ID stable.
+- The development manifest's `key` is this item's own store key, so the unpacked ID equals the
+  store-assigned ID and the helper's `allowed_origins` stays valid — please keep the ID stable.
 
 ## Version history
 - **0.1.8** (2026-09-22) — UX/UI refresh and accessibility enhancements (WCAG 2.1 AA); native
@@ -113,5 +113,5 @@ Key safety facts:
 - [x] Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy — live, verified
       2026-09-23. Enter it + hello@lusk.dev in the store, and fill the data-use form.
 - [ ] Chrome Web Store developer account ($5 one-time) / Edge Partner Center account (free)
-- [ ] After first publish, confirm the store-assigned extension ID matches the `key`-derived ID
-      so the native host `allowed_origins` remains correct
+- [x] Store-assigned ID (`klpoodibgjgibiiadnhddnnbpgckajkl`) adopted as the manifest `key` and in
+      the native host `allowed_origins` (verified: ID derived from the key matches)

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PROD_EXTENSION_ID, hostHome, hostBinName } from '../native-host/paths.js';
 
 test('PROD_EXTENSION_ID is the pinned store id', () => {
-  assert.equal(PROD_EXTENSION_ID, 'jjacbpnaekkhbfpncfhmignbiocddocc');
+  assert.equal(PROD_EXTENSION_ID, 'klpoodibgjgibiiadnhddnnbpgckajkl');
 });
 
 test('hostHome is a stable per-user dir per platform', () => {

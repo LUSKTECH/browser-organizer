@@ -1,0 +1,103 @@
+name: Release extension (Chrome Web Store)
+
+# Pushing a stable `vX.Y.Z` tag uploads the store zip and submits it for review.
+# Pre-release tags (anything with a `-`, e.g. v0.1.6-beta) are skipped. Run it by
+# hand with publish=false to upload a draft without submitting.
+#
+# Auth is keyless: GitHub's OIDC token is exchanged (Workload Identity
+# Federation, restricted to this repo) for a short-lived token of a service
+# account that is linked to the Web Store publisher. No secrets are stored; the
+# four repo *variables* below are identifiers, not credentials:
+#   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT, CWS_PUBLISHER_ID, CWS_ITEM_ID
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Submit for review after uploading (false = upload a draft only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-extension
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'LUSKTECH/browser-organizer' && (github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # OIDC token for Workload Identity Federation
+    env:
+      PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+      ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Check tag matches manifest version
+        if: github.ref_type == 'tag'
+        run: |
+          manifest=$(node -p "require('./extension/manifest.json').version")
+          if [ "v$manifest" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match extension/manifest.json version $manifest"
+            exit 1
+          fi
+
+      - name: Build store package
+        id: pkg
+        run: |
+          npm run package
+          zip=$(ls dist/browser-organizer-extension-*.zip | head -n1)
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        id: auth
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Upload package
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+          ZIP: ${{ steps.pkg.outputs.zip }}
+        run: |
+          set -euo pipefail
+          base="https://chromewebstore.googleapis.com"
+          item="publishers/$PUBLISHER_ID/items/$ITEM_ID"
+          resp=$(curl -sS --fail-with-body -X POST -H "Authorization: Bearer $TOKEN" -T "$ZIP" "$base/upload/v2/$item:upload")
+          echo "$resp" | jq .
+          state=$(echo "$resp" | jq -r '.uploadState')
+          # Large packages can finish asynchronously — poll until it settles.
+          for _ in $(seq 1 12); do
+            [ "$state" = "IN_PROGRESS" ] || break
+            sleep 10
+            state=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$base/v2/$item:fetchStatus" | jq -r '.lastAsyncUploadState // "UNKNOWN"')
+          done
+          if [ "$state" != "SUCCESS" ]; then
+            echo "::error::upload ended in state $state"
+            exit 1
+          fi
+
+      - name: Submit for review
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          base="https://chromewebstore.googleapis.com/v2/publishers/$PUBLISHER_ID/items/$ITEM_ID"
+          curl -sS --fail-with-body -X POST -H "Authorization: Bearer $TOKEN" "$base:publish" | jq .
+          curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$base:fetchStatus" | jq 'del(.publicKey)'

@@ -64,7 +64,7 @@ for d in /etc/opt/chrome/native-messaging-hosts /etc/chromium/native-messaging-h
   "path": "/usr/lib/browser-organizer/browser-organizer-host",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://jjacbpnaekkhbfpncfhmignbiocddocc/"
+    "chrome-extension://klpoodibgjgibiiadnhddnnbpgckajkl/"
   ]
 }
 JSON
