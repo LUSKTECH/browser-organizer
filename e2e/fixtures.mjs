@@ -16,7 +16,7 @@ import { install, buildHostManifest, HOST_NAME } from '../native-host/installer.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const extPath = path.join(repoRoot, 'extension');
 // The extension id is stable — derived from the manifest's pinned key.
-const EXT_ID = process.env.BORG_EXT_ID || 'jjacbpnaekkhbfpncfhmignbiocddocc';
+const EXT_ID = process.env.BORG_EXT_ID || 'klpoodibgjgibiiadnhddnnbpgckajkl';
 
 // Pages the local server serves, titled to give the model something to cluster.
 const PAGES = {

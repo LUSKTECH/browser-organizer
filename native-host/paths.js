@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 // Pinned Chrome/Edge id derived from the manifest `key` — identical across builds.
-export const PROD_EXTENSION_ID = 'jjacbpnaekkhbfpncfhmignbiocddocc';
+export const PROD_EXTENSION_ID = 'klpoodibgjgibiiadnhddnnbpgckajkl';
 
 // Stable per-user directory the host is copied into. Deliberately independent of
 // cwd, the repo, and any npx/temp cache so the browser manifest never dangles.

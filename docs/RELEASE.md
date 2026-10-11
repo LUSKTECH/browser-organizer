@@ -17,7 +17,7 @@ non-technical users. Anything marked **(you)** needs a human — the rest is aut
 Every path below registers the helper into `~/.browser-organizer` (macOS/Linux) or
 `%LOCALAPPDATA%\BrowserOrganizer` (Windows) and points the browser's host manifest there, so
 the repo/bundle/npx-cache can be deleted afterward. The extension ID is baked
-(`jjacbpnaekkhbfpncfhmignbiocddocc`, from `native-host/paths.js`).
+(`klpoodibgjgibiiadnhddnnbpgckajkl`, from `native-host/paths.js`).
 
 ## Path A — Self-hosted / unpacked (ready now)
 1. `npm run package:selfhost` → `dist/browser-organizer-selfhost-<version>.zip`
@@ -58,8 +58,20 @@ Build & submit:
 6. **(you)** Upload the zip; paste short/detailed description + permission justifications +
    **Notes for reviewers** from `CHROMEWEBSTORE.md`; enter the privacy URL and complete the
    data-use / privacy forms; upload icon + screenshot; link the installer downloads.
-7. **(you)** After first publish, verify the store-assigned extension ID matches the
-   `key`-derived ID so the native host `allowed_origins` stays valid.
+7. The extension `key` in `extension/manifest.json` is the Web Store's own public key for the
+   item (copied from the dashboard's Package tab, per Chrome's docs), so the unpacked/self-host
+   ID equals the store ID (`klpoodibgjgibiiadnhddnnbpgckajkl`) and the native host's
+   `allowed_origins` is valid for both. `npm run package` strips `key` from the store zip.
+
+### Automated store publish
+Pushing a stable `vX.Y.Z` tag runs `.github/workflows/release-extension.yml`: it checks the tag
+matches `extension/manifest.json`, builds the store zip, uploads it and submits it for review
+(manual run with `publish=false` uploads a draft only). Auth is keyless — GitHub OIDC →
+Workload Identity Federation (restricted to this repo) → service account
+`cws-publisher@browser-organizer-cws.iam.gserviceaccount.com`, which is linked to the publisher
+under Developer Dashboard › Account. Repo variables (identifiers, not secrets):
+`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `CWS_PUBLISHER_ID`, `CWS_ITEM_ID`.
+The manifest `version` must be higher than the last uploaded one; every update goes to review.
 
 ## Notes
 - `dist/` is git-ignored (build artifacts).
