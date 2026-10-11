@@ -82,10 +82,10 @@ jobs:
           echo "$resp" | jq .
           state=$(echo "$resp" | jq -r '.uploadState')
           # Large packages can finish asynchronously — poll until it settles.
-          for i in $(seq 1 12); do
+          for _ in $(seq 1 12); do
             [ "$state" = "IN_PROGRESS" ] || break
             sleep 10
-            state=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$base/v2/$item:fetchStatus" | jq -r '.lastAsyncUploadState // "SUCCESS"')
+            state=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$base/v2/$item:fetchStatus" | jq -r '.lastAsyncUploadState // "UNKNOWN"')
           done
           if [ "$state" != "SUCCESS" ]; then
             echo "::error::upload ended in state $state"

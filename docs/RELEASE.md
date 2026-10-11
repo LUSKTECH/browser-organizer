@@ -62,6 +62,9 @@ Build & submit:
    item (copied from the dashboard's Package tab, per Chrome's docs), so the unpacked/self-host
    ID equals the store ID (`klpoodibgjgibiiadnhddnnbpgckajkl`) and the native host's
    `allowed_origins` is valid for both. `npm run package` strips `key` from the store zip.
+   **Upgrade note:** installs that loaded the extension unpacked with the previous key (ID
+   `jjacbpna…`) get a new ID on update — their per-ID settings reset and the helper must be
+   re-registered (`npx @lusktech/browser-organizer-host repair`).
 
 ### Automated store publish
 Pushing a stable `vX.Y.Z` tag runs `.github/workflows/release-extension.yml`: it checks the tag
