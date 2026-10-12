@@ -87,7 +87,7 @@ jobs:
             sleep 10
             state=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$base/v2/$item:fetchStatus" | jq -r '.lastAsyncUploadState // "UNKNOWN"')
           done
-          if [ "$state" != "SUCCESS" ]; then
+          if [ "$state" != "SUCCEEDED" ]; then
             echo "::error::upload ended in state $state"
             exit 1
           fi
