@@ -58,6 +58,11 @@ with `… repair`, and remove it with `… uninstall`.
 a self-contained helper (no Node required) and registers it for Chrome and Edge. On Windows
 this is `BrowserOrganizerSetup.exe` — a **per-user** install (no admin rights).
 
+> **The installers are not code-signed yet.** Windows SmartScreen will show "Unknown publisher"
+> (**More info → Run anyway**) and macOS Gatekeeper will block the `.pkg` (Control-click →
+> **Open**). Check the download against `SHA256SUMS.txt` on the release, or use the `npx`
+> route in A, which runs the same code without an installer.
+
 **B2. Windows administrators (per-machine MSI):** for fleet deployment, use
 `BrowserOrganizer.msi` instead of the EXE. It installs the helper under `Program Files` and
 registers the native-messaging host in **HKLM** so every user on the machine can reach it
