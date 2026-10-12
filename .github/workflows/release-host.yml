@@ -21,7 +21,25 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    # Fail the whole run up front if the tag and the package version disagree, so neither the
+    # installers/GitHub release nor the npm publish can ship under a mismatched version.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Check tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/host-v')
+        run: |
+          pkg=$(node -p "require('./native-host/package.json').version")
+          if [ "host-v$pkg" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match native-host/package.json version $pkg"
+            exit 1
+          fi
+
   build:
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
@@ -282,14 +300,8 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Check tag matches the package version
-        run: |
-          pkg=$(node -p "require('./native-host/package.json').version")
-          if [ "host-v$pkg" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match native-host/package.json version $pkg"
-            exit 1
-          fi
-          echo "VERSION=$pkg" >> "$GITHUB_ENV"
+      - name: Read the package version
+        run: echo "VERSION=$(node -p "require('./native-host/package.json').version")" >> "$GITHUB_ENV"
       - name: Ensure npm CLI supports trusted publishing
         run: npm install -g npm@^11.5.1 && npm --version
       - name: Publish to npm
