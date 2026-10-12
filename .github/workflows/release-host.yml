@@ -261,3 +261,42 @@ jobs:
           files: release/*
           # Fail the publish rather than cut a release with no attached binaries.
           fail_on_unmatched_files: true
+
+  npm:
+    # Publishes the host package to npm (the side panel's onboarding command runs
+    # `npx @lusktech/browser-organizer-host`, so npm must carry the same version as the
+    # installers). Keyless: npm trusted publishing over GitHub OIDC — configure the
+    # package's Trusted Publisher on npmjs.com for this repo + workflow file. Runs only
+    # after every installer built, and skips a version that is already published.
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for npm trusted publishing
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Check tag matches the package version
+        run: |
+          pkg=$(node -p "require('./native-host/package.json').version")
+          if [ "host-v$pkg" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match native-host/package.json version $pkg"
+            exit 1
+          fi
+          echo "VERSION=$pkg" >> "$GITHUB_ENV"
+      - name: Ensure npm CLI supports trusted publishing
+        run: npm install -g npm@^11.5.1 && npm --version
+      - name: Publish to npm
+        run: |
+          if npm view "@lusktech/browser-organizer-host@$VERSION" version >/dev/null 2>&1; then
+            echo "@lusktech/browser-organizer-host@$VERSION is already on npm — skipping"
+            exit 0
+          fi
+          npm ci   # the package's prepublishOnly runs the repo's unit tests
+          cd native-host && npm publish --access public

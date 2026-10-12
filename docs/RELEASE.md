@@ -30,8 +30,13 @@ the repo/bundle/npx-cache can be deleted afterward. The extension ID is baked
 ## Path B — npm helper package (ready now; for technical users)
 1. `cd native-host && npm pack --dry-run` — confirm the tarball is self-contained (no
    `run.sh`, no tests) and dependency-free.
-2. **(you)** `npm login` to the `@lusktech` org, then `cd native-host && npm publish`
-   (`publishConfig.access` is already `public`; `prepublishOnly` re-runs the unit suite).
+2. Publishing is automated: pushing a `host-vX.Y.Z` tag runs the `npm` job in
+   `release-host.yml` (after all installers build), which publishes via npm **trusted
+   publishing** (GitHub OIDC, no token) and skips a version already on npm. One-time setup on
+   npmjs.com: package `@lusktech/browser-organizer-host` › Settings › Trusted Publisher › GitHub
+   Actions — org `LUSKTECH`, repo `browser-organizer`, workflow `release-host.yml`. Manual
+   fallback: `npm login` to the `@lusktech` org, then `cd native-host && npm publish`
+   (`prepublishOnly` re-runs the unit suite).
 3. Users then run `npx @lusktech/browser-organizer-host` from any directory.
 
 ## Path C — Chrome Web Store + Edge Add-ons + signed installer (follow-on)
