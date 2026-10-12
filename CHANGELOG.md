@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.9 — 2026-10-12
+Chrome Web Store readiness: the extension now uses its Web Store ID, the host trusts it, and releases to the store and to npm are automated.
+
+**Breaking for unpacked / self-host installs**
+- **New extension ID.** The Web Store assigned `klpoodibgjgibiiadnhddnnbpgckajkl`, which differs from the ID derived from the old manifest `key`. The manifest `key` is now the store's own public key and the native host's `allowed_origins` (`native-host/paths.js`, deb/rpm/Windows host manifests) trust the new ID, so the unpacked and store builds share one ID. Installs that loaded the extension unpacked with the old key get a new ID on update: their per-ID settings reset and the helper must be re-registered (`npx @lusktech/browser-organizer-host repair`). **Update the host to 0.1.9 before (or together with) the extension.**
+
+**Release automation**
+- `release-extension.yml`: a stable `vX.Y.Z` tag uploads the store zip and submits it for review through the Chrome Web Store API v2, using keyless GitHub OIDC → Workload Identity Federation (no stored credentials).
+- `release-host.yml`: a `host-v*` tag now also publishes `@lusktech/browser-organizer-host` to npm via trusted publishing (skips a version that is already published).
+
+**Security**
+- Bumped `brace-expansion` to 1.1.21 to close three high-severity DoS advisories (dev-only transitive dependency of eslint).
+
+**Docs**
+- Privacy policy (and the lusk.dev page) corrected: settings are saved with `chrome.storage.sync`, so they sync only when Chrome Sync is on and Extensions aren't excluded; tab-activity, the undo log and the encrypted API key stay local. Store listing doc, screenshots, promo tile and reviewer test instructions refreshed.
+
 ## 0.1.8 — 2026-09-22
 UX/UI refresh, accessibility enhancements (WCAG 2.1 AA), and native host packaging for npm.
 
