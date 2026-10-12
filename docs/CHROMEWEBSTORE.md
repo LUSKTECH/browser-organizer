@@ -82,6 +82,40 @@ Key safety facts:
 - The development manifest's `key` is this item's own store key, so the unpacked ID equals the
   store-assigned ID and the helper's `allowed_origins` stays valid — please keep the ID stable.
 
+## Test instructions (Access tab › "Test instructions", 500 characters max)
+Paste this verbatim (456 characters). There is no username or password.
+
+```
+No login needed. A free local helper is required (store packages can't bundle native hosts); without it the side panel loads, shows setup steps, and Open tabs/Sessions/Settings work. Full test: install Node 20+, click "Copy command" in the side panel card, run it in a terminal, click "Recheck connection". Then Settings > AI backend: Ollama (ollama.com; run `ollama pull llama3.2`) or any OpenAI-compatible URL + key. Then Analyze > Apply selected > Undo.
+```
+
+### Extended steps (for support or a reviewer follow-up; too long for the field)
+```
+No login is needed. This extension is the front-end for a small local helper (a native
+messaging host) that runs the user's own AI backend. Store packages cannot contain a native
+host, so the helper is installed once, separately.
+
+WITHOUT the helper (extension loads and is safe): click the toolbar icon. The side panel opens
+and shows a "Connect your AI CLI" card with the exact setup command. "Open tabs", "Sessions"
+(save/restore a window) and "Settings" work without it; the Analyze/Run buttons stay disabled
+until the helper is connected.
+
+FULL FUNCTIONALITY (about 2 minutes; Node.js 20+ required):
+1. In the side panel card, click "Copy command" and run it in a terminal. It looks like:
+   npx @lusktech/browser-organizer-host install chrome,edge <extension-id>
+2. Click "Recheck connection" (or reload the extension). The banner turns green once the helper
+   can reach an AI backend.
+3. Pick a backend in Settings > AI backend. Any one works: a local CLI (Claude Code, Codex,
+   Copilot, Kiro, Antigravity, or Ollama) or "OpenAI-compatible API" with a Base URL and API
+   key. Easiest with no account: install Ollama (https://ollama.com), run `ollama pull llama3.2`,
+   and choose "Ollama (local)".
+4. Open several tabs, click "Analyze my tabs & bookmarks", review the suggestions, click
+   "Apply selected", then undo from the toast or "Undo history". Nothing is changed without
+   the user's approval.
+
+Tab titles and URLs go only to the AI backend the user chose; nothing is sent to the developer.
+```
+
 ## Version history
 - **0.1.8** (2026-09-22) — UX/UI refresh and accessibility enhancements (WCAG 2.1 AA); native
   host packaged for npm.
