@@ -83,10 +83,10 @@ Key safety facts:
   store-assigned ID and the helper's `allowed_origins` stays valid — please keep the ID stable.
 
 ## Test instructions (Access tab › "Test instructions", 500 characters max)
-Paste this verbatim (445 characters). There is no username or password.
+Paste this verbatim (456 characters). There is no username or password.
 
 ```
-No login needed. A free local helper is required (store packages can't bundle native hosts); without it the side panel loads, shows setup steps, and Open tabs/Sessions/Settings work. Full test: install Node 20+, click "Copy command" in the side panel card, run it in a terminal, click "Recheck". Then Settings > AI backend: Ollama (ollama.com; run `ollama pull llama3.2`) or any OpenAI-compatible URL + key. Then Analyze > Apply selected > Undo.
+No login needed. A free local helper is required (store packages can't bundle native hosts); without it the side panel loads, shows setup steps, and Open tabs/Sessions/Settings work. Full test: install Node 20+, click "Copy command" in the side panel card, run it in a terminal, click "Recheck connection". Then Settings > AI backend: Ollama (ollama.com; run `ollama pull llama3.2`) or any OpenAI-compatible URL + key. Then Analyze > Apply selected > Undo.
 ```
 
 ### Extended steps (for support or a reviewer follow-up; too long for the field)
