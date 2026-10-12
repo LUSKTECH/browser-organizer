@@ -8,6 +8,7 @@ Chrome Web Store readiness: the extension now uses its Web Store ID, the host tr
 
 **Release automation**
 - `release-extension.yml`: a stable `vX.Y.Z` tag uploads the store zip and submits it for review through the Chrome Web Store API v2, using keyless GitHub OIDC → Workload Identity Federation (no stored credentials).
+- Host releases now open with a notice that the Windows and macOS installers are not code-signed yet (SmartScreen / Gatekeeper warnings and how to proceed); the same note is in `INSTALL.md`. Signing is deferred until the project qualifies for a free certificate.
 - `release-host.yml`: a `host-v*` tag now also publishes `@lusktech/browser-organizer-host` to npm via trusted publishing (skips a version that is already published).
 
 **Security**
