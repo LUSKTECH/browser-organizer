@@ -82,9 +82,14 @@ Key safety facts:
 - The development manifest's `key` is this item's own store key, so the unpacked ID equals the
   store-assigned ID and the helper's `allowed_origins` stays valid — please keep the ID stable.
 
-## Test instructions (Privacy tab › "Additional instructions")
-Paste this verbatim. There is no username or password.
+## Test instructions (Access tab › "Test instructions", 500 characters max)
+Paste this verbatim (445 characters). There is no username or password.
 
+```
+No login needed. A free local helper is required (store packages can't bundle native hosts); without it the side panel loads, shows setup steps, and Open tabs/Sessions/Settings work. Full test: install Node 20+, click "Copy command" in the side panel card, run it in a terminal, click "Recheck". Then Settings > AI backend: Ollama (ollama.com; run `ollama pull llama3.2`) or any OpenAI-compatible URL + key. Then Analyze > Apply selected > Undo.
+```
+
+### Extended steps (for support or a reviewer follow-up; too long for the field)
 ```
 No login is needed. This extension is the front-end for a small local helper (a native
 messaging host) that runs the user's own AI backend. Store packages cannot contain a native
