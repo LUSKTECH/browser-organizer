@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome to Browser Organizer</title>
+    <link rel="stylesheet" href="../sidepanel/sidepanel.css" />
+    <link rel="stylesheet" href="welcome.css" />
+  </head>
+  <body class="welcome">
+    <header class="appHeader">
+      <div class="brand">
+        <svg class="brandMark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect width="7" height="7" x="3" y="3" rx="1.5" />
+          <rect width="7" height="7" x="14" y="3" rx="1.5" />
+          <rect width="7" height="7" x="14" y="14" rx="1.5" />
+          <rect width="7" height="7" x="3" y="14" rx="1.5" />
+        </svg>
+        <h1>Browser Organizer setup</h1>
+      </div>
+      <p id="progress" class="progress" aria-live="polite"></p>
+    </header>
+
+    <main id="stage">
+      <section data-step="welcome" hidden>
+        <h2>Welcome</h2>
+        <p>Browser Organizer groups your open tabs by topic, flags forgotten ones, and tidies bookmarks, using an AI you already have. Nothing changes until you approve it.</p>
+        <h3>Find it in your toolbar</h3>
+        <p id="pinHint"></p>
+        <p>Then click its icon to open the side panel. The shortcut <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> analyzes your tabs.</p>
+        <p><button type="button" id="openPanel">Open the side panel</button></p>
+        <p id="openPanelMsg" class="hint" role="status"></p>
+      </section>
+
+      <section data-step="helper" hidden>
+        <h2>Connect the helper</h2>
+        <p>A small helper program on your computer runs your AI. Browsers can't bundle it, so you register it once.</p>
+        <p id="helperStatus" role="status"></p>
+        <div id="helperHelp" hidden>
+          <p id="helperForbidden" class="warn" hidden>The helper is installed, but it doesn't trust this copy of the extension yet. Run the command below once; it registers this extension's ID.</p>
+          <p>Open a terminal (Node.js 20 or newer is needed) and run:</p>
+          <pre id="installCmd"></pre>
+          <p>
+            <button type="button" id="copyCmd">Copy command</button>
+            <button type="button" id="helperRecheck" class="primary">Recheck connection</button>
+          </p>
+          <p id="installerHint" class="hint" hidden>No Node.js? Download the installer for your system from the <a href="https://github.com/LUSKTECH/browser-organizer/releases/latest" target="_blank" rel="noopener noreferrer">releases page</a>. The installers aren't code-signed yet, so your system will warn you.</p>
+        </div>
+      </section>
+
+      <section data-step="backend" hidden>
+        <h2>Choose your AI</h2>
+        <p>Pick one. Detected ones are marked Ready. You can change this later in Settings.</p>
+        <fieldset id="backendCards" class="cards">
+          <legend class="srOnly">AI backend</legend>
+        </fieldset>
+      </section>
+
+      <section data-step="setup" hidden>
+        <h2 id="setupTitle">Set it up</h2>
+        <div id="setupBody"></div>
+      </section>
+
+      <section data-step="test" hidden>
+        <h2>Check the connection</h2>
+        <p id="testHealth" role="status"></p>
+        <p class="hint">"Test sign-in" sends the single message "Reply with OK" to your chosen AI. No tabs or bookmarks are included. It can use a tiny amount of your quota.</p>
+        <p><button type="button" id="testSignIn">Test sign-in</button></p>
+        <p id="testResult" role="status"></p>
+      </section>
+
+      <section data-step="done" hidden>
+        <h2 id="doneTitle">You're set</h2>
+        <p id="doneBody"></p>
+        <p class="hint">Tab titles and URLs go only to the AI you chose, through the helper on your computer. Bookmarks and history never leave your machine, and nothing is sent to the extension's developer.</p>
+        <p>
+          <button type="button" id="analyze" class="primary">Open the panel and analyze my tabs</button>
+        </p>
+        <p id="analyzeMsg" class="hint" role="status"></p>
+      </section>
+    </main>
+
+    <footer class="wizardNav">
+      <button type="button" id="back">Back</button>
+      <button type="button" id="skip" class="linkBtn">Skip setup</button>
+      <button type="button" id="next" class="primary">Next</button>
+    </footer>
+
+    <script type="module" src="welcome.js"></script>
+  </body>
+</html>

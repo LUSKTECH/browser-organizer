@@ -65,6 +65,7 @@
       <div class="onboardingActions">
         <button id="copyCmd">Copy command</button>
         <button id="recheck" class="primary">Recheck connection</button>
+        <button type="button" id="openWizard">Set up…</button>
       </div>
       <p class="hint">Then pick your AI backend in Settings below (Claude, Antigravity, Kiro, Copilot, Codex, or local Ollama).</p>
     </section>
@@ -132,6 +133,7 @@
 
     <details id="settings">
       <summary data-i18n="settingsTitle">Settings</summary>
+      <p class="rerun"><button type="button" id="rerunSetup">Run setup again</button> <span class="fieldHint">Re-opens the guided setup (helper, AI backend, test).</span></p>
       <form id="settingsForm">
         <fieldset class="settingsGroup">
           <legend>AI Backend &amp; Model</legend>

@@ -14,6 +14,7 @@ API key** (no CLI to install); power users can point it at a local AI CLI instea
 
 **Chrome / Edge (unpacked, from this repo or the self-host bundle):**
 1. Download and unzip the self-host bundle (or clone this repo).
+   (To load the extension unpacked from a release, use the **self-host** bundle, `browser-organizer-selfhost-<version>.zip`, not `browser-organizer-extension-<version>.zip`: the latter is the Web Store package without the pinned key, so it gets a different extension ID that the installers don't trust. The setup wizard's `npx` command registers whatever ID the extension has.)
 2. Open `chrome://extensions` (or `edge://extensions`).
 3. Turn on **Developer mode** (top-right).
 4. Click **Load unpacked** and select the `extension/` folder.

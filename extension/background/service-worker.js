@@ -11,6 +11,7 @@ import { digestText } from '../lib/plan-summary.js';
 import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
 import { getSecret } from '../lib/secret-store.js';
+import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
 
 // Creates the native client, attaching the openai adapter's UI-entered config
 // (key decrypted from secret-store here, base/model from settings) so the host
@@ -60,7 +61,12 @@ chrome.action.onClicked.addListener(async (tab) => {
   await chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // First install only (never on update): show where the extension lives and walk through setup.
+  if (details && details.reason === 'install') {
+    await chrome.storage.local.set({ onboarding: normalizeState(null) });
+    await chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+  }
   const settings = await getSettings();
   await chrome.alarms.create(ALARM_SCAN, { periodInMinutes: settings.scanIntervalMinutes });
   await chrome.alarms.create(ALARM_PRUNE, { periodInMinutes: 1440 });
@@ -384,7 +390,48 @@ async function handleHealth() {
   finally { client.disconnect(); }
 }
 
+// Wizard: ask the helper how every backend looks, in parallel, each with its own short
+// timeout so one hung CLI can't stall the page. Reads `health` only (CLIs run `--version`; the
+// API adapter does a key-checked GET /models), and only probes the API once a key is saved.
+const PROBE_TIMEOUT_MS = 8000;
+
+async function probeOne(adapter, settings) {
+  const client = await makeClient({ ...settings, adapter });
+  const timeout = new Promise((resolve) => setTimeout(() => resolve({ adapter, ready: false, error: 'Timed out' }), PROBE_TIMEOUT_MS));
+  try {
+    return await Promise.race([
+      client.request({ type: 'health', adapter }).catch((err) => ({ adapter, ready: false, error: String((err && err.message) || err) })),
+      timeout,
+    ]);
+  } finally { client.disconnect(); }
+}
+
+async function handleProbe() {
+  const settings = await getSettings();
+  const hasKey = await getSecret('openaiApiKey');
+  const results = {};
+  await Promise.all(PROBE_ADAPTERS.map(async (a) => {
+    if (a === 'openai' && !hasKey) { results[a] = { adapter: a, ready: false, error: 'API key not set' }; return; }
+    results[a] = await probeOne(a, settings);
+  }));
+  return { ok: true, results };
+}
+
+// Wizard "Test sign-in": one constant prompt (no tab data) through the saved backend.
+async function handleTestPrompt() {
+  const settings = await getSettings();
+  const client = await makeClient(settings);
+  try {
+    const out = await client.request({ type: 'prompt', adapter: settings.adapter, payload: { prompt: TEST_PROMPT } });
+    return { ok: true, reply: String((out && out.raw) || '').slice(0, 200) };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  } finally { client.disconnect(); }
+}
+
 const HANDLERS = {
+  probe: handleProbe,
+  testPrompt: handleTestPrompt,
   run: handleRun,
   cancel: handleCancel,
   setSettings: handleSetSettings,

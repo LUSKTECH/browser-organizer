@@ -1,0 +1,29 @@
+body.welcome { max-width: 680px; font-size: 14px; }
+body.welcome h2 { margin: 18px 0 6px; font-size: 18px; }
+body.welcome h3 { margin: 14px 0 4px; font-size: 14px; }
+.progress { margin: 0; color: var(--text-muted); font-size: 12px; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cards { border: 0; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.card { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface); cursor: pointer; }
+.card:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--ring); }
+.card:focus-within { box-shadow: 0 0 0 2px var(--ring); }
+.card input { margin-top: 3px; }
+.card .name { font-weight: 600; }
+.badge { margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); font-size: 11px; background: var(--surface-2); color: var(--text-muted); }
+.badge.ready { background: var(--accent-soft); color: var(--accent-soft-text); }
+.badge.rec { background: var(--warn-soft); color: var(--warn-soft-text); }
+.warn { padding: 8px 10px; border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn-soft-text); }
+.ok { color: var(--accent-soft-text); font-weight: 600; }
+.bad { color: var(--danger); }
+pre { overflow-x: auto; padding: 10px; background: var(--surface-2); border-radius: var(--r-sm); }
+.field { display: grid; gap: 4px; margin: 10px 0; }
+.field input { padding: 6px 8px; }
+.wizardNav { display: flex; gap: 10px; align-items: center; margin-top: 22px; padding-top: 12px; border-top: 1px solid var(--border); }
+.wizardNav #next { margin-left: auto; }
+.linkBtn { background: none; border: 0; color: var(--link); text-decoration: underline; cursor: pointer; }
+
+.wizardNav button { width: auto; flex: none; white-space: nowrap; }
+.wizardNav #next { padding-left: 28px; padding-right: 28px; }
+h2[tabindex="-1"]:focus { outline: none; } /* focus moves here on step change for screen readers */
+code { padding: 1px 5px; background: var(--surface-2); border-radius: 4px; }
+#stage button { width: auto; }
