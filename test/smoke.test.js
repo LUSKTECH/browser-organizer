@@ -25,3 +25,11 @@ test('manifest declares commands and an omnibox keyword', () => {
   assert.ok(m.commands && m.commands['run-scan'], 'run-scan command');
   assert.equal(m.omnibox.keyword, 'org');
 });
+
+test('manifest exposes the settings as "Extension options" (opens in a tab)', () => {
+  const m = JSON.parse(readFileSync(new URL('../extension/manifest.json', import.meta.url)));
+  assert.equal(m.options_ui.open_in_tab, true);
+  const [page, hash] = m.options_ui.page.split('#');
+  assert.equal(hash, 'settings');
+  assert.ok(readFileSync(new URL(`../extension/${page}`, import.meta.url)).includes('id="settings"'));
+});

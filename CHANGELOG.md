@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- **Extension options link.** `chrome://extensions` / `edge://extensions` → Details now shows "Extension options", which opens the settings in a full tab (`options_ui`, same page as the side panel, `#settings` expanded).
+- `release-extension.yml` now prints the Web Store API's response body when an upload or submit is rejected (the 400 on a pending submission was previously silent).
+
 ## 0.1.9 — 2026-10-12
 Chrome Web Store readiness: the extension now uses its Web Store ID, the host trusts it, and releases to the store and to npm are automated.
 

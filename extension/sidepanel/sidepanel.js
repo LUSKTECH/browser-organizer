@@ -28,6 +28,12 @@ function applyI18n() {
   initMutedView();
   initHealthView();
   initUndoHistory();
+  // "Extension options" (edge://extensions → Details) opens this page in a tab with #settings.
+  if (window.location.hash === '#settings') {
+    const settings = document.getElementById('settings');
+    settings.open = true;
+    settings.scrollIntoView();
+  }
   // First paint: plan (loads the stored plan), then settings + health + sessions.
   // Each step is independent — one throwing (e.g. loadSettings' direct storage/
   // crypto calls) must not leave the rest of the panel silently uninitialized.

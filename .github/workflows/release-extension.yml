@@ -78,8 +78,14 @@ jobs:
           set -euo pipefail
           base="https://chromewebstore.googleapis.com"
           item="publishers/$PUBLISHER_ID/items/$ITEM_ID"
-          resp=$(curl -sS --fail-with-body -X POST -H "Authorization: Bearer $TOKEN" -T "$ZIP" "$base/upload/v2/$item:upload")
-          echo "$resp" | jq .
+          # Keep the response body even on an HTTP error so a rejection says why.
+          code=$(curl -sS -o upload.json -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" -T "$ZIP" "$base/upload/v2/$item:upload")
+          jq . upload.json || cat upload.json
+          if [ "$code" -ge 400 ]; then
+            echo "::error::upload rejected (HTTP $code): $(head -c 500 upload.json)"
+            exit 1
+          fi
+          resp=$(cat upload.json)
           state=$(echo "$resp" | jq -r '.uploadState')
           # Large packages can finish asynchronously — poll until it settles.
           for _ in $(seq 1 12); do
@@ -99,5 +105,10 @@ jobs:
         run: |
           set -euo pipefail
           base="https://chromewebstore.googleapis.com/v2/publishers/$PUBLISHER_ID/items/$ITEM_ID"
-          curl -sS --fail-with-body -X POST -H "Authorization: Bearer $TOKEN" "$base:publish" | jq .
+          code=$(curl -sS -o publish.json -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" "$base:publish")
+          jq . publish.json || cat publish.json
+          if [ "$code" -ge 400 ]; then
+            echo "::error::submit rejected (HTTP $code): $(head -c 500 publish.json)"
+            exit 1
+          fi
           curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$base:fetchStatus" | jq 'del(.publicKey)'
