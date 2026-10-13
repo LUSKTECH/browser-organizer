@@ -65,6 +65,9 @@ This extension is the front-end for a **local companion helper** ("native messag
 that runs the user's own AI CLI. Because a native host cannot be distributed inside a store
 package, the helper is installed once, separately, by the user:
 
+0. On first install the extension opens a welcome tab with a guided setup wizard (find the
+   extension, register the helper, pick and test an AI backend). It can be skipped, never opens
+   on updates, and uses no extra permissions.
 1. Until the helper is installed, the side panel shows an onboarding card with the exact
    one-line command to run — the extension loads and is safe, but analysis is inactive.
 2. After the one-time install, all features work. To exercise functionality during review,

@@ -93,6 +93,11 @@ export const test = base.extend({
         '--host-resolver-rules=MAP deadlink.test 127.0.0.1',
       ],
     });
+    // A fresh install opens the first-run wizard in a tab; close it so every spec starts from the
+    // same tab set (wizard.spec.mjs opens the page itself).
+    const isWizard = (pg) => pg.url().includes('/welcome/welcome.html');
+    for (let i = 0; i < 50 && !context.pages().some(isWizard); i++) await new Promise((r) => setTimeout(r, 100));
+    for (const pg of context.pages().filter(isWizard)) await pg.close();
     await use(context);
     await context.close();
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch { /* ignore */ }

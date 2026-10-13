@@ -57,10 +57,16 @@ async function maybeCheckLatestHost() {
   } catch { /* offline or registry unreachable — no nudge */ }
 }
 
+// The wizard is a full tab: the side panel is too narrow for it.
+export function openWizard() {
+  return chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+}
+
 export function initHealthView() {
   $('copyCmd').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(installCommand(chrome.runtime.id)); setStatus('Command copied.'); }
     catch { setStatus('Copy failed — select and copy manually.'); }
   });
   $('recheck').addEventListener('click', () => checkHealth());
+  $('openWizard').addEventListener('click', openWizard);
 }

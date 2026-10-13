@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **First-run setup wizard.** A fresh install opens a welcome tab that shows how to find the extension (pin it, open the panel, the `Ctrl+Shift+O` shortcut), detects the helper and which AI CLIs are installed, lets you choose a backend (CLI, Ollama, or an OpenAI-compatible API key), walks through its setup, and tests the connection (an automatic health check plus an opt-in "Test sign-in" that sends only "Reply with OK"). Skippable at every step; reopen it from the side panel's connect card ("Set up…") or Settings ("Run setup again"). Never opens on an update. No new permissions and no host change.
 - **Extension options link.** `chrome://extensions` / `edge://extensions` → Details now shows "Extension options", which opens the settings in a full tab (`options_ui`, same page as the side panel, `#settings` expanded).
 - `release-extension.yml` now prints the Web Store API's response body when an upload or submit is rejected (the 400 on a pending submission was previously silent).
 

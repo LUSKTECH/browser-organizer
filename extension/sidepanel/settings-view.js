@@ -6,7 +6,8 @@ import { $, setStatus, flashStatus, setSettings } from './dom.js';
 import { getSettings } from '../lib/storage.js';
 import { setSecret, hasSecret, clearSecret } from '../lib/secret-store.js';
 import { adapterNote } from './viewmodel.js';
-import { checkHealth } from './health-view.js';
+import { checkHealth, openWizard } from './health-view.js';
+import { normalizeState } from '../lib/onboarding.js';
 
 let advancedExtraArgs = {}; // per-adapter extra CLI flags, loaded from settings
 
@@ -95,6 +96,10 @@ export async function loadSettings() {
 }
 
 export function initSettingsView() {
+  $('rerunSetup').addEventListener('click', async () => {
+    await chrome.storage.local.set({ onboarding: normalizeState(null) }); // start over from step 1
+    await openWizard();
+  });
   $('openaiKeyShow').addEventListener('change', (e) => { $('openaiApiKey').type = e.target.checked ? 'text' : 'password'; });
   $('openaiKeyClear').addEventListener('click', async () => {
     await clearSecret('openaiApiKey');
