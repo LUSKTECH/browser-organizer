@@ -149,7 +149,7 @@ const enter = {
     setNext(false);
     $('testResult').textContent = '';
     $('testHealth').textContent = 'Checking the connection…';
-    const res = await send({ cmd: 'health' });
+    const res = await send({ cmd: 'health', adapter: choice });
     const { ok, text } = healthMessage(res && res.health, chrome.runtime.id);
     $('testHealth').className = ok ? 'ok' : 'bad';
     $('testHealth').style.whiteSpace = 'pre-line';
@@ -173,10 +173,6 @@ function field(id, label, type, value, placeholder) {
 
 // Runs when Next is pressed; returning false keeps the user on the step.
 const before = {
-  async backend() {
-    await setSettings({ adapter: choice });
-    return true;
-  },
   async setup() {
     if (backendInfo(choice).kind !== 'api') return true;
     const msg = $('setupMsg');
@@ -184,6 +180,12 @@ const before = {
     if (!key && !(await hasSecret('openaiApiKey'))) { msg.textContent = 'Enter an API key to continue.'; return false; }
     if (key) { await setSecret('openaiApiKey', key); $('apiKey').value = ''; }
     await setSettings({ openaiBaseUrl: $('apiBase').value.trim(), openaiModel: $('apiModel').value.trim() });
+    return true;
+  },
+  // The backend becomes the active one only once its check passed, so abandoning or skipping
+  // the wizard never replaces a configuration that already works.
+  async test() {
+    await setSettings({ adapter: choice });
     return true;
   },
 };
@@ -221,24 +223,34 @@ async function init() {
     out.className = '';
     out.textContent = 'Asking your AI…';
     $('testSignIn').disabled = true;
-    const res = await send({ cmd: 'testPrompt' });
+    const res = await send({ cmd: 'testPrompt', adapter: choice });
     $('testSignIn').disabled = false;
     if (res && res.ok) { out.className = 'ok'; out.textContent = `It answered: "${res.reply.trim() || '(empty reply)'}". Sign-in works.`; }
     else { out.className = 'bad'; out.textContent = `That didn't work: ${(res && res.error) || 'no response'}`; }
   });
-  $('back').addEventListener('click', () => show(state.step - 1));
-  $('next').addEventListener('click', async () => {
+  // One navigation at a time: a double click must not advance two steps and skip one.
+  let navigating = false;
+  const nav = (fn) => async () => {
+    if (navigating) return;
+    navigating = true;
+    try { await fn(); } finally { navigating = false; }
+  };
+  $('back').addEventListener('click', nav(() => show(state.step - 1)));
+  $('next').addEventListener('click', nav(async () => {
     if (!nextEnabled) return;
     const hook = before[STEPS[state.step]];
     if (hook && !(await hook())) return;
     await show(state.step + 1);
-  });
-  $('skip').addEventListener('click', async () => {
+  }));
+  $('skip').addEventListener('click', nav(async () => {
     await saveState({ skipped: true });
     await show(STEPS.length - 1);
-  });
+  }));
   // Reopening a finished or skipped wizard (Set up… / Run setup again) starts over; otherwise resume.
   if (state.completed || state.skipped) await saveState({ step: 0, completed: false, skipped: false });
+  // The chosen backend isn't persisted until its check passes, so a resumed wizard can't be past
+  // the choice step without one.
+  if (state.step > STEPS.indexOf('backend') && state.step < STEPS.length - 1) await saveState({ step: STEPS.indexOf('backend') });
   await show(state.step);
 }
 

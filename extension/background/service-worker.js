@@ -382,8 +382,11 @@ async function handleDeleteSession(m) {
   return { ok: true };
 }
 
-async function handleHealth() {
-  const settings = await getSettings();
+// `m.adapter` (optional) checks a backend without saving it as the active one; the wizard uses
+// it so a half-finished setup can't replace a working configuration.
+async function handleHealth(m) {
+  const saved = await getSettings();
+  const settings = m && PROBE_ADAPTERS.includes(m.adapter) ? { ...saved, adapter: m.adapter } : saved;
   const client = await makeClient(settings);
   try { return { ok: true, health: await client.request({ type: 'health', adapter: settings.adapter }) }; }
   catch (err) { return { ok: true, health: { adapter: settings.adapter, ready: false, error: String((err && err.message) || err) } }; }
@@ -418,8 +421,9 @@ async function handleProbe() {
 }
 
 // Wizard "Test sign-in": one constant prompt (no tab data) through the saved backend.
-async function handleTestPrompt() {
-  const settings = await getSettings();
+async function handleTestPrompt(m) {
+  const saved = await getSettings();
+  const settings = m && PROBE_ADAPTERS.includes(m.adapter) ? { ...saved, adapter: m.adapter } : saved;
   const client = await makeClient(settings);
   try {
     const out = await client.request({ type: 'prompt', adapter: settings.adapter, payload: { prompt: TEST_PROMPT } });

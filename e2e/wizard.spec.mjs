@@ -36,8 +36,9 @@ test('walks welcome → helper → backend → API setup, validates the key, and
   await page.locator('#next').click();                                   // saves → test
   await expect(page.locator('#progress')).toHaveText('Step 5 of 6');
   const s = await panel.evaluate(async () => (await chrome.storage.sync.get('settings')).settings);
-  expect(s.adapter).toBe('openai');
   expect(s.openaiBaseUrl).toBe('http://127.0.0.1:9/v1');
+  // The choice is only made active once its check passes; this one fails, so the default stays.
+  expect(s.adapter ?? 'claude').toBe('claude');
   // The unreachable endpoint must surface as a failed check, not a silent pass.
   await expect(page.locator('#testHealth')).toHaveClass(/bad/);
   await expect(page.locator('#next')).toBeDisabled();
@@ -84,4 +85,6 @@ test('API path end to end: health goes green and Test sign-in gets an answer', a
   await expect(page.locator('#doneTitle')).toHaveText("You're set");
   const st = await page.evaluate(() => chrome.storage.local.get('onboarding'));
   expect(st.onboarding).toMatchObject({ completed: true, skipped: false });
+  const saved = await page.evaluate(async () => (await chrome.storage.sync.get('settings')).settings);
+  expect(saved.adapter).toBe('openai'); // activated after the check passed
 });
