@@ -39,6 +39,7 @@
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
   },
+  "options_ui": { "page": "sidepanel/sidepanel.html#settings", "open_in_tab": true },
   "omnibox": { "keyword": "org" },
   "commands": {
     "run-scan": { "suggested_key": { "default": "Ctrl+Shift+O" }, "description": "Analyze tabs & bookmarks" },
