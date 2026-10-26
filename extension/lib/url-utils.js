@@ -64,7 +64,7 @@ export function isPrivateHost(url) {
     if (v4) return isPrivateHost(`http://${v4}`);
     return false;
   }
-  if (h === 'localhost' || h.endsWith('.local')) return true;
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
   if (h === '0.0.0.0') return true;
   // Non-dotted-decimal IPv4 encodings (decimal/hex integer hosts) can smuggle
   // internal targets past dotted-quad checks — treat any bare-integer host as private.
@@ -74,5 +74,6 @@ export function isPrivateHost(url) {
   if (/^192\.168\./.test(h)) return true;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
   if (/^169\.254\./.test(h)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)) return true; // CGNAT 100.64.0.0/10 (Tailscale)
   return false;
 }

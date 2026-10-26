@@ -82,7 +82,14 @@ export async function getSecret(name) {
   const blob = secrets[name];
   if (!blob) return '';
   try { return await decryptWith(await getCryptoKey(), blob); }
-  catch { return ''; } // key rotated / corrupt blob — treat as absent
+  catch {
+    // Key rotated (e.g. site data cleared wiped IndexedDB) or corrupt blob: the
+    // ciphertext is permanently unreadable, so drop it. That makes hasSecret()
+    // false and the UI asks for the key again instead of showing a phantom "saved".
+    console.warn(`secret-store: could not decrypt "${name}"; clearing it so it can be re-entered`);
+    await clearSecret(name);
+    return '';
+  }
 }
 
 export async function clearSecret(name) {
@@ -94,5 +101,9 @@ export async function clearSecret(name) {
 
 export async function hasSecret(name) {
   const { secrets = {} } = await chrome.storage.local.get('secrets');
-  return Boolean(secrets[name]);
+  if (!secrets[name]) return false;
+  // Verify the blob is actually readable (one small AES-GCM decrypt; the key is
+  // cached per context). Otherwise the panel says "saved" while the worker sees
+  // no key. A failed decrypt also self-heals via getSecret's clear.
+  return Boolean(await getSecret(name));
 }

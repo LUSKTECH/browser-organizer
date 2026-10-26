@@ -127,23 +127,43 @@ export function dedupeDeletes(items) {
   return [...byId.values()];
 }
 
+// If more than this share of a scan's probes hit a network failure (status 0),
+// the machine is almost certainly offline / behind a captive portal / blocked,
+// not hosting that many dead sites. Needs a minimum sample so a single flaky
+// bookmark is still judged on its own.
+export const OFFLINE_FAILURE_RATIO = 0.5;
+export const OFFLINE_MIN_PROBES = 3;
+export const OFFLINE_WARNING = 'Most links were unreachable, so you may be offline. Network failures were not counted as dead; rescan when you are back online.';
+
+// Resolves to the dead-link delete items. When the scan looks offline (see
+// OFFLINE_FAILURE_RATIO) the status-0 items are dropped so callers never strike
+// them, and the returned array carries a `warning` string to show the user.
+// Definitive 404/410 results are kept. Plain array otherwise (shape unchanged).
 export async function checkDeadLinks(bookmarks, deps = {}) {
   const fetchFn = deps.fetchFn || ((url, opts) => fetch(url, opts));
   const timeoutMs = deps.timeoutMs ?? 8000;
   const concurrency = deps.concurrency ?? 6;
   const queue = bookmarks.filter((b) => isHttpUrl(b.url) && !isPrivateHost(b.url));
-  const results = [];
+  let results = [];
   let idx = 0;
+  let probes = 0;
+  let networkFailures = 0;
 
   async function worker() {
     while (idx < queue.length) {
       const b = queue[idx++];
       const status = await probeStatus(b.url, fetchFn, timeoutMs);
+      probes++;
+      if (status === 0) networkFailures++;
       const reason = deadReason(status);
       if (reason) results.push(deleteItem(b, `Dead link (${reason})`, { category: 'dead', httpStatus: status }));
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker));
+  if (probes >= OFFLINE_MIN_PROBES && networkFailures / probes > OFFLINE_FAILURE_RATIO) {
+    results = results.filter((r) => r.data.httpStatus !== 0);
+    results.warning = OFFLINE_WARNING;
+  }
   return results;
 }
