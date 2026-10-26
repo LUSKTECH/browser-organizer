@@ -1,7 +1,7 @@
 // The direct open-tabs list: filter, multi-select, and bulk-close — no AI. Owns
 // its own openTabs/tabSelection state; the only outward call is showUndoToast()
 // after a close so the just-closed tabs are one click from being reopened.
-import { $, send, setStatus, currentScopeWindowId } from './dom.js';
+import { $, request, setStatus, currentScopeWindowId } from './dom.js';
 import { filterTabs } from './viewmodel.js';
 import { showUndoToast } from './undo.js';
 
@@ -39,10 +39,14 @@ function drawTabs() {
 }
 
 async function renderTabs() {
-  const res = await send({ cmd: 'listOpenTabs', windowId: await currentScopeWindowId() });
-  // Don't blank the list on a dropped/failed reply (SW asleep) — surface it and
-  // keep whatever's shown, consistent with the closeTabsBtn handler.
-  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'could not list tabs'}`); return; }
+  let res;
+  try {
+    res = await request({ cmd: 'listOpenTabs', windowId: await currentScopeWindowId() });
+  } catch (err) {
+    // Don't blank the list on a dropped/failed reply (SW asleep) — surface it and keep what's shown.
+    setStatus(`Error: ${err.message}`);
+    return;
+  }
   openTabs = res.tabs || [];
   tabSelection = new Set([...tabSelection].filter((id) => openTabs.some((t) => t.id === id)));
   drawTabs();
@@ -63,8 +67,13 @@ export function initTabsView() {
   $('closeTabsBtn').addEventListener('click', async () => {
     const ids = [...tabSelection];
     if (!ids.length) { setStatus('No tabs selected.'); return; }
-    const res = await send({ cmd: 'closeTabs', tabIds: ids });
-    if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'close failed'}`); return; }
+    let res;
+    try {
+      res = await request({ cmd: 'closeTabs', tabIds: ids });
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+      return;
+    }
     tabSelection = new Set();
     setStatus(`Closed ${res.closed} tab${res.closed === 1 ? '' : 's'}.`);
     await renderTabs();

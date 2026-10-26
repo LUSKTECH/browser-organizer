@@ -1,12 +1,20 @@
 // Saved window sessions: list with restore/rename/delete, JSON export, and the
 // save form. renderSessions() is exported so the bootstrap can paint it on load.
-import { $, send, setStatus, confirmAction } from './dom.js';
+import { $, request, setStatus, confirmAction, downloadText } from './dom.js';
+
+async function loadSessions() {
+  try {
+    return (await request({ cmd: 'listSessions' })).sessions || [];
+  } catch {
+    setStatus('Could not load sessions.');
+    return null;
+  }
+}
 
 export async function renderSessions() {
-  const sessRes = await send({ cmd: 'listSessions' });
   // Don't wipe the shown list on a dropped/failed reply (SW asleep) — surface it.
-  if (!sessRes || !sessRes.ok) { setStatus('Could not load sessions.'); return; }
-  const sessions = sessRes.sessions || [];
+  const sessions = await loadSessions();
+  if (!sessions) return;
   const list = $('sessionList');
   list.textContent = '';
   for (const s of sessions) {
@@ -17,8 +25,12 @@ export async function renderSessions() {
     restoreBtn.type = 'button';
     restoreBtn.textContent = 'Restore';
     restoreBtn.addEventListener('click', async () => {
-      await send({ cmd: 'restoreSession', id: s.sessionId });
-      setStatus(`Restored "${s.name}".`);
+      try {
+        const { session } = await request({ cmd: 'restoreSession', id: s.sessionId });
+        setStatus(session ? `Restored "${s.name}"${session.failed ? ` (${session.failed} tab${session.failed === 1 ? '' : 's'} failed to open)` : ''}.` : `Could not restore "${s.name}" (it no longer exists).`);
+      } catch (err) {
+        setStatus(`Could not restore "${s.name}": ${err.message}`);
+      }
     });
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
@@ -33,7 +45,10 @@ export async function renderSessions() {
         if (committed) return;
         committed = true;
         const name = input.value.trim();
-        if (name && name !== s.name) await send({ cmd: 'renameSession', id: s.sessionId, name });
+        if (name && name !== s.name) {
+          try { await request({ cmd: 'renameSession', id: s.sessionId, name }); }
+          catch (err) { setStatus(`Could not rename: ${err.message}`); }
+        }
         renderSessions();
       };
       input.addEventListener('keydown', (ev) => {
@@ -62,9 +77,13 @@ export async function renderSessions() {
         danger: true,
       });
       if (!ok) return;
-      await send({ cmd: 'deleteSession', id: s.sessionId });
+      try {
+        await request({ cmd: 'deleteSession', id: s.sessionId });
+        setStatus(`Deleted session "${s.name}".`);
+      } catch (err) {
+        setStatus(`Could not delete: ${err.message}`);
+      }
       renderSessions();
-      setStatus(`Deleted session "${s.name}".`);
     });
     li.append(label, restoreBtn, renameBtn, deleteBtn);
     list.appendChild(li);
@@ -73,14 +92,9 @@ export async function renderSessions() {
 
 export function initSessionsView() {
   $('exportSessions').addEventListener('click', async () => {
-    const sessRes = await send({ cmd: 'listSessions' });
-    if (!sessRes || !sessRes.ok) { setStatus('Could not load sessions.'); return; }
-    const sessions = sessRes.sessions || [];
-    const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'browser-organizer-sessions.json'; a.click();
-    URL.revokeObjectURL(url);
+    const sessions = await loadSessions();
+    if (!sessions) return;
+    downloadText('browser-organizer-sessions.json', JSON.stringify(sessions, null, 2), 'application/json');
     setStatus(`Exported ${sessions.length} session${sessions.length === 1 ? '' : 's'}.`);
   });
 
@@ -89,7 +103,12 @@ export function initSessionsView() {
     const nameInput = $('sessionName');
     const keepOpen = $('keepTabsOpen').checked;
     const win = await chrome.windows.getCurrent().catch(() => null);
-    await send({ cmd: 'saveSession', name: nameInput.value.trim(), close: !keepOpen, windowId: win?.id });
+    try {
+      await request({ cmd: 'saveSession', name: nameInput.value.trim(), close: !keepOpen, windowId: win?.id });
+    } catch (err) {
+      setStatus(`Could not save session: ${err.message}`);
+      return;
+    }
     nameInput.value = '';
     setStatus(keepOpen ? 'Session saved (tabs kept open).' : 'Session saved and tabs closed.');
     await renderSessions();

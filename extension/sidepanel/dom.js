@@ -6,20 +6,14 @@
 export const $ = (id) => document.getElementById(id);
 
 export const setStatus = (t) => {
-  const textEl = $('statusText');
-  if (textEl) textEl.textContent = t;
-  else if ($('status')) $('status').textContent = t;
+  $('statusText').textContent = t;
   const clock = $('statusClock');
   if (clock) clock.textContent = '';
 };
 
 export const setStatusWithClock = (text, elapsedText) => {
   const textEl = $('statusText');
-  if (textEl) {
-    if (textEl.textContent !== text) textEl.textContent = text;
-  } else if ($('status')) {
-    $('status').textContent = elapsedText ? `${text} · ${elapsedText}` : text;
-  }
+  if (textEl.textContent !== text) textEl.textContent = text;
   const clock = $('statusClock');
   if (clock) clock.textContent = elapsedText ? ` · ${elapsedText}` : '';
 };
@@ -40,7 +34,6 @@ export function flashStatus(t) {
 // Resolves true to proceed, false to cancel (Cancel button, backdrop dismiss, or Esc).
 export function confirmAction({ title = 'Apply changes?', message = 'Are you sure?', confirmLabel = 'Confirm', danger = false } = {}) {
   const dlg = $('confirmDialog');
-  if (!dlg) return Promise.resolve(true);
   $('confirmTitle').textContent = title;
   $('confirmMsg').textContent = message;
   const okBtn = $('confirmOk');
@@ -68,15 +61,32 @@ export function send(message) {
   return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
 }
 
+// send() that throws instead of resolving with a failure: an Error carrying the
+// reply's `error` when the worker didn't answer or answered {ok:false}. Callers
+// use try/catch and read the success fields off the returned reply.
+export async function request(message) {
+  const r = await send(message);
+  if (!r || !r.ok) throw new Error((r && r.error) || 'the background worker did not respond — try again');
+  return r;
+}
+
+// Saves text as a file via a temporary blob link (no data from tabs in href).
+export function downloadText(filename, text, type = 'text/plain') {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // All settings WRITES go through the service worker so they serialize under its
 // single 'settings' lock; writing chrome.storage directly from this context would
 // race SW-side writers (ignore/decisions) and clobber them. Reads stay local.
 export async function setSettings(patch) {
-  const r = await send({ cmd: 'setSettings', patch });
   // A dropped/failed write must not look like success (the SW may be asleep and
-  // the callback fires with no response). Throw so callers can surface it.
-  if (!r || !r.ok) throw new Error((r && r.error) || 'the background worker did not respond — settings were not saved');
-  return r.settings;
+  // the callback fires with no response). request() throws so callers can surface it.
+  return (await request({ cmd: 'setSettings', patch })).settings;
 }
 
 // Fetch the stored plan, tolerating a null response (SW asleep/no reply — the

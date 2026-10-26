@@ -35,8 +35,9 @@ test('walks welcome → helper → backend → API setup, validates the key, and
   await page.locator('#apiKey').fill('sk-test-not-real');
   await page.locator('#next').click();                                   // saves → test
   await expect(page.locator('#progress')).toHaveText('Step 5 of 6');
-  const s = await panel.evaluate(async () => (await chrome.storage.sync.get('settings')).settings);
-  expect(s.openaiBaseUrl).toBe('http://127.0.0.1:9/v1');
+  const s = (await panel.evaluate(async () => (await chrome.storage.sync.get('settings')).settings)) || {};
+  // Nothing is committed until the check passes; this one fails, so the saved config is untouched.
+  expect(s.openaiBaseUrl || '').toBe('');
   // The choice is only made active once its check passes; this one fails, so the default stays.
   expect(s.adapter ?? 'claude').toBe('claude');
   // The unreachable endpoint must surface as a failed check, not a silent pass.
@@ -83,8 +84,10 @@ test('API path end to end: health goes green and Test sign-in gets an answer', a
   await expect(page.locator('#testResult')).toContainText('Sign-in works', { timeout: 30000 });
   await page.locator('#next').click();                                   // → done
   await expect(page.locator('#doneTitle')).toHaveText("You're set");
-  const st = await page.evaluate(() => chrome.storage.local.get('onboarding'));
-  expect(st.onboarding).toMatchObject({ completed: true, skipped: false });
+  // #doneTitle has static text, so wait for the done step to actually record completion.
+  await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('onboarding')).onboarding)).toMatchObject({ completed: true, skipped: false });
   const saved = await page.evaluate(async () => (await chrome.storage.sync.get('settings')).settings);
   expect(saved.adapter).toBe('openai'); // activated after the check passed
+  expect(saved.openaiBaseUrl).toBe(`${server}/v1`); // address and model are committed with it
+  expect(saved.openaiModel).toBe('test-model');
 });

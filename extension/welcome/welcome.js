@@ -32,6 +32,12 @@ let probe = { results: {}, reachable: false };
 let choice = null;
 let windowId = null;
 let nextEnabled = true;
+// API-backend values typed in Setup. They stay in memory until the connection check passes
+// (before.test), so a typo can't overwrite a working saved configuration.
+let pendingApi = null; // { apiKey?: string, baseUrl: string, model: string }
+
+// Message fields that make the service worker run a check with the unsaved API values.
+const apiOverride = () => (backendInfo(choice).kind === 'api' && pendingApi ? { openai: pendingApi } : {});
 
 async function saveState(patch) {
   state = { ...state, ...patch };
@@ -113,11 +119,11 @@ const enter = {
     body.replaceChildren();
     if (info.kind === 'api') {
       const s = await getSettings();
-      const saved = await hasSecret('openaiApiKey');
+      const saved = (await hasSecret('openaiApiKey')) || !!(pendingApi && pendingApi.apiKey);
       body.append(
         el('p', {}, 'Enter your API key. Leave the address and model blank for OpenAI\'s defaults. The key is stored encrypted in this browser and sent only to the address you enter.'),
-        field('apiBase', 'API address (optional)', 'text', s.openaiBaseUrl || '', 'https://api.openai.com/v1'),
-        field('apiModel', 'Model (optional)', 'text', s.openaiModel || '', ''),
+        field('apiBase', 'API address (optional)', 'text', pendingApi ? pendingApi.baseUrl : (s.openaiBaseUrl || ''), 'https://api.openai.com/v1'),
+        field('apiModel', 'Model (optional)', 'text', pendingApi ? pendingApi.model : (s.openaiModel || ''), ''),
         field('apiKey', 'API key', 'password', '', saved ? '•••••••• saved — leave blank to keep' : 'sk-…'),
         el('p', { id: 'setupMsg', class: 'bad', role: 'alert' }),
       );
@@ -149,7 +155,7 @@ const enter = {
     setNext(false);
     $('testResult').textContent = '';
     $('testHealth').textContent = 'Checking the connection…';
-    const res = await send({ cmd: 'health', adapter: choice });
+    const res = await send({ cmd: 'health', adapter: choice, ...apiOverride() });
     const { ok, text } = healthMessage(res && res.health, chrome.runtime.id);
     $('testHealth').className = ok ? 'ok' : 'bad';
     $('testHealth').style.whiteSpace = 'pre-line';
@@ -177,15 +183,26 @@ const before = {
     if (backendInfo(choice).kind !== 'api') return true;
     const msg = $('setupMsg');
     const key = $('apiKey').value.trim();
-    if (!key && !(await hasSecret('openaiApiKey'))) { msg.textContent = 'Enter an API key to continue.'; return false; }
-    if (key) { await setSecret('openaiApiKey', key); $('apiKey').value = ''; }
-    await setSettings({ openaiBaseUrl: $('apiBase').value.trim(), openaiModel: $('apiModel').value.trim() });
+    const apiKey = key || (pendingApi && pendingApi.apiKey) || '';
+    if (!apiKey && !(await hasSecret('openaiApiKey'))) { msg.textContent = 'Enter an API key to continue.'; return false; }
+    // Nothing is saved yet: the connection check on the next step uses these values, and
+    // before.test commits them once it passes.
+    pendingApi = { baseUrl: $('apiBase').value.trim(), model: $('apiModel').value.trim() };
+    if (apiKey) pendingApi.apiKey = apiKey;
+    $('apiKey').value = '';
     return true;
   },
-  // The backend becomes the active one only once its check passed, so abandoning or skipping
-  // the wizard never replaces a configuration that already works.
+  // The backend and its API key/address/model are saved only once the check passed, so
+  // abandoning or skipping the wizard never replaces a configuration that already works.
   async test() {
-    await setSettings({ adapter: choice });
+    const patch = { adapter: choice };
+    if (backendInfo(choice).kind === 'api' && pendingApi) {
+      if (pendingApi.apiKey) await setSecret('openaiApiKey', pendingApi.apiKey);
+      patch.openaiBaseUrl = pendingApi.baseUrl;
+      patch.openaiModel = pendingApi.model;
+    }
+    await setSettings(patch);
+    pendingApi = null;
     return true;
   },
 };
@@ -223,7 +240,7 @@ async function init() {
     out.className = '';
     out.textContent = 'Asking your AI…';
     $('testSignIn').disabled = true;
-    const res = await send({ cmd: 'testPrompt', adapter: choice });
+    const res = await send({ cmd: 'testPrompt', adapter: choice, ...apiOverride() });
     $('testSignIn').disabled = false;
     if (res && res.ok) { out.className = 'ok'; out.textContent = `It answered: "${res.reply.trim() || '(empty reply)'}". Sign-in works.`; }
     else { out.className = 'bad'; out.textContent = `That didn't work: ${(res && res.error) || 'no response'}`; }
