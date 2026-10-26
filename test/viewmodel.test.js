@@ -289,5 +289,7 @@ test('healthMessage: a real native-messaging "native host" error still gives the
 test('toMarkdown escapes "]" in titles and ")" in URLs so links stay intact', () => {
   const items = [{ itemId: 'a', action: 'staleTab', reason: '', data: { title: 'Array[0](x) docs', url: 'https://en.wikipedia.org/wiki/Foo_(bar)' } }];
   const md = toMarkdown(items);
-  assert.ok(md.includes('- [Array[0\\](x) docs](https://en.wikipedia.org/wiki/Foo_(bar%29)'), md);
+  assert.ok(md.includes('- [Array\\[0\\](x) docs](https://en.wikipedia.org/wiki/Foo_(bar%29)'), md);
+  const withSlash = toMarkdown([{ action: 'closeTab', data: { title: 'C:\\path\\]x', url: 'https://a.example/' } }]);
+  assert.ok(withSlash.includes('[C:\\\\path\\\\\\]x](https://a.example/)'), withSlash);
 });

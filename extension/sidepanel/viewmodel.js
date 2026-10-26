@@ -225,9 +225,11 @@ export function progressLabel(phase, done, total) {
   return `${phase}… (${done}/${total})`;
 }
 
-// `]` in a title or `)` in a URL would end the link early.
+// `]` in a title or `)` in a URL would end the link early. Backslashes go
+// first so an escaped bracket can't be un-escaped by a preceding `\`.
 function mdLink(title, url) {
-  return `[${String(title).replace(/]/g, '\\]')}](${String(url).replace(/\)/g, '%29')})`;
+  const safeTitle = String(title).replace(/\\/g, '\\\\').replace(/[[\]]/g, '\\$&');
+  return `[${safeTitle}](${String(url).replace(/\)/g, '%29')})`;
 }
 
 export function toMarkdown(items) {
