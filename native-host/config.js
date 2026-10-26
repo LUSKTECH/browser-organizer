@@ -17,8 +17,10 @@ const DISALLOWED_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'LS', 'Bash',
 // pure, fast text transform. Turning a toggle on restores that loading.
 export function resolveArgs(cli = {}) {
   // --allowedTools '' only pre-approves nothing; in -p mode Claude still auto-runs
-  // read-only tools, so also deny every built-in tool by name.
-  const args = ['-p', '--output-format', 'json', '--allowedTools', '', '--disallowedTools', DISALLOWED_TOOLS.join(',')];
+  // read-only tools. --tools '' removes every built-in tool (so a tool added in a
+  // later CLI version is covered too); the explicit deny list stays as a second
+  // layer. Needs Claude Code >= 2.1 for --tools.
+  const args = ['-p', '--output-format', 'json', '--allowedTools', '', '--tools', '', '--disallowedTools', DISALLOWED_TOOLS.join(',')];
   if (!cli.loadMcpServers) args.push('--strict-mcp-config'); // no MCP servers
   if (!cli.loadPluginsSettings) args.push('--setting-sources', ''); // no on-disk settings/plugins/hooks
   return args;

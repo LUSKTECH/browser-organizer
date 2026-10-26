@@ -4,7 +4,7 @@ import { createNativeClient } from '../lib/native-client.js';
 import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision, ignoreKey } from '../lib/orchestrator.js';
 import { applyItem } from '../lib/executor.js';
 import { collectTree } from '../lib/bookmark-collector.js';
-import { recordUndo, reverseEntry, pruneUndo, getUndoLog, claimUndoEntries, restoreUndoEntries } from '../lib/undo-log.js';
+import { recordUndo, reverseEntry, pruneUndo, getUndoLog, claimUndoEntries, restoreUndoEntries, remapEntries } from '../lib/undo-log.js';
 import { listSessions, saveCurrentWindowSession, restoreSession, removeSession, renameSession, mutateSessions } from '../lib/sessions.js';
 import { parseOmnibox } from '../lib/omnibox.js';
 import { digestText } from '../lib/plan-summary.js';
@@ -372,7 +372,8 @@ async function handleUndo(m) {
   for (const entry of [...chosen].reverse()) {
     try { await reverseEntry(entry, chrome, idRemap); } catch { failed.push(entry); }
   }
-  await restoreUndoEntries(failed);
+  // A failed entry may point at a folder this batch recreated under a new id.
+  await restoreUndoEntries(remapEntries(failed, idRemap));
   return { ok: true, undone: chosen.length - failed.length, failed: failed.length };
 }
 

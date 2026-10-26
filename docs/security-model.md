@@ -33,7 +33,7 @@
 - **Agentic CLIs run tool-restricted.** Several backends are agentic (can run shell
   commands / edit files), so a prompt-injected tab title could otherwise escalate
   from "bad grouping" to real actions. Each is pinned to a tool-restricted mode:
-  - **claude**: `--allowedTools ''` plus `--disallowedTools` naming the built-in tools (Read, Edit, Write, Glob, Grep, LS, Bash, WebFetch, WebSearch, NotebookEdit, Task, TodoWrite, MultiEdit). `--allowedTools ''` alone only pre-approves nothing, and `--setting-sources ''` drops the user's own deny rules, so the explicit deny list is what blocks the built-ins. MCP tools are off via `--strict-mcp-config` by default. Strongest.
+  - **claude**: `--allowedTools ''`, `--tools ''` (removes every built-in tool, including ones added in later CLI versions; needs Claude Code 2.1+) plus `--disallowedTools` naming the built-in tools (Read, Edit, Write, Glob, Grep, LS, Bash, WebFetch, WebSearch, NotebookEdit, Task, TodoWrite, MultiEdit). `--allowedTools ''` alone only pre-approves nothing, and `--setting-sources ''` drops the user's own deny rules, so the explicit deny list is what blocks the built-ins. MCP tools are off via `--strict-mcp-config` by default. Strongest.
   - **ollama**: local LLM, no tools. Strongest.
   - **antigravity**: `--sandbox`, no `--dangerously-skip-permissions` (tools not auto-approved).
   - **kiro**: `--trust-tools=` (trusts no tools).

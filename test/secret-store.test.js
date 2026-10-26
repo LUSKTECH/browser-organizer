@@ -91,3 +91,34 @@ test('hasSecret reports false (and self-heals) for a corrupted blob', async () =
   } finally { console.warn = warn; }
   assert.equal(chrome._store.local.secrets.openai, undefined);
 });
+
+test('a key-store failure propagates and leaves the stored secret alone', async () => {
+  const first = await load();
+  await first.setSecret('openai', 'sk-test-123');
+  const blob = chrome._store.local.secrets.openai;
+  // Fresh module (no cached key) whose IndexedDB is unavailable: nothing can be
+  // said about the ciphertext, so it must not be discarded.
+  globalThis.indexedDB = { open() { throw new Error('IndexedDB unavailable'); } };
+  const second = await load();
+  await assert.rejects(second.getSecret('openai'), /IndexedDB unavailable/);
+  assert.deepEqual(chrome._store.local.secrets.openai, blob);
+  assert.equal(await second.hasSecret('openai'), true); // can't verify, so report what is stored
+});
+
+test('a failed decrypt does not clear a secret saved by another context in the meantime', async () => {
+  const first = await load();
+  await first.setSecret('openai', 'sk-old');
+  installFakeIndexedDb(); // key lost: the stored blob is now unreadable
+  const second = await load();
+  // Race: before `second` finishes failing, another context stores a fresh key.
+  const origGet = chrome.storage.local.get.bind(chrome.storage.local);
+  let intercepted = false;
+  chrome.storage.local.get = async (k) => {
+    const r = await origGet(k);
+    if (!intercepted && k === 'secrets') { intercepted = true; await second.setSecret('openai', 'sk-new'); }
+    return r;
+  };
+  const warn = console.warn; console.warn = () => {};
+  try { await second.getSecret('openai'); } finally { console.warn = warn; chrome.storage.local.get = origGet; }
+  assert.equal(await second.getSecret('openai'), 'sk-new');
+});

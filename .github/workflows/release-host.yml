@@ -228,19 +228,22 @@ jobs:
       - name: Sign + notarize (macOS)
         if: matrix.name == 'macos' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
         env:
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
           MACOS_NOTARY_API_KEY: ${{ secrets.MACOS_NOTARY_API_KEY }}
           MACOS_NOTARY_API_KEY_ID: ${{ secrets.MACOS_NOTARY_API_KEY_ID }}
           MACOS_NOTARY_API_ISSUER: ${{ secrets.MACOS_NOTARY_API_ISSUER }}
         run: |
           set -eu
-          if [ -z "${MACOS_SIGN_IDENTITY:-}" ]; then
-            echo "::warning::macOS signing secrets not set — publishing the .pkg unsigned/un-notarized (fine for alpha/pre-release builds)."
+          # A .pkg must be signed with a "Developer ID Installer" certificate; the
+          # "Developer ID Application" one used for the binary makes productsign
+          # appear to succeed but the package fails on the destination Mac.
+          if [ -z "${MACOS_INSTALLER_SIGN_IDENTITY:-}" ]; then
+            echo "::warning::MACOS_INSTALLER_SIGN_IDENTITY not set — publishing the .pkg unsigned/un-notarized (fine for alpha/pre-release builds)."
             exit 0
           fi
           # The host binary was already codesigned before packaging (step 1b), so
           # the .pkg embeds a signed Mach-O. Here we just wrap-sign and notarize it.
-          productsign --sign "$MACOS_SIGN_IDENTITY" dist/BrowserOrganizer.pkg dist/BrowserOrganizer-signed.pkg
+          productsign --sign "$MACOS_INSTALLER_SIGN_IDENTITY" dist/BrowserOrganizer.pkg dist/BrowserOrganizer-signed.pkg
           mv dist/BrowserOrganizer-signed.pkg dist/BrowserOrganizer.pkg
           printf '%s' "$MACOS_NOTARY_API_KEY" > notary_key.p8
           xcrun notarytool submit dist/BrowserOrganizer.pkg \

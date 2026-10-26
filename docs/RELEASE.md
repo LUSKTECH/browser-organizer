@@ -49,7 +49,9 @@ credentials.
 - [ ] **(you)** CI signing secrets (all optional; unset means the step warns and ships unsigned):
       `WINDOWS_CERT_BASE64` + `WINDOWS_CERT_PASSWORD` (Authenticode .pfx);
       `MACOS_CERT_P12_BASE64` + `MACOS_CERT_PASSWORD` (Developer ID .p12, imported into a
-      temporary keychain for the run), `MACOS_SIGN_IDENTITY`, and the notarytool API key trio
+      temporary keychain for the run; put both the Developer ID Application and the Developer ID
+      Installer certificates in it), `MACOS_SIGN_IDENTITY` (Application, signs the binary),
+      `MACOS_INSTALLER_SIGN_IDENTITY` (Installer, signs the .pkg), and the notarytool API key trio
       `MACOS_NOTARY_API_KEY` / `MACOS_NOTARY_API_KEY_ID` / `MACOS_NOTARY_API_ISSUER`.
 - [ ] **(you)** Confirm default store backend (recommended: OpenAI-compatible API, no CLI).
 

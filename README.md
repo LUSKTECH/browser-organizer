@@ -24,7 +24,7 @@ Seven backends ship today. The first six are command-line tools; the last talks 
 
 | Backend | Command / transport | How it's invoked | Auth |
 |---------|---------|------------------|------|
-| Claude Code *(default)* | `claude` | `claude -p --output-format json --allowedTools '' --disallowedTools <built-in tools>` (prompt on stdin) | saved `claude` login |
+| Claude Code *(default)* | `claude` | `claude -p --output-format json --allowedTools '' --tools '' --disallowedTools <built-in tools>` (prompt on stdin) | saved `claude` login |
 | Antigravity | `agy` | `agy --sandbox -p "<prompt>"` | saved `agy` login, or `GEMINI_API_KEY` / `ANTIGRAVITY_API_KEY` |
 | Kiro | `kiro-cli` | `kiro-cli chat --no-interactive "<prompt>"` | `KIRO_API_KEY` (Kiro Pro and up) |
 | GitHub Copilot | `copilot` | `copilot -s --no-ask-user -p "<prompt>"` | Copilot subscription via `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`, or an existing `gh` login |

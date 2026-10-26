@@ -47,8 +47,22 @@ export async function restoreUndoEntries(entries) {
     const log = await getUndoLog();
     // The log is kept in ts-ascending (apply) order. Failed entries arrive in
     // reverse-apply order, so merge and re-sort (stable) rather than prepending.
-    const merged = [...entries, ...log].sort((a, b) => a.ts - b.ts);
+    // Callers hand back failed entries in reverse-apply order (handleUndo walks
+    // the batch backwards), so reverse them again before the stable sort: equal
+    // timestamps then keep apply order instead of the order the undo attempted.
+    const merged = [...log, ...entries.slice().reverse()].sort((a, b) => a.ts - b.ts);
     await chrome.storage.local.set({ undoLog: merged.slice(-MAX_ENTRIES) });
+  });
+}
+
+// Applies this batch's old→new folder ids to entries that are about to go back
+// into the log (their reversal failed after a removeFolder in the same batch
+// recreated the parent), so a later retry targets the recreated folder.
+export function remapEntries(entries, idRemap) {
+  if (!idRemap || !idRemap.size) return entries;
+  return entries.map((e) => {
+    const target = e.reverse && idRemap.get(e.reverse.parentId);
+    return target ? { ...e, reverse: { ...e.reverse, parentId: target } } : e;
   });
 }
 

@@ -169,3 +169,24 @@ test('reverseEntry closeTab retries without windowId when the window is gone', a
   assert.ok(!('windowId' in calls[1]));
   assert.equal(calls[1].url, 'https://a');
 });
+
+test('restoreUndoEntries keeps apply order for entries that share a timestamp', async () => {
+  // Failed entries arrive in reverse-apply order (handleUndo walks the batch backwards).
+  await restoreUndoEntries([
+    { undoId: 'second', ts: 5, action: 'closeTab', reverse: {} },
+    { undoId: 'first', ts: 5, action: 'closeTab', reverse: {} },
+  ]);
+  assert.deepEqual((await getUndoLog()).map((e) => e.undoId), ['first', 'second']);
+});
+
+test('remapEntries redirects failed entries to a folder recreated in the same batch', async () => {
+  const { remapEntries } = await import('../extension/lib/undo-log.js');
+  const remap = new Map([['oldF', 'newF']]);
+  const out = remapEntries([
+    { undoId: 'm', action: 'moveBookmark', reverse: { bookmarkId: 'b', parentId: 'oldF', index: 0 } },
+    { undoId: 'c', action: 'closeTab', reverse: { url: 'https://a' } },
+  ], remap);
+  assert.equal(out[0].reverse.parentId, 'newF');
+  assert.equal(out[1].reverse.parentId, undefined);
+  assert.equal(remapEntries([{ undoId: 'x', reverse: { parentId: 'oldF' } }], new Map())[0].reverse.parentId, 'oldF');
+});
