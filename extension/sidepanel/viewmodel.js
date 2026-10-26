@@ -1,5 +1,6 @@
 import { ACTION_LABELS, STATUS_LABELS } from '../lib/labels.js';
 import { summarize, digestText } from '../lib/plan-summary.js';
+import { isNativeHostError } from '../lib/onboarding.js';
 
 export { summarize, digestText };
 
@@ -144,7 +145,7 @@ export function formatElapsed(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-const ADAPTER_LABELS = { claude: 'Claude CLI', antigravity: 'Antigravity CLI', kiro: 'Kiro CLI', copilot: 'Copilot CLI', codex: 'Codex CLI', ollama: 'Ollama', openai: 'OpenAI-compatible API' };
+export const ADAPTER_LABELS = { claude: 'Claude CLI', antigravity: 'Antigravity CLI', kiro: 'Kiro CLI', copilot: 'Copilot CLI', codex: 'Codex CLI', ollama: 'Ollama', openai: 'OpenAI-compatible API' };
 const ADAPTER_CMDS = { claude: 'claude', antigravity: 'agy', kiro: 'kiro-cli', copilot: 'copilot', codex: 'codex', ollama: 'ollama' };
 // Adapters that talk HTTP with a host-side key instead of spawning a CLI — their
 // fix-it guidance is "set the env key", not "install/sign-in to a CLI".
@@ -202,7 +203,7 @@ export function healthMessage(health, extensionId = '<your-extension-id>') {
   // fallbacks ("Native host disconnected/timed out"). A reachable helper whose CLI
   // errors (e.g. "spawn claude ENOENT", "command not found", "403 forbidden") never
   // does, so those correctly fall through to the "CLI didn't start" guidance below.
-  const hostMissing = err === '' || /native (messaging )?host|specified native/i.test(err);
+  const hostMissing = isNativeHostError(err);
   if (hostMissing) {
     return {
       ok: false,
@@ -228,6 +229,11 @@ export function progressLabel(phase, done, total) {
   return `${phase}… (${done}/${total})`;
 }
 
+// `]` in a title or `)` in a URL would end the link early.
+function mdLink(title, url) {
+  return `[${String(title).replace(/]/g, '\\]')}](${String(url).replace(/\)/g, '%29')})`;
+}
+
 export function toMarkdown(items) {
   const lines = ['# Browser Organizer export', ''];
   for (const [action, list] of Object.entries(groupByAction(items))) {
@@ -235,11 +241,11 @@ export function toMarkdown(items) {
     for (const it of list) {
       if (action === 'groupTabs') {
         lines.push(`- **${it.data.groupName}**`);
-        for (const m of it.data.members || []) lines.push(`  - [${m.title || m.url}](${m.url})`);
+        for (const m of it.data.members || []) lines.push(`  - ${mdLink(m.title || m.url, m.url)}`);
       } else {
         const label = it.data.title || it.data.url || '';
         const reason = it.reason ? ` — ${it.reason}` : '';
-        lines.push(it.data.url ? `- [${label}](${it.data.url})${reason}` : `- ${label}${reason}`);
+        lines.push(it.data.url ? `- ${mdLink(label, it.data.url)}${reason}` : `- ${label}${reason}`);
       }
     }
     lines.push('');

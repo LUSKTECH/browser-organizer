@@ -56,10 +56,15 @@ export function backendInfo(adapter) {
 
 // Chrome words these differently; only a native-messaging failure means the helper side is the
 // problem. "other" is a reachable helper reporting its own error.
+export function isNativeHostError(err) {
+  const e = String(err || '');
+  return e === '' || /native (messaging )?host|specified native/i.test(e);
+}
+
 export function classifyHostError(err) {
   const e = String(err || '');
   if (/forbidden/i.test(e)) return 'forbidden';
-  if (e === '' || /native (messaging )?host|specified native/i.test(e)) return 'missing';
+  if (isNativeHostError(e)) return 'missing';
   return 'other';
 }
 
