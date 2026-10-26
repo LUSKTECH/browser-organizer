@@ -99,7 +99,7 @@ export async function buildPlan(deps) {
   step('Finding duplicate tabs');
   if (shouldCancel()) return finalizePlan(items, settings, folders);
   if (f.dupeTabs && tabs.length) {
-    try { items.push(...findDuplicateTabs(tabs)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); }
+    try { items.push(...findDuplicateTabs(tabs)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); onWarning('Finding duplicate tabs failed. See the service-worker console for details.'); }
   }
 
   step('Grouping tabs');
@@ -113,7 +113,7 @@ export async function buildPlan(deps) {
         const r = await nativeClient.request({ type: 'organize', task: 'group', adapter, payload: { tabs: projectTabsForHost(ungrouped), rules } });
         items.push(...mapGroupResult(r.groups, byId));
       }
-    } catch (e) { console.warn('[organizer] grouping phase failed:', e); } // keep other results
+    } catch (e) { console.warn('[organizer] grouping phase failed:', e); onWarning('Grouping tabs failed. See the service-worker console for details.'); } // keep other results
   }
 
   step('Finding forgotten tabs');
@@ -126,7 +126,7 @@ export async function buildPlan(deps) {
         const r = await nativeClient.request({ type: 'organize', task: 'stale', adapter, payload: { tabs: projectTabsForHost(stale), thresholdDays: settings.staleTabDays, rules } });
         items.push(...mapStaleResult(r.stale, byId, candidateIds));
       }
-    } catch (e) { console.warn('[organizer] stale-tabs phase failed:', e); }
+    } catch (e) { console.warn('[organizer] stale-tabs phase failed:', e); onWarning('Finding forgotten tabs failed. See the service-worker console for details.'); }
   }
 
   step('Finding tabs to bookmark');
@@ -135,7 +135,7 @@ export async function buildPlan(deps) {
     try {
       const r = await nativeClient.request({ type: 'organize', task: 'important', adapter, payload: { tabs: projectTabsForHost(tabs), rules } });
       items.push(...mapImportantResult(r.important, byId));
-    } catch (e) { console.warn('[organizer] important-bookmarks phase failed:', e); }
+    } catch (e) { console.warn('[organizer] important-bookmarks phase failed:', e); onWarning('Finding tabs to bookmark failed. See the service-worker console for details.'); }
   }
 
   step('Cleaning bookmarks');
@@ -164,7 +164,7 @@ export async function buildPlan(deps) {
       deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
     }
     items.push(...dedupeDeletes(deletes));
-   } catch (e) { console.warn('[organizer] bookmark-cleanup phase failed:', e); }
+   } catch (e) { console.warn('[organizer] bookmark-cleanup phase failed:', e); onWarning('Cleaning bookmarks failed. See the service-worker console for details.'); }
   }
 
   step('Organizing bookmarks');
@@ -177,6 +177,7 @@ export async function buildPlan(deps) {
       const mode = settings.organizeMode || 'additive';
       const candidates = selectOrganizeCandidates(tree.bookmarks, mode, tree.rootIds);
       let moveItems = [];
+      let kept = []; // moves that survive protections (what the plan will actually contain)
       if (!candidates.length) {
         console.info(`[organizer] organize: 0 candidates (mode=${mode}, ${tree.bookmarks.length} bookmarks total, roots=[${[...tree.rootIds].join(',')}])`);
         onWarning(`Nothing to sort: no loose bookmarks were found${settings.protectBookmarkBar !== false ? ' outside the protected bookmarks bar' : ''}. "Match"/"Add folders" only move bookmarks that aren't already in a folder — try "Fully reorganize" in Settings to include filed ones.`);
@@ -188,7 +189,7 @@ export async function buildPlan(deps) {
         const rawMoves = Array.isArray(r && r.moves) ? r.moves : [];
         moveItems = mapOrganizeResult(rawMoves, byId, mode, tree.otherId, folderPathById);
         // How many survive the bar/whitelist protections (what actually reaches the plan)?
-        const kept = applyFolderProtection(moveItems, { protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, rootIds: tree.rootIds, barId: tree.barId });
+        kept = applyFolderProtection(moveItems, { protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, rootIds: tree.rootIds, barId: tree.barId });
         console.info(`[organizer] organize: ${candidates.length} candidate(s), mode=${mode} → model ${rawMoves.length} move(s) → ${moveItems.length} mapped → ${kept.length} after protections`);
         items.push(...moveItems);
         if (!moveItems.length) {
@@ -199,7 +200,7 @@ export async function buildPlan(deps) {
           onWarning(`All ${moveItems.length} proposed move(s) were skipped by your protections${settings.protectBookmarkBar ? ' — your folders are likely inside the Bookmarks Bar, which is protected. Untick "Never touch the Bookmarks Bar" to file into them.' : '.'}`);
         }
       }
-      if (settings.removeEmptyFolders) items.push(...findEmptyFolders(folders, tree.bookmarks, moveItems, tree.rootIds));
+      if (settings.removeEmptyFolders) items.push(...findEmptyFolders(folders, tree.bookmarks, kept, tree.rootIds));
     } catch (e) {
       console.warn('[organizer] organize-bookmarks phase failed:', e);
       // Never fall through to a silent "looks tidy": surface the failure. The
@@ -261,7 +262,7 @@ export async function hasAllUrls(chromeApi = chrome) {
 
 export function ignoreKey(item) {
   const d = item.data || {};
-  const target = d.url || (d.tabIds ? `group:${d.groupName}` : d.bookmarkId || '');
+  const target = d.url || (d.tabIds ? `group:${d.groupName}` : d.bookmarkId || d.folderId || '');
   return `${item.action}:${redactUrl(String(target))}`;
 }
 
@@ -301,9 +302,11 @@ export async function applyItems(items, deps = {}) {
   const recordUndo = deps.recordUndo || defaultRecordUndo;
   const applied = [];
   const failed = [];
+  const skipped = []; // no-ops (e.g. folder no longer empty): neither applied nor undoable
   for (const item of items) {
     try {
       const undo = await applyItem(item);
+      if (undo && undo.skipped) { skipped.push(item.itemId); continue; }
       // Persist each undo record immediately: if a later item or the process
       // dies, the destructive actions already taken remain undoable (a single
       // end-of-batch write would lose them all on failure).
@@ -316,5 +319,5 @@ export async function applyItems(items, deps = {}) {
       failed.push(item.itemId);
     }
   }
-  return { applied, failed };
+  return { applied, failed, skipped };
 }
