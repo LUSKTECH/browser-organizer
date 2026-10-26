@@ -14,7 +14,6 @@ test('undo-history dialog reverts an applied run', async ({ context, server, pan
   await panel.reload({ waitUntil: 'domcontentloaded' });
 
   await expect(panel.locator('#plan .item')).toHaveCount(1);
-  await panel.click('#approveSelected'); // nothing selected yet -> select then apply
   await panel.click('#selectAll');
   await panel.click('#approveAll');
   await expect.poll(() => countTabsWithUrl(panel, dup)).toBe(1); // one duplicate closed
