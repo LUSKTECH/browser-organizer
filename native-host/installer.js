@@ -101,8 +101,14 @@ export function resolveCliPath(platform = process.platform, spawnSyncFn = spawnS
   const finder = platform === 'win32' ? 'where' : 'which';
   try {
     const res = spawnSyncFn(finder, [binary], { encoding: 'utf8' });
-    const line = String(res.stdout || '').split(/\r?\n/).find(Boolean);
-    return line ? line.trim() : null;
+    const lines = String(res.stdout || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    // On Windows `where` lists the extensionless npm sh shim first, which can't be
+    // spawned without a shell (and we never use one). Prefer a real executable.
+    if (platform === 'win32') {
+      const pick = (ext) => lines.find((l) => l.toLowerCase().endsWith(ext));
+      return pick('.exe') || pick('.com') || lines[0] || null;
+    }
+    return lines[0] || null;
   } catch { return null; }
 }
 

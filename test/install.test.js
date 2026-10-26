@@ -292,3 +292,13 @@ test('install() and repair() default browsers and do not throw when browsers opt
   }
 });
 
+
+import { resolveCliPath } from '../native-host/installer.js';
+
+test('resolveCliPath on win32 prefers .exe, then .com, over the extensionless shim', () => {
+  const where = (out) => () => ({ stdout: out });
+  assert.match(resolveCliPath('win32', where('C:\\n\\claude\r\nC:\\n\\claude.cmd\r\nC:\\n\\claude.exe\r\n')), /claude\.exe$/);
+  assert.match(resolveCliPath('win32', where('C:\\n\\claude\r\nC:\\n\\claude.com\r\nC:\\n\\claude.cmd\r\n')), /claude\.com$/);
+  assert.equal(resolveCliPath('win32', where('C:\\n\\claude\r\nC:\\n\\claude.cmd\r\n')), 'C:\\n\\claude');
+  assert.equal(resolveCliPath('linux', where('/usr/bin/claude\n/opt/claude\n')), '/usr/bin/claude');
+});
