@@ -7,10 +7,6 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const mode = process.argv[2] === 'selfhost' ? 'selfhost' : 'store';
-const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8')).version;
-const outDir = path.join(ROOT, 'dist');
-fs.mkdirSync(outDir, { recursive: true });
 
 // Generated launchers, OS cruft — never ship these.
 const EXCLUDE = new Set(['.DS_Store', 'Thumbs.db', 'run.sh', 'run.bat']);
@@ -35,7 +31,7 @@ function walk(dir, base = '') {
   return out;
 }
 
-function collect() {
+function collect(mode) {
   if (mode === 'store') return walk(path.join(ROOT, 'extension'));
   const files = [];
   for (const dir of ['extension', 'native-host']) {
@@ -49,7 +45,14 @@ function collect() {
 }
 
 const DOS_DATE = 0x5221; // fixed (2021-01-01) → reproducible zips
-const files = collect();
+
+// Builds one zip into outDir. Returns { outPath, entries, manifestText } where
+// manifestText is the manifest.json exactly as written into the archive (store mode only).
+export function buildPackage({ mode = 'store', outDir = path.join(ROOT, 'dist') } = {}) {
+const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8')).version;
+fs.mkdirSync(outDir, { recursive: true });
+let manifestText = null;
+const files = collect(mode);
 const parts = [];
 const central = [];
 let offset = 0;
@@ -62,6 +65,7 @@ for (const f of files) {
     const m = JSON.parse(data.toString('utf8'));
     delete m.key;
     data = Buffer.from(JSON.stringify(m, null, 2) + '\n', 'utf8');
+    manifestText = data.toString('utf8');
   }
   const comp = zlib.deflateRawSync(data, { level: 9 });
   const name = Buffer.from(f.rel, 'utf8');
@@ -88,4 +92,11 @@ eocd.writeUInt16LE(files.length, 8); eocd.writeUInt16LE(files.length, 10);
 eocd.writeUInt32LE(centralBuf.length, 12); eocd.writeUInt32LE(offset, 16);
 const outPath = path.join(outDir, `browser-organizer-${mode === 'store' ? 'extension' : 'selfhost'}-${version}.zip`);
 fs.writeFileSync(outPath, Buffer.concat([...parts, centralBuf, eocd]));
-console.log(`[${mode}] packaged ${files.length} files → ${path.relative(ROOT, outPath)} (${(fs.statSync(outPath).size / 1024).toFixed(1)} KB)`);
+return { outPath, entries: files.map((f) => f.rel), manifestText };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const mode = process.argv[2] === 'selfhost' ? 'selfhost' : 'store';
+  const { outPath, entries } = buildPackage({ mode });
+  console.log(`[${mode}] packaged ${entries.length} files → ${path.relative(ROOT, outPath)} (${(fs.statSync(outPath).size / 1024).toFixed(1)} KB)`);
+}
