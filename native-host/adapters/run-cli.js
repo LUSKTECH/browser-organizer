@@ -23,11 +23,25 @@ function killTree(child) {
   } catch { try { child.kill('SIGKILL'); } catch {} }
 }
 
+// In-flight runs (child + private cwd). The host exits when stdin closes, which
+// skips runCli's finally; killAll() reaps the children and removes their dirs.
+const active = new Set();
+
+export function killAll() {
+  for (const entry of active) {
+    if (entry.child) killTree(entry.child);
+    try { fs.rmSync(entry.cwd, { recursive: true, force: true }); } catch {}
+  }
+  active.clear();
+}
+
 // Runs a CLI once and resolves with its raw stdout (string). If `usesStdin` is
 // true the prompt is piped to stdin; otherwise stdin is closed empty (the prompt
 // is expected to already be in `args`).
 export async function runCli({ command, args, prompt = '', usesStdin = false, env, timeoutMs = 120000, spawnFn = spawn, maxStdout = DEFAULT_MAX_STDOUT, maxStderr = DEFAULT_MAX_STDERR }) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'borg-'));
+  const entry = { child: null, cwd };
+  active.add(entry);
   try {
     return await new Promise((resolve, reject) => {
       let child;
@@ -35,6 +49,7 @@ export async function runCli({ command, args, prompt = '', usesStdin = false, en
       // whole tree; harmless where spawnFn is a test mock (no real pid/group).
       try { child = spawnFn(command, args, { cwd, env, detached: process.platform !== 'win32' }); }
       catch (err) { reject(err); return; }
+      entry.child = child;
 
       // Collect stdout as raw Buffer chunks and decode ONCE at the end. Decoding
       // each chunk independently (stdout += buf) turns a multibyte UTF-8 char
@@ -76,6 +91,7 @@ export async function runCli({ command, args, prompt = '', usesStdin = false, en
       else if (child.stdin) { child.stdin.end(); }
     });
   } finally {
+    active.delete(entry);
     try { fs.rmSync(cwd, { recursive: true, force: true }); } catch {}
   }
 }
