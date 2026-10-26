@@ -64,6 +64,19 @@ this is `BrowserOrganizerSetup.exe` — a **per-user** install (no admin rights)
 > **Open**). Check the download against `SHA256SUMS.txt` on the release, or use the `npx`
 > route in A, which runs the same code without an installer.
 
+**Remove the macOS package.** The `.pkg` has no uninstaller; run these in Terminal:
+
+```
+sudo rm -rf /usr/local/browser-organizer
+rm -rf ~/.browser-organizer
+rm -f "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.browser_organizer.host.json"
+rm -f "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts/com.browser_organizer.host.json"
+sudo pkgutil --forget tech.lusk.browserorganizer.host
+```
+
+In order: the staged package payload; the per-user helper copy; the Chrome and Edge
+native-messaging manifests; and the installer receipt.
+
 **B2. Windows administrators (per-machine MSI):** for fleet deployment, use
 `BrowserOrganizer.msi` instead of the EXE. It installs the helper under `Program Files` and
 registers the native-messaging host in **HKLM** so every user on the machine can reach it
