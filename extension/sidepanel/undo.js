@@ -2,10 +2,20 @@
 // undo-history dialog. Both are pure DOM over the SW's undo log, with no shared
 // panel state — so plan-view (after apply) and tabs-view (after bulk close) can
 // both call showUndoToast() without coupling.
-import { $, send, setStatus } from './dom.js';
+import { $, send, request, setStatus } from './dom.js';
 import { groupUndoByRun, actionLabel } from './viewmodel.js';
 
 let toastTimer = null;
+// Sends an undo and reports what actually happened ("Reverted 2, 1 failed.").
+async function undoIds(ids) {
+  try {
+    const { undone, failed } = await request({ cmd: 'undo', undoIds: ids });
+    setStatus(`Reverted ${undone}${failed ? `, ${failed} failed` : ''}.`);
+  } catch (err) {
+    setStatus(`Undo failed: ${err.message}`);
+  }
+}
+
 export async function showUndoToast() {
   const res = await send({ cmd: 'getUndo' });
   if (!res || !res.ok) return;
@@ -20,8 +30,7 @@ export async function showUndoToast() {
   undoBtn.type = 'button';
   undoBtn.textContent = 'Undo';
   undoBtn.addEventListener('click', async () => {
-    await send({ cmd: 'undo', undoIds: latest.entries.map((e) => e.undoId) });
-    setStatus(`Reverted ${latest.entries.length}.`);
+    await undoIds(latest.entries.map((e) => e.undoId));
     toast.hidden = true;
   });
   toast.append(msg, undoBtn);
@@ -59,8 +68,7 @@ export function initUndoHistory() {
       undoRunBtn.type = 'button';
       undoRunBtn.textContent = 'Undo this run';
       undoRunBtn.addEventListener('click', async () => {
-        await send({ cmd: 'undo', undoIds: run.entries.map((e) => e.undoId) });
-        setStatus(`Reverted ${run.entries.length}.`);
+        await undoIds(run.entries.map((e) => e.undoId));
         dlg.close();
       });
       header.append(ts, undoRunBtn);
@@ -84,10 +92,9 @@ export function initUndoHistory() {
       dlg.close();
     };
     dlg.querySelector('#undoSelected').onclick = async () => {
-      const undoIds = [...list.querySelectorAll('input:checked')].map((c) => c.value);
-      if (undoIds.length) {
-        await send({ cmd: 'undo', undoIds });
-        setStatus(`Reverted ${undoIds.length}.`);
+      const ids = [...list.querySelectorAll('input:checked')].map((c) => c.value);
+      if (ids.length) {
+        await undoIds(ids);
         dlg.close();
       }
     };

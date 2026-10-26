@@ -2,7 +2,8 @@
 // per-item edits, the run/command scans that produce a plan, and apply. These
 // share the plan/selection state so they live together; other panels talk to this
 // one only through initPlanView() (bootstrap) and showUndoToast() (undo module).
-import { $, setStatus, flashStatus, send, fetchPlan, focusTab, currentScopeWindowId, confirmAction } from './dom.js';
+import { $, setStatus, flashStatus, send, request, downloadText, fetchPlan, focusTab, currentScopeWindowId, confirmAction } from './dom.js';
+import { getSettings } from '../lib/storage.js';
 import { startScanClock, stopScanClock, ensureScanPort } from './scan-clock.js';
 import { showUndoToast } from './undo.js';
 import { ignoreKey } from '../lib/orchestrator.js';
@@ -10,7 +11,7 @@ import { TAB_GROUP_COLORS as GROUP_COLORS } from '../lib/colors.js';
 import { STATUS_LABELS } from '../lib/labels.js';
 import {
   summarize, groupByAction, toggleSelection, selectedItems, actionLabel,
-  excludeMember, renameGroup, recolorGroup, moveMember, toMarkdown,
+  ADAPTER_LABELS, excludeMember, renameGroup, recolorGroup, moveMember, toMarkdown,
   allItemIds, filterPlan, needsBulkConfirm, destructiveCount, groupByStatus, statusLabel,
 } from './viewmodel.js';
 
@@ -57,7 +58,7 @@ function renderGroupItem(item) {
   check.checked = selection.has(item.itemId);
   check.setAttribute('aria-label', `Select group ${item.data.groupName}`);
   check.addEventListener('click', (e) => e.stopPropagation()); // don't toggle the <details>
-  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); });
+  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); updateApplySelectedLabel(); });
 
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
@@ -157,6 +158,11 @@ function renderGroupItem(item) {
   return li;
 }
 
+function updateApplySelectedLabel() {
+  const btn = $('approveSelected');
+  if (btn) btn.textContent = selection.size ? `Apply selected (${selection.size})` : 'Apply selected';
+}
+
 export function renderPlan(animate = false) {
   const container = $('plan');
   container.textContent = '';
@@ -176,12 +182,7 @@ export function renderPlan(animate = false) {
     const isOnboarding = onboarding && !onboarding.hidden;
     emptyEl.hidden = plan.length > 0 || isOnboarding;
   }
-  const approveSelBtn = $('approveSelected');
-  if (approveSelBtn) {
-    approveSelBtn.textContent = selection.size
-      ? `Apply selected (${selection.size})`
-      : 'Apply selected';
-  }
+  updateApplySelectedLabel();
 
   const groups = groupByAction(shown);
   const tpl = $('itemTemplate');
@@ -242,7 +243,7 @@ function buildItemNode(item, tpl) {
   const node = tpl.content.cloneNode(true);
   const check = node.querySelector('.itemCheck');
   check.checked = selection.has(item.itemId);
-  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); });
+  check.addEventListener('change', () => { selection = toggleSelection(selection, item.itemId); updateApplySelectedLabel(); });
   node.querySelector('.itemAction').textContent = item.data.groupName || item.data.title || item.data.url || '';
   const reasonEl = node.querySelector('.itemReason');
   if (item.action === 'moveBookmark' && item.data.toLabel) {
@@ -277,8 +278,12 @@ function buildItemNode(item, tpl) {
 // Marks an item as "never suggest again": persists the key server-side and
 // drops it from the currently displayed plan immediately.
 async function ignoreItem(item) {
-  const key = ignoreKey(item);
-  await send({ cmd: 'ignore', keys: [key], items: [item] });
+  try {
+    await request({ cmd: 'ignore', keys: [ignoreKey(item)], items: [item] });
+  } catch (err) {
+    setStatus(`Error: ${err.message}`);
+    return;
+  }
   plan = plan.filter((it) => it.itemId !== item.itemId);
   renderPlan();
   setStatus('Won’t suggest that again.');
@@ -289,10 +294,16 @@ async function startScan(features) {
   $('cancelRun').hidden = false;
   startScanClock('Analyzing… (running your local AI CLI)');
   const windowId = await currentScopeWindowId();
-  const res = await send({ cmd: 'run', features, windowId });
-  stopScanClock();
-  $('cancelRun').hidden = true;
-  if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+  let res;
+  try {
+    res = await request({ cmd: 'run', features, windowId });
+  } catch (err) {
+    setStatus(`Error: ${err.message}`);
+    return;
+  } finally {
+    stopScanClock();
+    $('cancelRun').hidden = true;
+  }
   plan = await fetchPlan();
   selection = new Set();
   renderPlan(true);
@@ -331,13 +342,14 @@ async function applyItems(itemIds) {
   setStatus(`Applying ${itemIds.length}…`);
   setPlanActionsBusy(true);
   try {
-    const res = await send({ cmd: 'apply', itemIds });
-    if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+    const res = await request({ cmd: 'apply', itemIds });
     plan = await fetchPlan();
     selection = new Set();
     renderPlan();
     setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}`);
     await showUndoToast();
+  } catch (err) {
+    setStatus(`Error: ${err.message}`);
   } finally {
     setPlanActionsBusy(false);
   }
@@ -396,10 +408,16 @@ export async function initPlanView() {
     const input = $('commandInput');
     const instruction = input.value.trim();
     if (!instruction) return;
-    setStatus('Running your command… (local Claude CLI)');
+    const { adapter } = await getSettings();
+    setStatus(`Running your command… (${ADAPTER_LABELS[adapter] || 'AI backend'})`);
     const windowId = await currentScopeWindowId();
-    const res = await send({ cmd: 'command', instruction, windowId });
-    if (!res || !res.ok) { setStatus(`Error: ${(res && res.error) || 'the background worker did not respond — try again'}`); return; }
+    let res;
+    try {
+      res = await request({ cmd: 'command', instruction, windowId });
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+      return;
+    }
     plan = res.items || [];
     selection = new Set();
     renderPlan(true);
@@ -416,13 +434,7 @@ export async function initPlanView() {
       await navigator.clipboard.writeText(md);
       setStatus('Markdown copied to clipboard.');
     } catch {
-      const blob = new Blob([md], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'browser-organizer-export.md';
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadText('browser-organizer-export.md', md, 'text/markdown');
       setStatus('Markdown downloaded.');
     }
   });
