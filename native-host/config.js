@@ -117,10 +117,7 @@ export function hostEnv(extraNames = []) {
 }
 
 // Only a bounded timeout may come from the message; everything else is discarded.
-// Out-of-range/invalid values fall back to the default; values above the max
-// are clamped down to the max (deviation from the plan's draft implementation,
-// which clamped low values up to MIN_TIMEOUT instead of falling back to the
-// default — that contradicted the plan's own test expectations).
+// Below MIN_TIMEOUT falls back to the default; above MAX_TIMEOUT clamps to it.
 export function sanitizeOptions(raw) {
   const t = Number(raw && raw.timeoutMs);
   if (!Number.isFinite(t) || t < MIN_TIMEOUT) return { timeoutMs: DEFAULT_TIMEOUT };

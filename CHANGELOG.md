@@ -26,11 +26,11 @@ Chrome Web Store readiness: the extension now uses its Web Store ID, the host tr
 UX/UI refresh, accessibility enhancements (WCAG 2.1 AA), and native host packaging for npm.
 
 **User Experience & Layout**
-- **Slim sticky app header**: Compact 44px sticky top bar preserving brand identity, undo shortcut, and animated progress bar while freeing vertical viewing space for suggestions.
+- **Slim sticky app header**: The 44px sticky top bar holds the logo, undo shortcut, and animated progress bar, and leaves more vertical room for suggestions.
 - **Plan controls & export**: Reorganized `#planTools` into a responsive 2-row layout with segmented button controls and moved "Export as Markdown" into the contextual action bar.
-- **Categorized settings**: Structured 15+ flat settings into carded `<fieldset>` groups with clean section legends.
+- **Categorized settings**: Grouped the 15+ settings into `<fieldset>` cards, each with a section legend.
 - **Open tabs bulk management**: Added "Select all" and "None" bulk controls above the open tabs list.
-- **Empty state guidance**: Added friendly suggestion placeholder when no items are queued.
+- **Empty state guidance**: Added a placeholder message when no suggestions are queued.
 
 **Accessibility & Safety**
 - **Touch device discoverability**: Made `.itemIgnore` ("Never suggest this") discoverable with a visible baseline (0.85 opacity, 32px touch target) on touchscreens.
@@ -40,21 +40,21 @@ UX/UI refresh, accessibility enhancements (WCAG 2.1 AA), and native host packagi
 - **Toast timing**: Added pause-on-hover and pause-on-focus to the undo toast auto-dismiss timer (WCAG 2.2.1).
 
 ## 0.1.7 — 2026-09-20
-Comprehensive reliability and bug-fix release addressing 11 findings from a systematic codebase audit across the extension and native host.
+Reliability and bug-fix release addressing 11 findings from a systematic codebase audit across the extension and native host.
 
 **Fixes & Reliability**
-- **Session saving window context (FIND-01)**: `saveCurrentWindowSession` now accepts explicit `windowId`, forwards the originating sidepanel window, handles missing window states gracefully, and falls back to `windows.getLastFocused` instead of throwing an unhandled `TypeError`.
-- **Windows CLI argument length guard (FIND-02)**: Added Win32 character length limit (28,000 chars) in `cli-adapter.js` to catch oversized prompts before `child_process.spawn` fails with `EINVAL` due to the OS 32 KB command-line limit.
-- **Native host installer arguments & repair (FIND-03 & FIND-07)**: `install()` and `repair()` in `installer.js` now default `browsers` safely so direct calls without parameters don't crash with `TypeError`. Normalized CLI entry argument parsing to flexibly accept both `[extensionId] [browsers]` and `[browsers] [extensionId]`.
-- **Undo history UX (FIND-04)**: Separated Close and Undo actions in the undo dialog; the Close button now safely dismisses the dialog without executing pending reversals, and a dedicated "Undo selected" button applies the checked reversals.
-- **OpenAI API key management (FIND-05)**: Added a "Clear key" button to the settings panel under the OpenAI configuration, allowing users to remove their stored encrypted API key.
-- **Bookmark Bar protection on creation (FIND-06)**: `createBookmark` and safety bookmarks created before closing tabs now honor `protectBookmarkBar` and route new folders to `otherId` ("Other Bookmarks") by default rather than polluting the Bookmarks Bar.
-- **Tab activity leak prevention (FIND-08)**: Added a `chrome.tabs.onRemoved` listener in `activity-tracker.js` to clean closed tab IDs from `storage.local.tabActivity` under mutex serialization.
-- **Advanced CLI settings merge (FIND-09)**: `setSettings` now deep-merges `advancedCli.extraArgs` so updating settings for one AI adapter preserves custom flags configured for other adapters.
+- **Session saving window context**: `saveCurrentWindowSession` now accepts explicit `windowId`, forwards the originating sidepanel window, handles missing window states gracefully, and falls back to `windows.getLastFocused` instead of throwing an unhandled `TypeError`.
+- **Windows CLI argument length guard**: Added Win32 character length limit (28,000 chars) in `cli-adapter.js` to catch oversized prompts before `child_process.spawn` fails with `EINVAL` due to the OS 32 KB command-line limit.
+- **Native host installer arguments & repair**: `install()` and `repair()` in `installer.js` now default `browsers` safely so direct calls without parameters don't crash with `TypeError`. Normalized CLI entry argument parsing to flexibly accept both `[extensionId] [browsers]` and `[browsers] [extensionId]`.
+- **Undo history UX**: Separated Close and Undo actions in the undo dialog; the Close button now safely dismisses the dialog without executing pending reversals, and a dedicated "Undo selected" button applies the checked reversals.
+- **OpenAI API key management**: Added a "Clear key" button to the settings panel under the OpenAI configuration, allowing users to remove their stored encrypted API key.
+- **Bookmark Bar protection on creation**: `createBookmark` and safety bookmarks created before closing tabs now honor `protectBookmarkBar` and route new folders to `otherId` ("Other Bookmarks") by default rather than polluting the Bookmarks Bar.
+- **Tab activity leak prevention**: Added a `chrome.tabs.onRemoved` listener in `activity-tracker.js` to clean closed tab IDs from `storage.local.tabActivity` under mutex serialization.
+- **Advanced CLI settings merge**: `setSettings` now deep-merges `advancedCli.extraArgs` so updating settings for one AI adapter preserves custom flags configured for other adapters.
 
 **Internal & Maintenance**
-- **Cleaned orphan exports and magic strings (FIND-10)**: Imported and used `OTHER_ID` constant in `plan.js` and `executor.js`, removed redundant re-exports in `orchestrator.js`, and cleaned unused `extraArgs` handling in `ollama.js`.
-- **Installer version synchronization (FIND-11)**: Synchronized Inno Setup fallback `AppVersion` to `0.1.7`.
+- **Cleaned orphan exports and magic strings**: Imported and used `OTHER_ID` constant in `plan.js` and `executor.js`, removed redundant re-exports in `orchestrator.js`, and cleaned unused `extraArgs` handling in `ollama.js`.
+- **Installer version synchronization**: Synchronized Inno Setup fallback `AppVersion` to `0.1.7`.
 
 ## 0.1.6-beta — 2026-08-27
 A systematic security/code audit across the extension and native host, plus a UX pass on the

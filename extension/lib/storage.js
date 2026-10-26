@@ -22,7 +22,7 @@ export const DEFAULTS = {
   advancedCli: {                       // Advanced settings — power-user CLI control (see native-host/config.sanitizeCli)
     loadMcpServers: false,             // Claude: false → --strict-mcp-config (no MCP servers)
     loadPluginsSettings: false,        // Claude: false → --setting-sources '' (no on-disk settings/plugins/hooks)
-    extraArgs: {},                     // { <adapter>: "extra flags" } — host validates against a denylist
+    extraArgs: {},                     // { <adapter>: "extra flags" } — host validates against a per-adapter allowlist
     checkHostUpdates: false,           // opt-in: query npm for a newer host bridge (a network call)
   },
 };

@@ -95,7 +95,7 @@ chrome.runtime.onStartup.addListener(async () => {
     const { tabActivity = {} } = await chrome.storage.local.get('tabActivity');
     await chrome.storage.local.set({ tabActivity: reconcile(tabActivity, rawTabs, now) });
   });
-  await chrome.storage.local.remove('currentPlan'); // stale plan (see Task 6)
+  await chrome.storage.local.remove('currentPlan'); // a plan saved by an earlier install is stale
 });
 
 installActivityListeners(chrome);

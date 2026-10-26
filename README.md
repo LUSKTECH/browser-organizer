@@ -24,11 +24,11 @@ Seven backends ship today. The first six are command-line tools; the last talks 
 
 | Backend | Command / transport | How it's invoked | Auth |
 |---------|---------|------------------|------|
-| Claude Code *(default)* | `claude` | `claude -p --output-format json` | saved `claude` login |
-| Antigravity | `agy` | `agy -p "<prompt>" --yes --no-color` | saved `agy` login, or `GEMINI_API_KEY` / `ANTIGRAVITY_API_KEY` |
+| Claude Code *(default)* | `claude` | `claude -p --output-format json --allowedTools ''` (prompt on stdin) | saved `claude` login |
+| Antigravity | `agy` | `agy --sandbox -p "<prompt>"` | saved `agy` login, or `GEMINI_API_KEY` / `ANTIGRAVITY_API_KEY` |
 | Kiro | `kiro-cli` | `kiro-cli chat --no-interactive "<prompt>"` | `KIRO_API_KEY` (Kiro Pro and up) |
-| GitHub Copilot | `copilot` | `copilot -p "<prompt>" -s --no-ask-user` | Copilot subscription via `COPILOT_GITHUB_TOKEN` / `GH_TOKEN`, or an existing `gh` login |
-| OpenAI Codex | `codex` | `codex exec --skip-git-repo-check "<prompt>"` | saved ChatGPT login, or `OPENAI_API_KEY` |
+| GitHub Copilot | `copilot` | `copilot -s --no-ask-user -p "<prompt>"` | Copilot subscription via `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`, or an existing `gh` login |
+| OpenAI Codex | `codex` | `codex exec --sandbox read-only --skip-git-repo-check "<prompt>"` | saved ChatGPT login, or `OPENAI_API_KEY` |
 | Ollama | `ollama` | `ollama run <model>` (prompt on stdin) | none; fully local |
 | OpenAI-compatible API | HTTP | `POST <base>/chat/completions` | API key in **Settings** (encrypted at rest), or `BROWSER_ORGANIZER_OPENAI_API_KEY` |
 
@@ -76,22 +76,29 @@ The extension collects tab and bookmark metadata, then passes it to the local No
 
 ## End-to-end tests
 
-`npm run e2e` runs the Playwright suite in `e2e/`. It loads the real extension into Chrome for Testing, drives the side panel, and exercises the whole path down through the native host. Most specs are deterministic and need no CLI; a few (marked *CLI*) drive a real backend and can be skipped.
+`npm run e2e` runs the Playwright suite in `e2e/`. It loads the real extension into Chrome for Testing, drives the side panel, and exercises the whole path down through the native host. Most specs run without a CLI. Five need a real backend and skip when `BORG_SKIP_CLI=1` is set.
 
-Deterministic specs:
-- **health**: the panel reports the backend connected
+Specs that run without a CLI:
 - **tab-panel**: search, filter, and bulk-close on open tabs (no AI); closing the selected tabs, then restoring them with undo
 - **duplicate-tabs**: spots a duplicate open tab, closes it on apply, restores it on undo
 - **sessions**: saves the current window as a session (closing its tabs), then restores them
 - **bookmark-cleanup**: spots a duplicate bookmark, deletes it on apply, restores it on undo
 - **dom-panel**: the real UI from end to end, covering *Clean bookmarks*, *Apply all*, the toast *Undo*, editing a proposed group (rename, drop a tab) followed by *Apply this group*, and the settings form persisting
 - **auto-apply**: `onInstalled` schedules the alarms; auto mode applies tab actions but never auto-deletes bookmarks
+- **enhancements**: the plan toolbar (filter, select all), click-to-focus, and the lower-assurance adapter note
+- **notification**: a basic notification with a generated icon succeeds
+- **undo-and-muted**: the undo-history dialog reverts a run, and the muted list works
+- **openai-key**: entering, storing, and clearing the OpenAI-compatible key in Settings
+- **options-page**: the Extension options page
+- **wizard**: the first-run setup wizard
 
-CLI-backed specs (they use whichever backend is configured, which defaults to `claude`):
+Specs that need a CLI (they use whichever backend is configured, which defaults to `claude`, and skip under `BORG_SKIP_CLI=1`):
+- **health**: the panel reports the backend connected
 - **grouping**: clusters tabs and checks that a real Chrome tab group forms
 - **command**: turns a natural-language instruction into an actionable plan
 - **stale-tabs**: seeds a long-idle tab and checks the backend proposes closing or suspending it
+- **organize-bookmarks**: sorts loose bookmarks into a folder, and undo restores them
 
 Dead-link detection's HTTP logic has its own real-server integration test (`test/dead-link-integration.test.js`, part of `npm test`). The full in-browser dead-link flow isn't automated, because granting the optional `<all_urls>` permission needs a Chrome prompt that can't be accepted headlessly.
 
-To run the suite on Linux, WSL, or CI you need the default CLI (`claude`) on PATH plus `xvfb` for a virtual display; the `e2e` script wraps the run in `xvfb-run`. Google Chrome's branded builds dropped `--load-extension`, so the suite uses Playwright's bundled Chromium (Chrome for Testing); install it once with `npx playwright install chromium`. Set `BORG_SKIP_CLI=1` to skip the CLI-backed grouping test in offline or fast CI. The fixture registers the native host on its own, so there's no manual install-host step.
+To run the suite on Linux, WSL, or CI you need the default CLI (`claude`) on PATH plus `xvfb` for a virtual display; the `e2e` script wraps the run in `xvfb-run`. Google Chrome's branded builds dropped `--load-extension`, so the suite uses Playwright's bundled Chromium (Chrome for Testing); install it once with `npx playwright install chromium`. Set `BORG_SKIP_CLI=1` to skip the five CLI-backed specs in offline or fast CI. The fixture registers the native host on its own, so there's no manual install-host step.

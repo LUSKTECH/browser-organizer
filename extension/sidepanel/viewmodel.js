@@ -147,7 +147,7 @@ export function formatElapsed(ms) {
 const ADAPTER_LABELS = { claude: 'Claude CLI', antigravity: 'Antigravity CLI', kiro: 'Kiro CLI', copilot: 'Copilot CLI', codex: 'Codex CLI', ollama: 'Ollama', openai: 'OpenAI-compatible API' };
 const ADAPTER_CMDS = { claude: 'claude', antigravity: 'agy', kiro: 'kiro-cli', copilot: 'copilot', codex: 'codex', ollama: 'ollama' };
 // Adapters that talk HTTP with a host-side key instead of spawning a CLI — their
-// fix-it guidance is "set the env key", not "install/sign-in to a CLI".
+// fix-it guidance is "enter the key in Settings", not "install/sign-in to a CLI".
 const API_ADAPTERS = new Set(['openai']);
 
 // The host version this extension build needs. Bumped whenever the extension
@@ -191,10 +191,6 @@ export function healthMessage(health, extensionId = '<your-extension-id>') {
     };
   }
   const err = String((health && health.error) || '');
-  // Two very different causes need two different fixes. Native-messaging
-  // connection failures ("host not found/disconnected") mean the helper isn't
-  // registered; anything else from a reachable helper means the CLI itself
-  // failed to start.
   // Only a native-MESSAGING failure means the helper isn't registered. Every such
   // error that reaches here carries native-host context — Chrome's lastError
   // ("Specified native messaging host not found", "Access to the specified native

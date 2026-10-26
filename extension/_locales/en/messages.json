@@ -21,5 +21,5 @@
   "exportMarkdown": { "message": "Export as Markdown", "description": "Export the plan as Markdown." },
   "sessionsTitle": { "message": "Sessions", "description": "Sessions section heading." },
   "mutedTitle": { "message": "Muted & learned", "description": "Muted/learned section heading." },
-  "onboardingTitle": { "message": "Connect your AI CLI", "description": "Onboarding card heading." }
+  "onboardingTitle": { "message": "Connect your AI", "description": "Onboarding card heading." }
 }
