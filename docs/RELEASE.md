@@ -5,9 +5,9 @@ Three deliverables now ship from one repo: the **extension**, the **npm helper p
 non-technical users. Anything marked **(you)** needs a human — the rest is automated.
 
 ## Preflight (all paths)
-- [x] `npm test` green (256 unit)
-- [x] `npm run e2e` green (21 specs; 3 CLI-marked specs skip without a `claude` login)
-- [x] `npm run lint` clean (pre-existing browser-global lint errors in crypto-box/secret-store excepted)
+- [x] `npm test` green
+- [x] `npm run e2e` green (17 spec files; 5 CLI-gated specs skip without a `claude` login)
+- [x] `npm run lint` clean (lint is blocking in CI)
 - [x] Icons present (`npm run icons`) and referenced in manifest
 - [x] `CHANGELOG.md` / version bumped in `extension/manifest.json` (and `native-host/package.json` for a host release)
 - [x] Contact email wired in (`hello@lusk.dev`) and privacy URL set
@@ -46,6 +46,11 @@ credentials.
 - [ ] **(you)** Obtain a Windows Authenticode (OV/EV) certificate and an Apple Developer
       account (long lead), and add them to CI secrets. (Or use the free SignPath Foundation
       OSS certificate for Windows; macOS notarization still needs the $99/yr Apple account.)
+- [ ] **(you)** CI signing secrets (all optional; unset means the step warns and ships unsigned):
+      `WINDOWS_CERT_BASE64` + `WINDOWS_CERT_PASSWORD` (Authenticode .pfx);
+      `MACOS_CERT_P12_BASE64` + `MACOS_CERT_PASSWORD` (Developer ID .p12, imported into a
+      temporary keychain for the run), `MACOS_SIGN_IDENTITY`, and the notarytool API key trio
+      `MACOS_NOTARY_API_KEY` / `MACOS_NOTARY_API_KEY_ID` / `MACOS_NOTARY_API_ISSUER`.
 - [ ] **(you)** Confirm default store backend (recommended: OpenAI-compatible API — no CLI).
 
 Build & submit:
@@ -85,5 +90,5 @@ The manifest `version` must be higher than the last uploaded one; every update g
 - `dist/` is git-ignored (build artifacts).
 - The `key` in the manifest is intentional — it pins the extension ID so native messaging
   keeps working across builds. Keep the corresponding **private** key secret; never commit it.
-- `esbuild`/`postject` are build-time-only devDependencies for `npm run build:sea`; the
-  shipped npm package and SEA binary stay dependency-free.
+- `esbuild`/`postject` are deliberately not devDependencies: `scripts/build-sea.mjs` fetches
+  them via `npx` at build time, so the shipped npm package and SEA binary stay dependency-free.

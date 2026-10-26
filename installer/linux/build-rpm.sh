@@ -10,9 +10,8 @@
 # dist/browser-organizer-host-<version>-1.<arch>.rpm.
 #
 # Like the .deb, the package installs the binary system-wide
-# (/usr/lib/browser-organizer + /usr/bin symlink) and leaves per-user
-# native-messaging registration to `browser-organizer-host --install`, since
-# manifests live under each user's home.
+# (/usr/lib/browser-organizer + /usr/bin symlink) and ships static system-wide
+# native-messaging manifests, so no per-user registration step is needed.
 set -eu
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
