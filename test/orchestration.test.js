@@ -419,3 +419,19 @@ test('buildPlan surfaces AI phase failures as warnings naming the phase', async 
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /group/i);
 });
+
+test('buildPlan surfaces the offline warning from a dead-link scan', async () => {
+  const bm = (id, host) => ({ id, parentId: '1', url: `https://${host}/p`, title: host, dateAdded: 1 });
+  const chromeApi = {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    tabs: { async query() { return []; } },
+    bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '1', title: 'Bookmarks bar', children: [bm('b1', 'a.example'), bm('b2', 'b.example'), bm('b3', 'c.example')] }] }]; } },
+    history: { async getVisits() { return []; } },
+    permissions: { async contains() { return true; } },
+  };
+  const settings = { adapter: 'claude', enabledFeatures: { groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: true, deadLinkScan: true, dupeTabs: false, organizeBookmarks: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200, whitelist: [], protectedFolders: [] };
+  const warnings = [];
+  const fetchFn = async () => { throw new Error('offline'); };
+  await buildPlan({ settings, nativeClient: null, chromeApi, now: 1, onWarning: (w) => warnings.push(w), fetchFn });
+  assert.ok(warnings.some((w) => /offline/i.test(w)), JSON.stringify(warnings));
+});

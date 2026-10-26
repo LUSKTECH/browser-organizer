@@ -152,7 +152,8 @@ export async function buildPlan(deps) {
       const cursor = (await chromeApi.storage.local.get('deadCursor')).deadCursor || 0;
       const { slice, nextCursor } = sliceForScan(httpBookmarks, cursor, settings.deadLinkBatchSize);
       await chromeApi.storage.local.set({ deadCursor: nextCursor });
-      const deadCandidates = await checkDeadLinks(slice, {});
+      const deadCandidates = await checkDeadLinks(slice, { fetchFn: deps.fetchFn });
+      if (deadCandidates.warning) onWarning(deadCandidates.warning); // scan looked offline; network failures were not counted
       const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
       // Pass the ids actually scanned this batch so strikes for bookmarks in
       // OTHER (unscanned) slices are carried forward, not silently reset —
