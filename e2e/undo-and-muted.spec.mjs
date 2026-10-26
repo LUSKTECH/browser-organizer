@@ -40,6 +40,8 @@ test('muting a suggestion moves it to the muted list, and unmute clears it', asy
   await expect(panel.locator('#plan .item')).toHaveCount(1);
   await panel.click('#plan .itemIgnore'); // "Never suggest this"
   await expect(panel.locator('#plan .item')).toHaveCount(0); // dropped from the plan
+  await panel.reload({ waitUntil: 'domcontentloaded' });
+  await expect(panel.locator('#plan .item')).toHaveCount(0); // and gone from the stored plan, not just the view
 
   await panel.click('#mutedPanel summary');
   const muted = panel.locator('#mutedList li');

@@ -1,7 +1,7 @@
 import { getSettings, setSettings } from '../lib/storage.js';
-import { installActivityListeners } from '../lib/activity-tracker.js';
+import { installActivityListeners, reconcile } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
-import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision } from '../lib/orchestrator.js';
+import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision, ignoreKey } from '../lib/orchestrator.js';
 import { applyItem } from '../lib/executor.js';
 import { collectTree } from '../lib/bookmark-collector.js';
 import { recordUndo, reverseEntry, pruneUndo, getUndoLog, claimUndoEntries, restoreUndoEntries } from '../lib/undo-log.js';
@@ -12,6 +12,8 @@ import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
 import { getSecret } from '../lib/secret-store.js';
 import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
+
+const errText = (err) => String((err && err.message) || err);
 
 // Creates the native client, attaching the openai adapter's UI-entered config
 // (key decrypted from secret-store here, base/model from settings) so the host
@@ -29,10 +31,17 @@ function cliExtrasFor(settings) {
   };
 }
 
-async function makeClient(settings) {
+// `override` ({apiKey, baseUrl, model}, all optional strings) is merged over the saved
+// openai config for this one client only; the wizard uses it to test unsaved values.
+async function makeClient(settings, override = null) {
   const extras = cliExtrasFor(settings);
   if (settings.adapter === 'openai') {
-    extras.config = { apiKey: await getSecret('openaiApiKey'), baseUrl: settings.openaiBaseUrl || '', model: settings.openaiModel || '' };
+    const o = override || {};
+    extras.config = {
+      apiKey: o.apiKey || await getSecret('openaiApiKey'),
+      baseUrl: typeof o.baseUrl === 'string' ? o.baseUrl : (settings.openaiBaseUrl || ''),
+      model: typeof o.model === 'string' ? o.model : (settings.openaiModel || ''),
+    };
   }
   return createNativeClient({ requestExtras: extras });
 }
@@ -88,7 +97,6 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 chrome.runtime.onStartup.addListener(async () => {
   const now = Date.now();
   const rawTabs = await chrome.tabs.query({});
-  const { reconcile } = await import('../lib/activity-tracker.js');
   // Share the 'tabActivity' lock with the activity listeners so this startup
   // reconcile can't clobber a concurrently-written timestamp.
   await withLock('tabActivity', async () => {
@@ -101,7 +109,7 @@ chrome.runtime.onStartup.addListener(async () => {
 installActivityListeners(chrome);
 
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command === 'run-scan') await runScan({ background: true });
+  if (command === 'run-scan') await backgroundScan('Scan failed');
   if (command === 'open-panel') {
     const win = await chrome.windows.getLastFocused();
     await chrome.sidePanel.open({ windowId: win.id });
@@ -130,9 +138,15 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
   if (alarm.name === ALARM_SCAN && settings.automationMode === 'auto') {
-    await runScan({ background: true });
+    await backgroundScan('Scheduled scan failed');
   }
 });
+
+// Hotkey and alarm scans have no panel to show an error in, so surface a failure as a notification.
+async function backgroundScan(failLabel) {
+  try { await runScan({ background: true }); }
+  catch (err) { await notify(`${failLabel}: ${errText(err)}`); }
+}
 
 // Single-flight: three callers (panel, hotkey, 12h alarm) can trigger a scan.
 // Overlapping scans would interleave read-modify-write on deadCursor/deadStrikes/
@@ -144,6 +158,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 let scanInFlight = null;
 let scanInFlightSig = null;
 let currentScanCancel = null;
+const queuedRuns = new Set(); // runs waiting behind an in-flight run of a different scope; Cancel drops them
 
 function scanSig(deps = {}) {
   return JSON.stringify({ w: deps.windowId ?? null, f: deps.features ?? null });
@@ -154,7 +169,13 @@ function runScan(deps = {}) {
   if (scanInFlight) {
     if (scanInFlightSig === sig) return scanInFlight;
     // Different scope/features: chain after the current run rather than return it.
-    return scanInFlight.then(() => runScan(deps), () => runScan(deps));
+    const queued = { cancelled: false };
+    queuedRuns.add(queued);
+    const next = () => {
+      queuedRuns.delete(queued);
+      return queued.cancelled ? { cancelled: true } : runScan(deps);
+    };
+    return scanInFlight.then(next, next);
   }
   scanInFlightSig = sig;
   const token = { cancelled: false };
@@ -230,12 +251,14 @@ async function notify(message) {
 // ---- Message handlers (one function per command; dispatched by the map below) ----
 
 async function handleRun(m) {
-  const { items, warnings } = await runScan({ features: m.features, windowId: m.windowId ?? null });
-  return { ok: true, items, warnings };
+  const res = await runScan({ features: m.features, windowId: m.windowId ?? null });
+  if (res.cancelled) return { ok: true, items: [], warnings: [], cancelled: true };
+  return { ok: true, items: res.items, warnings: res.warnings };
 }
 
 function handleCancel() {
   if (currentScanCancel) currentScanCancel.cancelled = true;
+  for (const q of queuedRuns) q.cancelled = true; // a queued run must not start after Cancel
   return { ok: true };
 }
 
@@ -257,6 +280,16 @@ async function handleIgnore(m) {
     for (const item of m.items || []) decisions = recordDecision(decisions, item, 'reject');
     await setSettings({ ignore: next, decisions });
     return { ok: true, ignore: next };
+  }).then(async (res) => {
+    // Drop the muted items from the stored plan too, or reopening the panel brings
+    // them back and "Apply all" would apply them. Separate lock, taken after the settings one.
+    const muted = new Set(m.keys || []);
+    await withLock('currentPlan', async () => {
+      const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
+      const remaining = currentPlan.filter((i) => !muted.has(ignoreKey(i)));
+      if (remaining.length !== currentPlan.length) await chrome.storage.local.set({ currentPlan: remaining });
+    });
+    return res;
   });
 }
 
@@ -282,13 +315,14 @@ async function handleCloseTabs(m) {
   // Manual, explicit bulk close (no AI). Records undo only for tabs that were
   // actually removed, so "Undo" can't re-create still-open tabs.
   const runId = uniqueId('run-');
-  const entries = [];
-  for (const id of m.tabIds || []) {
-    const t = await chrome.tabs.get(id).catch(() => null);
-    if (!t) continue;
-    try { await chrome.tabs.remove(id); } catch { continue; }
-    entries.push({ undoId: uniqueId(), runId, ts: Date.now(), action: 'closeTab', label: `Close tab: ${t.title || t.url}`, reverse: { url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } });
-  }
+  const wanted = new Set(m.tabIds || []);
+  const targets = (await chrome.tabs.query({})).filter((t) => wanted.has(t.id));
+  if (!targets.length) return { ok: true, closed: 0 };
+  try { await chrome.tabs.remove(targets.map((t) => t.id)); } catch { /* a tab vanished mid-call; the re-query below tells which actually closed */ }
+  const stillOpen = new Set((await chrome.tabs.query({})).map((t) => t.id));
+  const entries = targets
+    .filter((t) => !stillOpen.has(t.id))
+    .map((t) => ({ undoId: uniqueId(), runId, ts: Date.now(), action: 'closeTab', label: `Close tab: ${t.title || t.url}`, reverse: { url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } }));
   if (entries.length) await recordUndo(entries);
   return { ok: true, closed: entries.length };
 }
@@ -382,14 +416,24 @@ async function handleDeleteSession(m) {
   return { ok: true };
 }
 
+// Optional unsaved openai config ({apiKey, baseUrl, model}) from the wizard, so a check can use
+// values that are only committed once it passes. Accepted from our own pages only (onMessage
+// drops other senders); never logged.
+function openaiOverride(m) {
+  const o = m && m.openai;
+  if (!o || typeof o !== 'object') return null;
+  const str = (v) => (typeof v === 'string' ? v : undefined);
+  return { apiKey: str(o.apiKey), baseUrl: str(o.baseUrl), model: str(o.model) };
+}
+
 // `m.adapter` (optional) checks a backend without saving it as the active one; the wizard uses
 // it so a half-finished setup can't replace a working configuration.
 async function handleHealth(m) {
   const saved = await getSettings();
   const settings = m && PROBE_ADAPTERS.includes(m.adapter) ? { ...saved, adapter: m.adapter } : saved;
-  const client = await makeClient(settings);
+  const client = await makeClient(settings, openaiOverride(m));
   try { return { ok: true, health: await client.request({ type: 'health', adapter: settings.adapter }) }; }
-  catch (err) { return { ok: true, health: { adapter: settings.adapter, ready: false, error: String((err && err.message) || err) } }; }
+  catch (err) { return { ok: true, health: { adapter: settings.adapter, ready: false, error: errText(err) } }; }
   finally { client.disconnect(); }
 }
 
@@ -403,7 +447,7 @@ async function probeOne(adapter, settings) {
   const timeout = new Promise((resolve) => setTimeout(() => resolve({ adapter, ready: false, error: 'Timed out' }), PROBE_TIMEOUT_MS));
   try {
     return await Promise.race([
-      client.request({ type: 'health', adapter }).catch((err) => ({ adapter, ready: false, error: String((err && err.message) || err) })),
+      client.request({ type: 'health', adapter }).catch((err) => ({ adapter, ready: false, error: errText(err) })),
       timeout,
     ]);
   } finally { client.disconnect(); }
@@ -424,12 +468,12 @@ async function handleProbe() {
 async function handleTestPrompt(m) {
   const saved = await getSettings();
   const settings = m && PROBE_ADAPTERS.includes(m.adapter) ? { ...saved, adapter: m.adapter } : saved;
-  const client = await makeClient(settings);
+  const client = await makeClient(settings, openaiOverride(m));
   try {
     const out = await client.request({ type: 'prompt', adapter: settings.adapter, payload: { prompt: TEST_PROMPT } });
     return { ok: true, reply: String((out && out.raw) || '').slice(0, 200) };
   } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
+    return { ok: false, error: errText(err) };
   } finally { client.disconnect(); }
 }
 
@@ -465,7 +509,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       sendResponse(await handler(message));
     } catch (err) {
-      sendResponse({ ok: false, error: String((err && err.message) || err) });
+      sendResponse({ ok: false, error: errText(err) });
     }
   })();
   return true; // async response
