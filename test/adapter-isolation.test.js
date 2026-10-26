@@ -16,6 +16,8 @@ test('adapter runs in a private per-run dir under tmp, not tmp root, and disable
   assert.ok(seen.cwd.startsWith(os.tmpdir()), 'private dir lives under tmp');
   assert.deepEqual(seen.args, resolveArgs());
   assert.ok(seen.args.includes('--allowedTools'));
+  const deny = seen.args[seen.args.indexOf('--disallowedTools') + 1].split(',');
+  for (const t of ['Read', 'Glob', 'Grep', 'LS', 'Bash', 'Write', 'Edit', 'WebFetch']) assert.ok(deny.includes(t), `${t} denied`);
 });
 
 test('claude adapter honors the MCP toggle and appends sanitized extra flags', async () => {
