@@ -364,3 +364,58 @@ test('sliceForScan returns a batch and wraps the cursor', () => {
   assert.deepEqual(slice, [4]);
   assert.equal(nextCursor, 0); // wrapped
 });
+
+test('ignoreKey distinguishes removeFolder items by folder so ignoring one does not suppress all', () => {
+  const a = { action: 'removeFolder', data: { folderId: '10', title: 'Misc' } };
+  const b = { action: 'removeFolder', data: { folderId: '11', title: 'Other' } };
+  assert.notEqual(ignoreKey(a), ignoreKey(b));
+  assert.equal(ignoreKey(a), ignoreKey({ action: 'removeFolder', data: { folderId: '10', title: 'Misc' } }));
+  assert.deepEqual(applyIgnoreList([a, b], [ignoreKey(a)]).map((i) => i.data.folderId), ['11']);
+});
+
+test('buildPlan does not propose removing a folder that protections keep non-empty', async () => {
+  const stored = {};
+  const chromeApi = {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: stored[k] } : { ...stored }; }, async set(o) { Object.assign(stored, o); } } },
+    tabs: { async query() { return []; } },
+    bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '1', title: 'Bar', parentId: '0', index: 0, children: [] }, { id: '2', title: 'Other Bookmarks', parentId: '0', index: 1, children: [
+      { id: '10', title: 'Misc', parentId: '2', index: 0, children: [{ id: '9', title: 'Doc', url: 'https://x.com', parentId: '10', index: 0 }] },
+      { id: '11', title: 'Keep', parentId: '2', index: 1, children: [] },
+    ] }] }]; } },
+    history: { async getVisits() { return []; } },
+  };
+  const nativeClient = { request: async (m) => (m.task === 'organize-bookmarks' ? { moves: [{ bookmarkId: '9', targetFolderId: '11' }] } : {}) };
+  const settings = { adapter: 'claude', enabledFeatures: { organizeBookmarks: true }, organizeMode: 'full', removeEmptyFolders: true, protectedFolders: ['Keep'], staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  const items = await buildPlan({ settings, nativeClient, chromeApi, now: 1 });
+  assert.equal(items.filter((i) => i.action === 'removeFolder' && i.data.folderId === '10').length, 0);
+});
+
+test('applyItems puts skipped results in their own bucket: not applied, not recorded for undo', async () => {
+  const recorded = [];
+  const items = [{ itemId: 'rf-1', action: 'removeFolder', data: {} }, { itemId: 'ok', action: 'groupTabs', data: {} }];
+  const res = await applyItems(items, {
+    applyItem: async (item) => (item.itemId === 'rf-1'
+      ? { undoId: 'u1', ts: 1, action: item.action, reverse: null, skipped: true }
+      : { undoId: 'u2', ts: 1, action: item.action, reverse: {} }),
+    recordUndo: async (e) => { recorded.push(...e); },
+  });
+  assert.deepEqual(res.applied, ['ok']);
+  assert.deepEqual(res.skipped, ['rf-1']);
+  assert.deepEqual(res.failed, []);
+  assert.deepEqual(recorded.map((e) => e.undoId), ['u2']);
+});
+
+test('buildPlan surfaces AI phase failures as warnings naming the phase', async () => {
+  const chromeApi = {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    tabs: { async query() { return [{ id: 1, url: 'https://a.com', windowId: 1, index: 0, pinned: false }]; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+  const nativeClient = { request: async () => { throw new Error('CLI crashed'); } };
+  const settings = { adapter: 'claude', enabledFeatures: { groupTabs: true, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, dupeTabs: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  const warnings = [];
+  await buildPlan({ settings, nativeClient, chromeApi, now: 1, onWarning: (w) => warnings.push(w) });
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /group/i);
+});
