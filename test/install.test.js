@@ -292,3 +292,29 @@ test('install() and repair() default browsers and do not throw when browsers opt
   }
 });
 
+test('win32 uninstall of chrome+edge removes the shared manifest and home when chromium is not registered', () => {
+  const copyTo = fs.mkdtempSync(path.join(os.tmpdir(), 'bo-winun-'));
+  try {
+    const manifest = winManifestPath(copyTo);
+    fs.writeFileSync(manifest, '{}');
+    const removed = uninstall({ browsers: ['chrome', 'edge'], platform: 'win32', copyTo, isRegistered: (b) => b !== 'chromium' });
+    assert.ok(removed.includes(manifest));
+    assert.ok(!fs.existsSync(copyTo));
+  } finally {
+    fs.rmSync(copyTo, { recursive: true, force: true });
+  }
+});
+
+test('win32 uninstall keeps the shared manifest while another browser is still registered', () => {
+  const copyTo = fs.mkdtempSync(path.join(os.tmpdir(), 'bo-winun-'));
+  try {
+    const manifest = winManifestPath(copyTo);
+    fs.writeFileSync(manifest, '{}');
+    const removed = uninstall({ browsers: ['chrome'], platform: 'win32', copyTo, isRegistered: (b) => b !== 'chromium' });
+    assert.ok(!removed.includes(manifest));
+    assert.ok(fs.existsSync(manifest));
+  } finally {
+    fs.rmSync(copyTo, { recursive: true, force: true });
+  }
+});
+

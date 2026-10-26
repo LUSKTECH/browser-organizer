@@ -162,14 +162,27 @@ export function copyHostTo(destDir, srcDir = defaultHostDir()) {
 
 // Removes the native-host manifests (and returns registry-delete argv on win32)
 // so users/installers can cleanly unregister. Returns the list of files removed.
+// Best effort: is this browser's native-messaging key present? Any failure to run
+// `reg` (not on Windows, blocked) counts as registered, i.e. the static list applies.
+function winBrowserRegistered(browser) {
+  const r = spawnSync('reg', ['query', `${WIN_REG_ROOTS[browser]}\\${HOST_NAME}`], { encoding: 'utf8' });
+  if (r.error || r.signal) return true;
+  return r.status === 0;
+}
+
 export function uninstall({
   browsers,
   platform = process.platform,
   home = os.homedir(),
   copyTo = hostHome(platform, process.env, home),
+  isRegistered = winBrowserRegistered,
 } = {}) {
   const removed = [];
-  const known = platform === 'win32' ? Object.keys(WIN_REG_ROOTS) : Object.keys(DIRS[platform] || {});
+  // On Windows "all" means every browser that is actually registered, so the
+  // per-user uninstaller (chrome,edge) still cleans up when chromium was never set up.
+  const known = platform === 'win32'
+    ? Object.keys(WIN_REG_ROOTS).filter((b) => (browsers || []).includes(b) || isRegistered(b))
+    : Object.keys(DIRS[platform] || {});
   const requested = browsers || known;
   const removingSet = new Set(requested);
   const removingAll = known.every((b) => removingSet.has(b));
