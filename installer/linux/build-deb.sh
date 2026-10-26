@@ -11,10 +11,9 @@
 #
 # The package installs the binary system-wide at
 # /usr/lib/browser-organizer/browser-organizer-host and drops a helper wrapper at
-# /usr/bin/browser-organizer-host. Native-messaging manifests are per-user, so
-# registration is NOT done at package-install time: each user runs
-# `browser-organizer-host --install` once (the postinst prints this hint). This
-# keeps the package free of per-user side effects and multi-user safe.
+# /usr/bin/browser-organizer-host. It also ships static system-wide
+# native-messaging manifests (Chrome, Edge, Chromium under /etc), so the host is
+# registered for every user at package-install time; no per-user step is needed.
 set -eu
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"

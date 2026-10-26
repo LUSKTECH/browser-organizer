@@ -28,6 +28,24 @@ if [ -f "$SCRIPT_DIR/browser-organizer-host" ]; then
 elif [ -f "$SCRIPT_DIR/../../dist/host/browser-organizer-host" ]; then
   SRC_BIN="$SCRIPT_DIR/../../dist/host/browser-organizer-host"
 else
+  # Release assets: browser-organizer-host-<ver>-linux-install.sh sits next to
+  # browser-organizer-host-<ver>-linux-<arch>. Prefer the binary with our own version.
+  SELF_VER="$(basename "$0" | sed -n 's/^browser-organizer-host-\(.*\)-linux-install\.sh$/\1/p')"
+  SRC_BIN=""
+  if [ -n "$SELF_VER" ]; then
+    for f in "$SCRIPT_DIR"/browser-organizer-host-"$SELF_VER"-linux-*; do
+      case "$f" in *-install.sh|*.deb|*.rpm|*.txt) continue;; esac
+      if [ -f "$f" ]; then SRC_BIN="$f"; break; fi
+    done
+  fi
+  if [ -z "$SRC_BIN" ]; then
+    for f in "$SCRIPT_DIR"/browser-organizer-host-*-linux-*; do
+      case "$f" in *-install.sh|*.deb|*.rpm|*.txt) continue;; esac
+      if [ -f "$f" ]; then SRC_BIN="$f"; break; fi
+    done
+  fi
+fi
+if [ -z "$SRC_BIN" ]; then
   echo "error: browser-organizer-host binary not found. Run 'npm run build:sea' or use a release tarball." >&2
   exit 1
 fi
