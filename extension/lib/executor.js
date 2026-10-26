@@ -2,7 +2,7 @@ import { TAB_GROUP_COLORS } from './colors.js';
 import { ACTION_LABELS } from './labels.js';
 import { uniqueId as undoId } from './ids.js';
 import { ROOT_IDS, BAR_ID, OTHER_ID } from './bookmark-collector.js';
-import { applyFolderProtection } from './protections.js';
+import { applyFolderProtection, applyWhitelist } from './protections.js';
 
 const COLORS = new Set(TAB_GROUP_COLORS);
 
@@ -21,6 +21,21 @@ function isProtectedNow(item, deps) {
   const { settings, folders = [], rootIds = ROOT_IDS, barId = BAR_ID } = deps;
   const opts = { protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, rootIds, barId };
   return applyFolderProtection([item], opts).length === 0;
+}
+
+// Re-checks a URL-targeting item against the LIVE whitelist (the user may have
+// added a host since the plan was built). Same fail-open-without-settings rule.
+function assertNotWhitelisted(item, deps) {
+  if (!deps.settings) return;
+  if (applyWhitelist([item], deps.settings.whitelist || []).length === 0) {
+    throw new ProtectedTargetError(`${item.action} of ${item.data.url} is now blocked by the whitelist`);
+  }
+}
+
+// Where new "Browser Organizer" folders go by default: Other Bookmarks while the
+// bar is protected, otherwise the bookmarks bar.
+function defaultRootFor(deps) {
+  return deps.settings?.protectBookmarkBar !== false ? (deps.otherId || OTHER_ID) : (deps.barId || BAR_ID);
 }
 
 function labelFor(item) {
@@ -52,12 +67,13 @@ async function applyItemInner(item, c, deps = {}) {
   switch (item.action) {
     case 'closeTab': {
       const { tabId, url, title, windowId, index, pinned, bookmarkFirst } = item.data;
+      assertNotWhitelisted(item, deps);
       const live = await c.tabs.get(tabId).catch(() => null);
       if (!live || live.url !== url) throw new StaleTabError(`Tab ${tabId} no longer matches ${url}`);
       if (live.pinned) throw new StaleTabError(`Tab ${tabId} is pinned (protected)`); // never close a pinned tab
       let savedBookmarkId = null;
       if (bookmarkFirst) {
-        const targetRoot = (deps.settings?.protectBookmarkBar !== false && (deps.otherId || OTHER_ID)) ? (deps.otherId || OTHER_ID) : (deps.barId || BAR_ID);
+        const targetRoot = defaultRootFor(deps);
         const folder = await ensureFolder(['Browser Organizer', 'Saved before closing'], c, targetRoot);
         const bm = await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
         savedBookmarkId = bm && bm.id;
@@ -74,7 +90,7 @@ async function applyItemInner(item, c, deps = {}) {
     }
     case 'createBookmark': {
       const { url, title, folderPath, rootId } = item.data;
-      const targetRoot = rootId || (deps.settings?.protectBookmarkBar !== false && (deps.otherId || OTHER_ID) ? (deps.otherId || OTHER_ID) : (deps.barId || BAR_ID));
+      const targetRoot = rootId || defaultRootFor(deps);
       const folder = await ensureFolder(folderPath, c, targetRoot);
       const bm = await c.bookmarks.create({ parentId: folder.id, title: title || url, url });
       return { undoId: undoId(), ts: Date.now(), action: 'createBookmark', reverse: { bookmarkId: bm.id } };
@@ -84,6 +100,7 @@ async function applyItemInner(item, c, deps = {}) {
       // Staleness guard (mirrors closeTab): the plan captured this bookmark at
       // scan time. If the user has since edited its URL, don't delete the now-
       // different bookmark, and don't let undo resurrect a stale snapshot.
+      assertNotWhitelisted(item, deps);
       const live = await c.bookmarks.get(bookmarkId).then((r) => r && r[0]).catch(() => null);
       if (!live || live.url !== url) throw new StaleTabError(`Bookmark ${bookmarkId} no longer matches ${url}`);
       await c.bookmarks.remove(bookmarkId);
@@ -91,15 +108,18 @@ async function applyItemInner(item, c, deps = {}) {
     }
     case 'moveBookmark': {
       const { bookmarkId, fromParentId, fromIndex, toParentId, toFolderPath, toRootId } = item.data;
+      // Fetch the LIVE bookmark first: the plan's fromParentId may be stale (the
+      // user may have dragged it into a protected folder since), so protection
+      // and the undo record must use where it actually is now.
+      const cur = await c.bookmarks.get(bookmarkId).then((r) => r && r[0]).catch(() => null);
+      if (!cur) throw new StaleTabError(`Bookmark ${bookmarkId} no longer exists`);
+      const origin = { parentId: cur.parentId ?? fromParentId, index: cur.index ?? fromIndex };
       // Settings/protected-folders may have changed since the plan was built —
       // re-check now, not just at plan-build time (see ProtectedTargetError).
-      if (isProtectedNow(item, deps)) throw new ProtectedTargetError(`Move of bookmark ${bookmarkId} is now blocked by folder protections`);
-      // Capture the live origin so undo restores correctly even if the plan's
-      // fromParentId/fromIndex are stale or missing.
-      const cur = await c.bookmarks.get(bookmarkId).then((r) => r && r[0]).catch(() => null) || {};
+      if (isProtectedNow({ ...item, data: { ...item.data, fromParentId: origin.parentId } }, deps)) throw new ProtectedTargetError(`Move of bookmark ${bookmarkId} is now blocked by folder protections`);
       const parentId = toParentId || (await ensureFolder(toFolderPath || [], c, toRootId || deps.otherId || OTHER_ID)).id;
       await c.bookmarks.move(bookmarkId, { parentId });
-      return { undoId: undoId(), ts: Date.now(), action: 'moveBookmark', reverse: { bookmarkId, parentId: fromParentId ?? cur.parentId, index: fromIndex ?? cur.index } };
+      return { undoId: undoId(), ts: Date.now(), action: 'moveBookmark', reverse: { bookmarkId, parentId: origin.parentId, index: origin.index } };
     }
     case 'removeFolder': {
       const { folderId, parentId, index, title } = item.data;
@@ -120,6 +140,7 @@ async function applyItemInner(item, c, deps = {}) {
       return { undoId: undoId(), ts: Date.now(), action: 'removeFolder', reverse: { folderId, parentId, index, title } };
     }
     case 'discardTab': {
+      assertNotWhitelisted(item, deps);
       await c.tabs.discard(item.data.tabId);
       return { undoId: undoId(), ts: Date.now(), action: 'discardTab', reverse: {} };
     }

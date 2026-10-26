@@ -106,6 +106,41 @@ test('checkDeadLinks marks connection failures unreachable (httpStatus 0)', asyn
   assert.equal(items[0].data.httpStatus, 0);
 });
 
+const netFail = () => { throw Object.assign(new Error('offline'), { name: 'TypeError' }); };
+const mk = (id, url) => ({ id, url, parentId: '1', index: 0, title: id });
+
+test('offline scan (all probes status 0) records no strikes and surfaces a warning', async () => {
+  const bms = [mk('1', 'https://a.example/'), mk('2', 'https://b.example/'), mk('3', 'https://c.example/')];
+  const scannedIds = bms.map((b) => b.id);
+  let strikes = {};
+  let confirmed = [];
+  for (let pass = 0; pass < 2; pass++) {
+    const items = await checkDeadLinks(bms, { fetchFn: netFail, concurrency: 2 });
+    assert.deepEqual(items.map((i) => i.data.bookmarkId), []);
+    assert.match(items.warning, /offline|network/i);
+    ({ strikes, confirmed } = recordDeadStrikes(strikes, items.map((i) => i.data.bookmarkId), scannedIds));
+  }
+  assert.deepEqual(confirmed, []);
+  assert.deepEqual(strikes, {});
+});
+
+test('mixed scan still records the 404 strike and has no warning', async () => {
+  const bms = [mk('1', 'https://gone.example/'), mk('2', 'https://ok.example/')];
+  const fetchFn = async (url) => ({ status: url.includes('gone') ? 404 : 200 });
+  const items = await checkDeadLinks(bms, { fetchFn, concurrency: 1 });
+  assert.equal(items.warning, undefined);
+  const r = recordDeadStrikes({}, items.map((i) => i.data.bookmarkId), ['1', '2']);
+  assert.deepEqual(r.strikes, { 1: 1 });
+});
+
+test('mostly-offline scan drops status-0 results but keeps definitive 404s', async () => {
+  const bms = [mk('1', 'https://gone.example/'), mk('2', 'https://x.example/'), mk('3', 'https://y.example/'), mk('4', 'https://z.example/')];
+  const fetchFn = async (url) => (url.includes('gone') ? { status: 404 } : netFail());
+  const items = await checkDeadLinks(bms, { fetchFn, concurrency: 1 });
+  assert.deepEqual(items.map((i) => i.data.bookmarkId), ['1']);
+  assert.ok(items.warning);
+});
+
 test('duplicate/stale proposals carry their category', () => {
   const dups = findDuplicateBookmarks([
     { id: '1', url: 'https://a.com', parentId: '1', index: 0, title: 'a' },

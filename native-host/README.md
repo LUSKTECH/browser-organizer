@@ -19,7 +19,7 @@ npx @lusktech/browser-organizer-host
 This copies the host into a stable per-user location (`~/.browser-organizer`, or
 `%LOCALAPPDATA%\BrowserOrganizer` on Windows) and registers it for Chrome and Edge using the
 extension's pinned ID — you don't need to be inside any project folder, and the download can
-be deleted afterward.
+be deleted afterward. On Windows the host spawns CLIs without a shell, so a CLI installed only as an npm `.cmd` shim is not launchable and its `.exe` build is needed.
 
 ```sh
 npx @lusktech/browser-organizer-host install chrome   # specific browser(s)
@@ -32,8 +32,7 @@ Prefer a double-click, no-Node installer? Download the per-OS installer from the
 
 ## Security
 
-The host resolves the command, arguments, environment, and any API key **on your machine** —
-an extension message can only pick *which* known backend runs, never *what* runs. See
+The command, arguments and environment are resolved on your machine. The only per-request input is the OpenAI-compatible key, base URL and model you enter in Settings. See
 [`docs/security-model.md`](https://github.com/LUSKTECH/browser-organizer/blob/main/docs/security-model.md).
 
 ## License

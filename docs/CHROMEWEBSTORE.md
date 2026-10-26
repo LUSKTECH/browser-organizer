@@ -1,4 +1,4 @@
-# Chrome Web Store / Edge Add-ons Listing — Browser Organizer
+# Chrome Web Store / Edge Add-ons Listing: Browser Organizer
 
 _Last updated: 2026-09-23_
 
@@ -18,10 +18,10 @@ duplicate bookmarks to remove. You review every change before it happens, or tur
 automatic mode with one-click undo.
 
 All processing runs through a small helper program on your own computer, which calls your
-own AI CLI (Claude Code, Antigravity, Kiro, Copilot, Codex, or local Ollama) — or an
+own AI CLI (Claude Code, Antigravity, Kiro, Copilot, Codex, or local Ollama), or an
 OpenAI-compatible endpoint you configure. Tab titles and URLs are sent to that provider
 under your own subscription; bookmarks and history never leave your machine. Nothing is
-ever sent to our servers — we operate none.
+ever sent to our servers (we operate none).
 
 ## Permission justifications
 - **tabs**: Read tab titles and URLs to suggest groupings and identify forgotten tabs.
@@ -37,11 +37,11 @@ ever sent to our servers — we operate none.
 - **notifications**: Tell you when a scheduled pass finishes and changes are ready/applied.
 - **optional_host_permissions `<all_urls>`**: Requested at runtime only if you enable
   dead-link scanning, to check whether bookmarked pages still load. Not granted at install.
-  The extension never reads page contents — it only checks the HTTP status.
+  The extension never reads page contents. It only checks the HTTP status.
 - **optional_host_permissions `https://registry.npmjs.org/*`**: Requested at runtime only if
   you enable "Check npm for a newer helper" under Advanced settings, to read the published
   version of the helper package. Not granted at install; off by default. Only the version
-  number is read — no personal data is sent.
+  number is read, and no personal data is sent.
 
 ## Privacy
 Privacy policy URL: **https://lusk.dev/browser-organizer/privacy** (source: `docs/privacy.html`).
@@ -54,13 +54,13 @@ ever reaches the extension developer's servers; we operate none.
 **Data-safety form note:** settings (feature toggles, protected folders/domains, chosen AI
 backend) are stored via `chrome.storage.sync`, which only actually leaves the device when the
 user has Chrome Sync turned on and hasn't excluded Extensions from what syncs (otherwise it
-behaves like local storage) — check whatever box the dashboard's data-use questionnaire uses
+behaves like local storage). Check whatever box the dashboard's data-use questionnaire uses
 for data synced through the browser's own account sync in that case; this is Chrome Sync, not
 a developer-operated server. Tab-activity
 timestamps, the undo log, and the
 (encrypted) OpenAI-compatible API key use `chrome.storage.local` and are never synced.
 
-## Notes for reviewers (IMPORTANT — read before testing)
+## Notes for reviewers (IMPORTANT: read before testing)
 This extension is the front-end for a **local companion helper** ("native messaging host")
 that runs the user's own AI CLI. Because a native host cannot be distributed inside a store
 package, the helper is installed once, separately, by the user:
@@ -69,21 +69,21 @@ package, the helper is installed once, separately, by the user:
    extension, register the helper, pick and test an AI backend). It can be skipped, never opens
    on updates, and uses no extra permissions.
 1. Until the helper is installed, the side panel shows an onboarding card with the exact
-   one-line command to run — the extension loads and is safe, but analysis is inactive.
+   one-line command to run. The extension loads and is safe, but analysis is inactive.
 2. After the one-time install, all features work. To exercise functionality during review,
-   install the helper the easy way — with Node 20+ present, run
-   `npx @lusktech/browser-organizer-host` (works from any directory) — or run the per-OS
+   install the helper the easy way: with Node 20+ present, run
+   `npx @lusktech/browser-organizer-host` (works from any directory), or run the per-OS
    installer from the releases page (no Node required). See `INSTALL.md`.
 
 Key safety facts:
 - **No developer servers exist.** Tab titles/URLs go only to the *user's own* AI provider via
   the *user's own* subscription; bookmarks/history stay on-device.
 - `nativeMessaging` is used **solely** to talk to that local helper. The helper runs only a
-  fixed set of known CLIs (or an HTTPS OpenAI-compatible endpoint); the command, arguments,
-  and credentials are resolved host-side and can never be supplied by the extension/a web
-  page. See [`security-model.md`](security-model.md).
+  fixed set of known CLIs (or an HTTPS OpenAI-compatible endpoint). The command, arguments and environment are resolved on your machine. The only
+  per-request input is the OpenAI-compatible key, base URL and model entered in Settings. See
+  [`security-model.md`](security-model.md).
 - The development manifest's `key` is this item's own store key, so the unpacked ID equals the
-  store-assigned ID and the helper's `allowed_origins` stays valid — please keep the ID stable.
+  store-assigned ID and the helper's `allowed_origins` stays valid; please keep the ID stable.
 
 ## Test instructions (Access tab › "Test instructions", 500 characters max)
 Paste this verbatim (456 characters). There is no username or password.
@@ -99,7 +99,7 @@ messaging host) that runs the user's own AI backend. Store packages cannot conta
 host, so the helper is installed once, separately.
 
 WITHOUT the helper (extension loads and is safe): click the toolbar icon. The side panel opens
-and shows a "Connect your AI CLI" card with the exact setup command. "Open tabs", "Sessions"
+and shows a "Connect your AI" card with the exact setup command. "Open tabs", "Sessions"
 (save/restore a window) and "Settings" work without it; the Analyze/Run buttons stay disabled
 until the helper is connected.
 
@@ -120,35 +120,35 @@ Tab titles and URLs go only to the AI backend the user chose; nothing is sent to
 ```
 
 ## Version history
-- **0.1.8** (2026-09-22) — UX/UI refresh and accessibility enhancements (WCAG 2.1 AA); native
+- **0.1.8** (2026-09-22): UX/UI refresh and accessibility enhancements (WCAG 2.1 AA); native
   host packaged for npm.
-- **0.1.7** (2026-09-20) — Reliability/bug-fix release addressing 11 findings from a systematic
+- **0.1.7** (2026-09-20): Reliability/bug-fix release addressing 11 findings from a systematic
   codebase audit across the extension and native host.
-- **0.1.6-beta** (2026-08-27) — Security/code audit across the extension and native host
+- **0.1.6-beta** (2026-08-27): Security/code audit across the extension and native host
   (stale-plan protections re-validated at apply time, CLI-adapter sandbox hardening,
   message-sender validation, permission cleanup), plus a side-panel UX pass.
-- **0.1.5** (2026-07-19) — Native-host security hardening (per-adapter flag allowlist, OpenAI
+- **0.1.5** (2026-07-19): Native-host security hardening (per-adapter flag allowlist, OpenAI
   SSRF fix, host crash-hardening) and an extension-only `prompt` passthrough extensibility path.
-- **0.1.4** (2026-07-19) — Organize fixes for Edge (non-Chrome root bookmark folder ids) plus
+- **0.1.4** (2026-07-19): Organize fixes for Edge (non-Chrome root bookmark folder ids) plus
   Advanced settings (CLI control, debug logging).
-- **0.1.3** (2026-07-16) — The connection banner now shows the installed native-host bridge
+- **0.1.3** (2026-07-16): The connection banner now shows the installed native-host bridge
   version alongside the CLI version, so a stale helper install is visible at a glance.
-- **0.1.2** (2026-07-16) — Organize bookmarks into folders (AI-driven), plus bookmark-cleanup
+- **0.1.2** (2026-07-16): Organize bookmarks into folders (AI-driven), plus bookmark-cleanup
   status grouping.
-- **0.1.1** (2026-07-15) — Host package fixes: Windows `npx` install now registers the native
+- **0.1.1** (2026-07-15): Host package fixes: Windows `npx` install now registers the native
   host (was silently unregistered); corrected npm package metadata.
-- **0.1.0** (2026-07-11) — Initial submission. Tab grouping, stale-tab detection, bookmark
+- **0.1.0** (2026-07-11): Initial submission. Tab grouping, stale-tab detection, bookmark
   cleanup (duplicate/stale/dead-link), auto-bookmarking, per-window scope, natural-language
   commands, sessions, scheduled auto-mode with undo. Six CLI backends + OpenAI-compatible API.
 
 ## Store assets still required (not in this repo)
 - [x] Real 16/48/128 px icons in `extension/icons/` and referenced in manifest (`npm run icons`)
 - [x] Upload zip built from `extension/` only (`npm run package` → `dist/`)
-- [x] Store icon shown on the listing page (128×128 — reuse `icons/icon-128.png`)
-- [x] At least one screenshot at 1280×800 (`docs/screenshots/` — overview, bookmark-cleanup,
+- [x] Store icon shown on the listing page (128×128, reuse `icons/icon-128.png`)
+- [x] At least one screenshot at 1280×800 (`docs/screenshots/`: overview, bookmark-cleanup,
       settings; refreshed 2026-09-23 against the current UI)
-- [x] Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy — live, verified
+- [x] Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy, live and verified
       2026-09-23. Enter it + hello@lusk.dev in the store, and fill the data-use form.
-- [ ] Chrome Web Store developer account ($5 one-time) / Edge Partner Center account (free)
+- [x] Chrome Web Store developer account ($5 one-time) / Edge Partner Center account (free)
 - [x] Store-assigned ID (`klpoodibgjgibiiadnhddnnbpgckajkl`) adopted as the manifest `key` and in
       the native host `allowed_origins` (verified: ID derived from the key matches)

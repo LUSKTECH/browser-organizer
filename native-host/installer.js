@@ -101,8 +101,14 @@ export function resolveCliPath(platform = process.platform, spawnSyncFn = spawnS
   const finder = platform === 'win32' ? 'where' : 'which';
   try {
     const res = spawnSyncFn(finder, [binary], { encoding: 'utf8' });
-    const line = String(res.stdout || '').split(/\r?\n/).find(Boolean);
-    return line ? line.trim() : null;
+    const lines = String(res.stdout || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    // On Windows `where` lists the extensionless npm sh shim first, which can't be
+    // spawned without a shell (and we never use one). Prefer a real executable.
+    if (platform === 'win32') {
+      const pick = (ext) => lines.find((l) => l.toLowerCase().endsWith(ext));
+      return pick('.exe') || pick('.com') || lines[0] || null;
+    }
+    return lines[0] || null;
   } catch { return null; }
 }
 
@@ -162,14 +168,27 @@ export function copyHostTo(destDir, srcDir = defaultHostDir()) {
 
 // Removes the native-host manifests (and returns registry-delete argv on win32)
 // so users/installers can cleanly unregister. Returns the list of files removed.
+// Best effort: is this browser's native-messaging key present? Any failure to run
+// `reg` (not on Windows, blocked) counts as registered, i.e. the static list applies.
+function winBrowserRegistered(browser) {
+  const r = spawnSync('reg', ['query', `${WIN_REG_ROOTS[browser]}\\${HOST_NAME}`], { encoding: 'utf8' });
+  if (r.error || r.signal) return true;
+  return r.status === 0;
+}
+
 export function uninstall({
   browsers,
   platform = process.platform,
   home = os.homedir(),
   copyTo = hostHome(platform, process.env, home),
+  isRegistered = winBrowserRegistered,
 } = {}) {
   const removed = [];
-  const known = platform === 'win32' ? Object.keys(WIN_REG_ROOTS) : Object.keys(DIRS[platform] || {});
+  // On Windows "all" means every browser that is actually registered, so the
+  // per-user uninstaller (chrome,edge) still cleans up when chromium was never set up.
+  const known = platform === 'win32'
+    ? Object.keys(WIN_REG_ROOTS).filter((b) => (browsers || []).includes(b) || isRegistered(b))
+    : Object.keys(DIRS[platform] || {});
   const requested = browsers || known;
   const removingSet = new Set(requested);
   const removingAll = known.every((b) => removingSet.has(b));
@@ -252,33 +271,21 @@ export function install({
 }
 
 // CLI entry (defaults extensionId to the pinned production id):
-//   node native-host/installer.js [<extensionId>] [chrome,edge]   → install
-//   node native-host/installer.js uninstall [chrome,edge]         → remove
-// import.meta.url is undefined inside the SEA bundle, where this file is imported
-// (not run as the entry) — guard so importing installer.js never throws there.
-if (import.meta.url && process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  if (process.argv[2] === 'uninstall') {
-    const browsers = (process.argv[3] || 'chrome,edge').split(',').filter(Boolean);
-    const removed = uninstall({ browsers });
-    console.log(removed.length ? 'Removed:\n' + removed.map((f) => '  ' + f).join('\n') : 'Nothing to remove.');
-    runRegistryCommands(removed._registryCommands);
-  } else {
-    // Support both `node installer.js [extensionId] [browsers]` and
-    // `node installer.js [browsers] [extensionId]` (matching cli.js)
-    const arg1 = process.argv[2];
-    const arg2 = process.argv[3];
-    let extensionId = PROD_EXTENSION_ID;
-    let browsers = (arg2 || 'chrome,edge').split(',').filter(Boolean);
-    if (arg1) {
-      if (/^[a-z]{32}$/.test(arg1)) {
-        extensionId = arg1;
-      } else {
-        browsers = arg1.split(',').filter(Boolean);
-        if (arg2) extensionId = arg2;
-      }
-    }
-    const files = install({ extensionId, browsers });
-    console.log('Wrote:\n' + files.map((f) => '  ' + f).join('\n'));
-    runRegistryCommands(files._registryCommands);
+const EXTENSION_ID_RE = /^[a-z]{32}$/;
+
+// Parses the install/repair positional args: `[browsers] [extensionId]` or the
+// swapped `[extensionId] [browsers]`. A malformed extension id is rejected
+// (it is baked into the host manifest's allowed_origins).
+export function parseInstallArgs(argv = []) {
+  const [a, b] = argv;
+  let browsersArg = a;
+  let extensionId = b;
+  if (a && EXTENSION_ID_RE.test(a)) { extensionId = a; browsersArg = b; }
+  if (extensionId !== undefined && !EXTENSION_ID_RE.test(extensionId)) {
+    throw new Error(`Invalid extension id: ${JSON.stringify(extensionId)} (expected 32 lowercase letters)`);
   }
+  return {
+    browsers: (browsersArg || 'chrome,edge').split(',').filter(Boolean),
+    extensionId: extensionId || PROD_EXTENSION_ID,
+  };
 }

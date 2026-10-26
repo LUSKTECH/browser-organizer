@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import path from 'node:path';
-import { createMessageReader, encodeMessage } from './messaging.js';
+import { createMessageReader, encodeReply, isFrameError } from './messaging.js';
+import { killAll } from './adapters/run-cli.js';
 import { handle } from './dispatch.js';
 import { chooseMode } from './entry.js';
 
-function send(obj) { process.stdout.write(encodeMessage(obj)); }
+function send(obj) { process.stdout.write(encodeReply(obj)); }
 
 // A reply's id echoes the request's id. Guard against non-object frames (a bare
 // `null`/number/string is valid JSON) so reading `.id` can never throw — that
@@ -47,7 +48,7 @@ function runMessaging() {
 
   process.stdin.on('data', (chunk) => {
     for (const msg of reader.push(chunk)) {
-      if (msg && msg.frameError) { send({ id: null, ok: false, error: `Bad frame: ${msg.frameError}` }); continue; }
+      if (isFrameError(msg)) { send({ id: null, ok: false, error: `Bad frame: ${msg.frameError}` }); continue; }
       if (queue.length + inflight >= MAX_QUEUE) { send({ id: msgId(msg), ok: false, error: 'Host busy: too many pending requests' }); continue; }
       queue.push(msg);
     }
@@ -56,7 +57,8 @@ function runMessaging() {
     pump();
   });
 
-  process.stdin.on('end', () => process.exit(0));
+  // Browser closed the port: reap in-flight CLIs (they're detached) and temp dirs.
+  process.stdin.on('end', () => { killAll(); process.exit(0); });
 }
 
 // When the per-OS installer runs `browser-organizer-host --install`, register the

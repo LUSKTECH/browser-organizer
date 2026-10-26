@@ -104,3 +104,12 @@ test('parseJsonBlock preserves bracketed substrings in values, still strips real
   // A genuine ANSI CSI sequence (ESC-prefixed) around the JSON is still removed.
   assert.deepEqual(parseJsonBlock('\x1b[32m{"a":1}\x1b[0m'), { a: 1 });
 });
+
+test('every normalizer drops null and primitive array elements instead of throwing', () => {
+  const junk = [null, 5, 'x', true, []];
+  assert.deepEqual(parseGroupResult(JSON.stringify({ groups: [...junk, { name: 'A', color: 'blue', tabIds: [1] }] })).map((g) => g.name), ['A']);
+  assert.deepEqual(parseImportantResult(JSON.stringify({ important: [...junk, { tabId: 2 }] })).map((i) => i.tabId), [2]);
+  assert.deepEqual(parseStaleResult(JSON.stringify({ close: [...junk, { tabId: 3, action: 'suspend' }] })), [{ tabId: 3, reason: '', suggestBookmark: false, action: 'suspend' }]);
+  assert.deepEqual(parseCommandResult(JSON.stringify({ close: [...junk, { tabId: 4 }], groups: [...junk], important: [...junk] })), { close: [{ tabId: 4, reason: '', suggestBookmark: false }], groups: [], important: [] });
+  assert.deepEqual(parseOrganizeResult(JSON.stringify({ moves: [...junk, { bookmarkId: 9, targetFolderId: 1 }] })).map((m) => m.bookmarkId), ['9']);
+});

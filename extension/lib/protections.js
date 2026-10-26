@@ -13,7 +13,12 @@ function firstOtherRoot(rootIds, barId) {
 // Drops destructive actions (close/discard/delete) targeting a whitelisted host,
 // so users can protect domains ("never touch github.com") outright.
 export function applyWhitelist(items, whitelist = []) {
-  const hosts = whitelist.map((w) => String(w).trim().toLowerCase()).filter(Boolean);
+  // Entries may be bare hosts or pasted URLs ("https://github.com/x"); reduce to a hostname.
+  const normalize = (w) => {
+    const t = String(w).trim().toLowerCase();
+    try { return new URL(t).hostname || t; } catch { return t; }
+  };
+  const hosts = whitelist.map(normalize).filter(Boolean);
   if (!hosts.length) return items;
   const PROTECTED = new Set(['closeTab', 'discardTab', 'deleteBookmark']);
   const hostOf = (url) => { try { return new URL(url).hostname.toLowerCase(); } catch { return ''; } };

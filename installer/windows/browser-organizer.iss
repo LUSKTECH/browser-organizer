@@ -65,3 +65,9 @@ Filename: "{app}\{#ExeName}"; Parameters: "--install chrome,edge"; \
 ; Unregister before the files are removed.
 Filename: "{app}\{#ExeName}"; Parameters: "--uninstall chrome,edge"; \
   Flags: runhidden waituntilterminated; RunOnceId: "UnregisterHost"
+
+[UninstallDelete]
+; The host writes a shared manifest next to the exe; remove it (and the dir if empty)
+; even when the exe's own --uninstall could not.
+Type: files; Name: "{app}\com.browser_organizer.host.json"
+Type: dirifempty; Name: "{app}"

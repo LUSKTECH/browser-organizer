@@ -81,8 +81,28 @@ export async function getSecret(name) {
   const { secrets = {} } = await chrome.storage.local.get('secrets');
   const blob = secrets[name];
   if (!blob) return '';
-  try { return await decryptWith(await getCryptoKey(), blob); }
-  catch { return ''; } // key rotated / corrupt blob — treat as absent
+  // Key acquisition failing (IndexedDB unavailable) says nothing about the
+  // ciphertext, so let it propagate rather than discard a possibly valid secret.
+  const key = await getCryptoKey();
+  try { return await decryptWith(key, blob); }
+  catch {
+    // Key rotated (e.g. site data cleared wiped IndexedDB) or corrupt blob: the
+    // ciphertext is permanently unreadable, so drop it. That makes hasSecret()
+    // false and the UI asks for the key again instead of showing a phantom "saved".
+    console.warn(`secret-store: could not decrypt "${name}"; clearing it so it can be re-entered`);
+    await clearSecretIfUnchanged(name, blob);
+    return '';
+  }
+}
+
+// Removes `name` only if the stored blob is still the one that failed to decrypt,
+// so a secret saved by another context in the meantime is kept.
+async function clearSecretIfUnchanged(name, failedBlob) {
+  const { secrets = {} } = await chrome.storage.local.get('secrets');
+  const cur = secrets[name];
+  if (!cur || cur.iv !== failedBlob.iv || cur.ct !== failedBlob.ct) return;
+  delete secrets[name];
+  await chrome.storage.local.set({ secrets });
 }
 
 export async function clearSecret(name) {
@@ -94,5 +114,11 @@ export async function clearSecret(name) {
 
 export async function hasSecret(name) {
   const { secrets = {} } = await chrome.storage.local.get('secrets');
-  return Boolean(secrets[name]);
+  if (!secrets[name]) return false;
+  // Verify the blob is actually readable (one small AES-GCM decrypt; the key is
+  // cached per context). Otherwise the panel says "saved" while the worker sees
+  // no key. A failed decrypt also self-heals via getSecret's clear. If the key
+  // store itself is unavailable we can't tell, so report what is stored.
+  try { return Boolean(await getSecret(name)); }
+  catch { return true; }
 }

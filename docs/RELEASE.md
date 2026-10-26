@@ -2,12 +2,12 @@
 
 Three deliverables now ship from one repo: the **extension**, the **npm helper package**
 (`@lusktech/browser-organizer-host`) for technical users, and the **per-OS installer** for
-non-technical users. Anything marked **(you)** needs a human — the rest is automated.
+non-technical users. Anything marked **(you)** needs a human; the rest is automated.
 
 ## Preflight (all paths)
-- [x] `npm test` green (256 unit)
-- [x] `npm run e2e` green (21 specs; 3 CLI-marked specs skip without a `claude` login)
-- [x] `npm run lint` clean (pre-existing browser-global lint errors in crypto-box/secret-store excepted)
+- [x] `npm test` green
+- [x] `npm run e2e` green (17 spec files; 5 CLI-gated specs skip without a `claude` login)
+- [x] `npm run lint` clean (lint is blocking in CI)
 - [x] Icons present (`npm run icons`) and referenced in manifest
 - [x] `CHANGELOG.md` / version bumped in `extension/manifest.json` (and `native-host/package.json` for a host release)
 - [x] Contact email wired in (`hello@lusk.dev`) and privacy URL set
@@ -19,34 +19,41 @@ Every path below registers the helper into `~/.browser-organizer` (macOS/Linux) 
 the repo/bundle/npx-cache can be deleted afterward. The extension ID is baked
 (`klpoodibgjgibiiadnhddnnbpgckajkl`, from `native-host/paths.js`).
 
-## Path A — Self-hosted / unpacked (ready now)
+## Path A: Self-hosted / unpacked (ready now)
 1. `npm run package:selfhost` → `dist/browser-organizer-selfhost-<version>.zip`
    (extension + native-host + INSTALL.md/README.md/PRIVACY.md/security-model.md).
 2. **(you)** Tag `v<version>` and attach the self-host zip to a GitHub Release; paste
    `CHANGELOG.md` notes.
-3. Users follow `INSTALL.md`: load unpacked → `node native-host/installer.js` (or the npx
+3. Users follow `INSTALL.md`: load unpacked → `node native-host/cli.js` (or the npx
    command from Path C) → pick a backend.
 
-## Path B — npm helper package (ready now; for technical users)
-1. `cd native-host && npm pack --dry-run` — confirm the tarball is self-contained (no
+## Path B: npm helper package (ready now; for technical users)
+1. `cd native-host && npm pack --dry-run` and confirm the tarball is self-contained (no
    `run.sh`, no tests) and dependency-free.
 2. Publishing is automated: pushing a `host-vX.Y.Z` tag runs the `npm` job in
    `release-host.yml` (after all installers build), which publishes via npm **trusted
    publishing** (GitHub OIDC, no token) and skips a version already on npm. One-time setup on
    npmjs.com: package `@lusktech/browser-organizer-host` › Settings › Trusted Publisher › GitHub
-   Actions — org `LUSKTECH`, repo `browser-organizer`, workflow `release-host.yml`. Manual
+   Actions: org `LUSKTECH`, repo `browser-organizer`, workflow `release-host.yml`. Manual
    fallback: `npm login` to the `@lusktech` org, then `cd native-host && npm publish`
    (`prepublishOnly` re-runs the unit suite).
 3. Users then run `npx @lusktech/browser-organizer-host` from any directory.
 
-## Path C — Chrome Web Store + Edge Add-ons + signed installer (follow-on)
+## Path C: Chrome Web Store (automated on vX.Y.Z tags)
 The store path needs the double-click, no-Node installer so store users never touch a
-terminal. The installer sources and CI exist (Phase C); the remaining gate is code-signing
+terminal. The installer sources and CI exist; the remaining gate is code-signing
 credentials.
 - [ ] **(you)** Obtain a Windows Authenticode (OV/EV) certificate and an Apple Developer
       account (long lead), and add them to CI secrets. (Or use the free SignPath Foundation
       OSS certificate for Windows; macOS notarization still needs the $99/yr Apple account.)
-- [ ] **(you)** Confirm default store backend (recommended: OpenAI-compatible API — no CLI).
+- [ ] **(you)** CI signing secrets (all optional; unset means the step warns and ships unsigned):
+      `WINDOWS_CERT_BASE64` + `WINDOWS_CERT_PASSWORD` (Authenticode .pfx);
+      `MACOS_CERT_P12_BASE64` + `MACOS_CERT_PASSWORD` (Developer ID .p12, imported into a
+      temporary keychain for the run; put both the Developer ID Application and the Developer ID
+      Installer certificates in it), `MACOS_SIGN_IDENTITY` (Application, signs the binary),
+      `MACOS_INSTALLER_SIGN_IDENTITY` (Installer, signs the .pkg), and the notarytool API key trio
+      `MACOS_NOTARY_API_KEY` / `MACOS_NOTARY_API_KEY_ID` / `MACOS_NOTARY_API_ISSUER`.
+- [ ] **(you)** Confirm default store backend (recommended: OpenAI-compatible API, no CLI).
 
 Build & submit:
 1. Tag `host-v<version>` → `.github/workflows/release-host.yml` builds the SEA binary on
@@ -56,9 +63,9 @@ Build & submit:
 2. `npm run package` → `dist/browser-organizer-extension-<version>.zip` (extension only).
    (Also produced automatically and attached to the `host-v*` release; versioned by
    `extension/manifest.json`, independent of the host version.)
-3. **(you)** Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy.
-4. **(you)** Capture ≥1 screenshot at 1280×800 (side panel with suggestions).
-5. **(you)** Create accounts: Chrome Web Store developer ($5 one-time) / Edge Partner Center
+3. **(done)** Deploy `docs/privacy.html` to https://lusk.dev/browser-organizer/privacy.
+4. **(done)** Capture ≥1 screenshot at 1280×800 (side panel with suggestions).
+5. **(done)** Create accounts: Chrome Web Store developer ($5 one-time) / Edge Partner Center
    (free).
 6. **(you)** Upload the zip; paste short/detailed description + permission justifications +
    **Notes for reviewers** from `CHROMEWEBSTORE.md`; enter the privacy URL and complete the
@@ -68,13 +75,13 @@ Build & submit:
    ID equals the store ID (`klpoodibgjgibiiadnhddnnbpgckajkl`) and the native host's
    `allowed_origins` is valid for both. `npm run package` strips `key` from the store zip.
    **Upgrade note:** installs that loaded the extension unpacked with the previous key (ID
-   `jjacbpna…`) get a new ID on update — their per-ID settings reset and the helper must be
+   `jjacbpna…`) get a new ID on update, so their per-ID settings reset and the helper must be
    re-registered (`npx @lusktech/browser-organizer-host repair`).
 
 ### Automated store publish
 Pushing a stable `vX.Y.Z` tag runs `.github/workflows/release-extension.yml`: it checks the tag
 matches `extension/manifest.json`, builds the store zip, uploads it and submits it for review
-(manual run with `publish=false` uploads a draft only). Auth is keyless — GitHub OIDC →
+(manual run with `publish=false` uploads a draft only). Auth is keyless: GitHub OIDC →
 Workload Identity Federation (restricted to this repo) → service account
 `cws-publisher@browser-organizer-cws.iam.gserviceaccount.com`, which is linked to the publisher
 under Developer Dashboard › Account. Repo variables (identifiers, not secrets):
@@ -83,7 +90,7 @@ The manifest `version` must be higher than the last uploaded one; every update g
 
 ## Notes
 - `dist/` is git-ignored (build artifacts).
-- The `key` in the manifest is intentional — it pins the extension ID so native messaging
+- The `key` in the manifest is intentional. It pins the extension ID so native messaging
   keeps working across builds. Keep the corresponding **private** key secret; never commit it.
-- `esbuild`/`postject` are build-time-only devDependencies for `npm run build:sea`; the
-  shipped npm package and SEA binary stay dependency-free.
+- `esbuild`/`postject` are deliberately not devDependencies: `scripts/build-sea.mjs` fetches
+  them via `npx` at build time, so the shipped npm package and SEA binary stay dependency-free.

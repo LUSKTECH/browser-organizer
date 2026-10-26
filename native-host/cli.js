@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { install, repair, uninstall, runRegistryCommands } from './installer.js';
-import { PROD_EXTENSION_ID } from './paths.js';
+import { install, repair, uninstall, runRegistryCommands, parseInstallArgs } from './installer.js';
 
 const COMMANDS = new Set(['install', 'repair', 'uninstall']);
 
@@ -10,8 +9,7 @@ export function parseArgs(argv) {
   let cmd = 'install';
   let rest = argv;
   if (argv[0] && COMMANDS.has(argv[0])) { cmd = argv[0]; rest = argv.slice(1); }
-  const browsers = (rest[0] || 'chrome,edge').split(',').filter(Boolean);
-  const extensionId = rest[1] || PROD_EXTENSION_ID;
+  const { browsers, extensionId } = parseInstallArgs(rest);
   return { cmd, browsers, extensionId };
 }
 

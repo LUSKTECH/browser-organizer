@@ -65,7 +65,7 @@ export const test = base.extend({
     // under manifestDir(browser, platform, home), which defaults to the real os.homedir().
     const hostHomeDir = path.join(userDataDir, 'host-home');
     const isolatedHome = path.join(userDataDir, 'home');
-    try { install({ extensionId: EXT_ID, browsers: ['chrome-for-testing'], copyTo: hostHomeDir, home: isolatedHome }); } catch { /* best effort */ }
+    try { install({ extensionId: EXT_ID, browsers: ['chrome-for-testing'], copyTo: hostHomeDir, home: isolatedHome }); } catch (err) { console.warn('[e2e] host install() failed — native host may be unreachable:', err); }
     const launcher = path.join(hostHomeDir, process.platform === 'win32' ? 'run.bat' : 'run.sh');
     const manifestJson = JSON.stringify(buildHostManifest({ execPath: launcher, extensionId: EXT_ID }), null, 2);
     // Place the host manifest deterministically where Chrome for Testing looks.

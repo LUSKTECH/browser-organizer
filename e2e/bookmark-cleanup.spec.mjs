@@ -1,16 +1,7 @@
-import { test, expect, send } from './fixtures.mjs';
+import { test, expect, send, createBookmark, getBookmark, searchBookmarks } from './fixtures.mjs';
 
 // Duplicate-bookmark cleanup is local and deterministic (no CLI, no network).
 test.describe.configure({ mode: 'serial' });
-
-const createBookmark = (panel, node) =>
-  panel.evaluate((n) => new Promise((r) => chrome.bookmarks.create(n, r)), node);
-const getBookmark = (panel, id) =>
-  panel.evaluate((i) => new Promise((r) => {
-    chrome.bookmarks.get(i, (res) => { void chrome.runtime.lastError; r((res && res[0]) || null); });
-  }), id);
-const searchBookmarks = (panel, url) =>
-  panel.evaluate((u) => new Promise((r) => chrome.bookmarks.search({ url: u }, r)), url);
 
 test('detects a duplicate bookmark, deletes it on apply, and restores it on undo', async ({ panel }) => {
   // Two bookmarks that normalize to the same url (trailing slash differs).

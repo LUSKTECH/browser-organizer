@@ -68,3 +68,12 @@ test('isPrivateHost catches IPv4-mapped/embedded IPv6 (SSRF guard)', () => {
   assert.equal(isPrivateHost('http://[::ffff:8.8.8.8]/'), false);
   assert.equal(isPrivateHost('https://[2606:4700:4700::1111]/'), false);
 });
+
+test('isPrivateHost flags *.localhost and the CGNAT range 100.64.0.0/10', () => {
+  assert.equal(isPrivateHost('http://foo.localhost:8080/token/abc'), true);
+  assert.equal(isPrivateHost('http://100.64.0.1/'), true);
+  assert.equal(isPrivateHost('http://100.127.255.254/'), true);
+  assert.equal(isPrivateHost('http://100.128.0.1/'), false);
+  assert.equal(isPrivateHost('http://100.63.255.255/'), false);
+  assert.equal(isPrivateHost('https://notlocalhost.example/'), false);
+});

@@ -59,15 +59,15 @@
     </div>
 
     <section id="onboarding" hidden>
-      <h2 data-i18n="onboardingTitle">Connect your AI CLI</h2>
-      <p>Browser Organizer runs a local AI CLI to organize your tabs and bookmarks. Register the helper once in a terminal:</p>
+      <h2 data-i18n="onboardingTitle">Connect your AI</h2>
+      <p>Browser Organizer runs your AI through a small helper on your computer to organize your tabs and bookmarks. Register the helper once in a terminal:</p>
       <pre id="installCmd"></pre>
       <div class="onboardingActions">
         <button id="copyCmd">Copy command</button>
         <button id="recheck" class="primary">Recheck connection</button>
         <button type="button" id="openWizard">Set up…</button>
       </div>
-      <p class="hint">Then pick your AI backend in Settings below (Claude, Antigravity, Kiro, Copilot, Codex, or local Ollama).</p>
+      <p class="hint">Then pick your AI backend in Settings below (Claude, Antigravity, Kiro, Copilot, Codex, local Ollama, or an OpenAI-compatible API key).</p>
     </section>
 
     <section id="summary" hidden></section>
@@ -233,7 +233,7 @@
     <details id="sessions">
       <summary data-i18n="sessionsTitle">Sessions</summary>
       <form id="saveSessionForm">
-        <input type="text" id="sessionName" placeholder="Session name (optional)" />
+        <input type="text" id="sessionName" aria-label="Session name" placeholder="Session name (optional)" />
         <label class="inlineCheck"><input type="checkbox" id="keepTabsOpen" /> Keep tabs open</label>
         <button type="submit">Save window as session</button>
       </form>

@@ -45,7 +45,42 @@ export async function restoreUndoEntries(entries) {
   if (!entries.length) return;
   return withLock(LOCK, async () => {
     const log = await getUndoLog();
-    await chrome.storage.local.set({ undoLog: [...entries, ...log].slice(-MAX_ENTRIES) });
+    // The log is kept in ts-ascending (apply) order. Failed entries arrive in
+    // reverse-apply order, so merge and re-sort (stable) rather than prepending.
+    // Callers hand back failed entries in reverse-apply order (handleUndo walks
+    // the batch backwards), so reverse them again before the stable sort: equal
+    // timestamps then keep apply order instead of the order the undo attempted.
+    const merged = [...log, ...entries.slice().reverse()].sort((a, b) => a.ts - b.ts);
+    await chrome.storage.local.set({ undoLog: merged.slice(-MAX_ENTRIES) });
+  });
+}
+
+// Applies this batch's old→new folder ids to entries that are about to go back
+// into the log (their reversal failed after a removeFolder in the same batch
+// recreated the parent), so a later retry targets the recreated folder.
+export function remapEntries(entries, idRemap) {
+  if (!idRemap || !idRemap.size) return entries;
+  return entries.map((e) => {
+    const target = e.reverse && idRemap.get(e.reverse.parentId);
+    return target ? { ...e, reverse: { ...e.reverse, parentId: target } } : e;
+  });
+}
+
+// After a folder is recreated by undo it has a NEW id. Entries still in the log
+// (not part of this undo) may point at the old id; rewrite them so a later,
+// separate undo of e.g. a moveBookmark lands in the recreated folder.
+async function remapStoredParents(oldId, newId) {
+  return withLock(LOCK, async () => {
+    const log = await getUndoLog();
+    let changed = false;
+    const next = log.map((e) => {
+      if (e.reverse && e.reverse.parentId === oldId) {
+        changed = true;
+        return { ...e, reverse: { ...e.reverse, parentId: newId } };
+      }
+      return e;
+    });
+    if (changed) await chrome.storage.local.set({ undoLog: next });
   });
 }
 
@@ -57,7 +92,12 @@ export async function reverseEntry(entry, chromeApi = chrome, idRemap = new Map(
   switch (entry.action) {
     case 'closeTab': {
       const { url, windowId, index, pinned, savedBookmarkId } = entry.reverse;
-      await chromeApi.tabs.create({ url, windowId, index, pinned, active: false });
+      try {
+        await chromeApi.tabs.create({ url, windowId, index, pinned, active: false });
+      } catch {
+        // The original window may be gone; reopen in the current one instead.
+        await chromeApi.tabs.create({ url, pinned, active: false });
+      }
       // Clean up the "Saved before closing" bookmark so undo is a true inverse.
       if (savedBookmarkId) { try { await chromeApi.bookmarks.remove(savedBookmarkId); } catch { /* already gone */ } }
       return;
@@ -91,7 +131,11 @@ export async function reverseEntry(entry, chromeApi = chrome, idRemap = new Map(
       const target = idRemap.get(entry.reverse.parentId) ?? entry.reverse.parentId;
       const created = await chromeApi.bookmarks.create({ parentId: target, index: entry.reverse.index, title: entry.reverse.title });
       // Record old→new id so a moveBookmark/child reversed later this batch lands here.
-      if (entry.reverse.folderId && created && created.id) idRemap.set(entry.reverse.folderId, created.id);
+      if (entry.reverse.folderId && created && created.id) {
+        idRemap.set(entry.reverse.folderId, created.id);
+        // Best-effort: also fix entries left in the stored log for a later undo.
+        try { await remapStoredParents(entry.reverse.folderId, created.id); } catch { /* storage unavailable */ }
+      }
       return;
     }
     case 'discardTab':

@@ -42,3 +42,29 @@ test('an over-cap frame length yields an error sentinel and drops the buffer', (
   assert.equal(msgs.length, 1);
   assert.match(msgs[0].frameError, /exceeds/);
 });
+
+import { isFrameError } from '../native-host/messaging.js';
+
+test('a user message with a frameError field is delivered, not treated as a bad frame', () => {
+  const reader = createMessageReader();
+  const [m] = reader.push(encodeMessage({ id: 7, frameError: 'x' }));
+  assert.deepEqual(m, { id: 7, frameError: 'x' });
+  assert.equal(isFrameError(m), false);
+});
+
+test('real frame errors are flagged by isFrameError', () => {
+  const bad = Buffer.from('{nope', 'utf8');
+  const header = Buffer.alloc(4); header.writeUInt32LE(bad.length, 0);
+  const [m] = createMessageReader().push(Buffer.concat([header, bad]));
+  assert.equal(isFrameError(m), true);
+});
+
+test('a 2 MB frame trickled in 64 KiB chunks reassembles', () => {
+  const payload = { blob: 'z'.repeat(2 * 1024 * 1024) };
+  const buf = encodeMessage(payload);
+  const reader = createMessageReader();
+  const out = [];
+  for (let i = 0; i < buf.length; i += 64 * 1024) out.push(...reader.push(buf.subarray(i, i + 64 * 1024)));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].blob.length, payload.blob.length);
+});

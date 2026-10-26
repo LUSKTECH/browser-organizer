@@ -10,11 +10,17 @@ export function resolveCommand() {
   return process.env.BROWSER_ORGANIZER_CLI || 'claude';
 }
 
+const DISALLOWED_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'LS', 'Bash', 'WebFetch', 'WebSearch', 'NotebookEdit', 'Task', 'TodoWrite', 'MultiEdit'];
+
 // `cli` is the sanitized Advanced-settings object (see sanitizeCli). Default
 // (both toggles off) skips loading MCP servers and on-disk settings/plugins — a
 // pure, fast text transform. Turning a toggle on restores that loading.
 export function resolveArgs(cli = {}) {
-  const args = ['-p', '--output-format', 'json', '--allowedTools', ''];
+  // --allowedTools '' only pre-approves nothing; in -p mode Claude still auto-runs
+  // read-only tools. --tools '' removes every built-in tool (so a tool added in a
+  // later CLI version is covered too); the explicit deny list stays as a second
+  // layer. Needs Claude Code >= 2.1 for --tools.
+  const args = ['-p', '--output-format', 'json', '--allowedTools', '', '--tools', '', '--disallowedTools', DISALLOWED_TOOLS.join(',')];
   if (!cli.loadMcpServers) args.push('--strict-mcp-config'); // no MCP servers
   if (!cli.loadPluginsSettings) args.push('--setting-sources', ''); // no on-disk settings/plugins/hooks
   return args;
@@ -117,10 +123,7 @@ export function hostEnv(extraNames = []) {
 }
 
 // Only a bounded timeout may come from the message; everything else is discarded.
-// Out-of-range/invalid values fall back to the default; values above the max
-// are clamped down to the max (deviation from the plan's draft implementation,
-// which clamped low values up to MIN_TIMEOUT instead of falling back to the
-// default — that contradicted the plan's own test expectations).
+// Below MIN_TIMEOUT falls back to the default; above MAX_TIMEOUT clamps to it.
 export function sanitizeOptions(raw) {
   const t = Number(raw && raw.timeoutMs);
   if (!Number.isFinite(t) || t < MIN_TIMEOUT) return { timeoutMs: DEFAULT_TIMEOUT };

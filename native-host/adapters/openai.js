@@ -1,13 +1,12 @@
 // OpenAI-compatible Chat Completions adapter (`openai`).
 //
-// Unlike the CLI adapters this one talks HTTP from the native host — but it keeps
-// the exact same security invariant: the API key, base URL, and model are all
-// resolved HOST-SIDE from environment variables (set by the operator/installer),
-// never from an extension message. A single base_url makes this work against
-// OpenAI, OpenRouter, Groq, Together, LM Studio, vLLM, and any other endpoint
-// that speaks the /chat/completions shape.
+// Unlike the CLI adapters this one talks HTTP from the native host. Config
+// resolution: the sanitized UI-entered config (key, base URL, model) wins; host
+// env vars are the fallback; the two sources are never mixed. A single base_url
+// works against OpenAI, OpenRouter, Groq, Together, LM Studio, vLLM, and any other
+// endpoint that speaks the /chat/completions shape.
 //
-//   BROWSER_ORGANIZER_OPENAI_API_KEY   required — bearer token (host env only)
+//   BROWSER_ORGANIZER_OPENAI_API_KEY   bearer token (fallback when no key is entered)
 //   BROWSER_ORGANIZER_OPENAI_BASE_URL  default https://api.openai.com/v1
 //   BROWSER_ORGANIZER_OPENAI_MODEL     default gpt-4o-mini
 //
