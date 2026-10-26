@@ -52,3 +52,10 @@ test('extra flags go before -p so the prompt stays the -p value (no splice)', as
   await antigravityAdapter.run('PROMPT', { spawnFn, cli: { extraArgs: ['--model', 'gemini-x'] } });
   assert.deepEqual(seen, ['--sandbox', '--model', 'gemini-x', '-p', 'PROMPT']);
 });
+
+test('run rejects a dash-leading prompt before spawning (prompt-flag adapter)', async () => {
+  let called = false;
+  const spawnFn = makeFakeSpawn(() => { called = true; return { stdout: '{}' }; });
+  await assert.rejects(() => antigravityAdapter.run('--approval-mode=yolo', { spawnFn }), /must not start with "-"/);
+  assert.equal(called, false);
+});

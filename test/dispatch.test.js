@@ -124,3 +124,12 @@ test('handle applies the adapter flag allowlist (accepts allowed, rejects the re
   assert.equal(seenOpts.cli.rejected, true);          // codex sandbox override blocked
   assert.deepEqual(seenOpts.cli.extraArgs, []);
 });
+
+test('passthrough rejects a prompt that starts with a dash (flag smuggling)', async () => {
+  await assert.rejects(() => handle({ type: 'prompt', payload: { prompt: '--approval-mode=yolo' } }, { getAdapter: fakeGetAdapter('x') }), /must not start with "-"/);
+  await assert.rejects(() => handle({ type: 'prompt', payload: { prompt: '  -p' } }, { getAdapter: fakeGetAdapter('x') }), /must not start with "-"/);
+});
+
+test('passthrough rejects a non-string prompt instead of stringifying it', async () => {
+  await assert.rejects(() => handle({ type: 'prompt', payload: { prompt: { a: 1 } } }, { getAdapter: fakeGetAdapter('x') }), /must be a string/);
+});
