@@ -19,7 +19,7 @@ npx @lusktech/browser-organizer-host
 This copies the host into a stable per-user location (`~/.browser-organizer`, or
 `%LOCALAPPDATA%\BrowserOrganizer` on Windows) and registers it for Chrome and Edge using the
 extension's pinned ID — you don't need to be inside any project folder, and the download can
-be deleted afterward.
+be deleted afterward. On Windows the host spawns CLIs without a shell, so a CLI installed only as an npm `.cmd` shim is not launchable and its `.exe` build is needed.
 
 ```sh
 npx @lusktech/browser-organizer-host install chrome   # specific browser(s)

@@ -27,6 +27,7 @@ export function makeCliAdapter({ name, cmdEnv, defaultCmd, argsEnv, defaultArgs,
       if (prompt.length > maxPromptLen) {
         throw new Error(`Prompt length (${prompt.length} chars) exceeds the command-line limit on this platform. Please analyze fewer tabs/bookmarks at a time.`);
       }
+      if (promptFlag && /^\s*-/.test(prompt)) throw new Error('Prompt must not start with "-" (it could be parsed as a CLI flag)');
       const promptTail = promptFlag ? [promptFlag, prompt] : ['--', prompt];
       const out = await runCli({
         command: resolveCommand(),

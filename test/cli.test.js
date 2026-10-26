@@ -16,5 +16,7 @@ test('accepts a subcommand and a browser list', () => {
 });
 
 test('accepts an explicit extension id override', () => {
-  assert.equal(parseArgs(['install', 'chrome', 'abcdef']).extensionId, 'abcdef');
+  const id = 'a'.repeat(32);
+  assert.equal(parseArgs(['install', 'chrome', id]).extensionId, id);
+  assert.throws(() => parseArgs(['install', 'chrome', 'abcdef']), /Invalid extension id/);
 });

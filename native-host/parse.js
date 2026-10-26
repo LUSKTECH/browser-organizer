@@ -60,11 +60,17 @@ import { TAB_GROUP_COLORS } from './colors.js';
 
 const COLORS = new Set(TAB_GROUP_COLORS);
 
+// Model output is untrusted: keep only plain objects so a null/primitive/array
+// element is dropped instead of throwing on `.name`/`.tabId`.
+function objects(arr) {
+  return arr.filter((x) => x !== null && typeof x === 'object' && !Array.isArray(x));
+}
+
 // Normalizers operate on an already-parsed array (reused by the command path
 // without a JSON re-serialize round-trip); the parse* wrappers add text parsing.
 export function normalizeGroups(groups) {
   if (!Array.isArray(groups)) throw new Error('Expected {"groups":[...]}');
-  return groups
+  return objects(groups)
     .map((g) => ({
       name: String(g.name ?? 'Group').slice(0, 40),
       color: COLORS.has(g.color) ? g.color : 'grey',
@@ -75,7 +81,7 @@ export function normalizeGroups(groups) {
 
 export function normalizeImportant(important) {
   if (!Array.isArray(important)) throw new Error('Expected {"important":[...]}');
-  return important
+  return objects(important)
     .filter((i) => Number.isInteger(Number(i.tabId)))
     .map((i) => ({
       tabId: Number(i.tabId),
@@ -84,10 +90,15 @@ export function normalizeImportant(important) {
     }));
 }
 
-function normalizeClose(close) {
-  return (Array.isArray(close) ? close : [])
+// withAction adds the stale task's `action` field ('suspend' | 'close').
+function normalizeClose(close, { withAction = false } = {}) {
+  return objects(Array.isArray(close) ? close : [])
     .filter((c) => Number.isInteger(Number(c.tabId)))
-    .map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark }));
+    .map((c) => {
+      const out = { tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark };
+      if (withAction) out.action = c.action === 'suspend' ? 'suspend' : 'close';
+      return out;
+    });
 }
 
 export function parseGroupResult(text) {
@@ -98,9 +109,7 @@ export function parseGroupResult(text) {
 export function parseStaleResult(text) {
   const obj = parseJsonBlock(text);
   if (!obj || !Array.isArray(obj.close)) throw new Error('Expected {"close":[...]}');
-  return obj.close
-    .filter((c) => Number.isInteger(Number(c.tabId)))
-    .map((c) => ({ tabId: Number(c.tabId), reason: String(c.reason ?? ''), suggestBookmark: !!c.suggestBookmark, action: c.action === 'suspend' ? 'suspend' : 'close' }));
+  return normalizeClose(obj.close, { withAction: true });
 }
 
 export function parseImportantResult(text) {
@@ -112,8 +121,8 @@ export function parseImportantResult(text) {
 // move must carry a destination (existing targetFolderId or a newFolderPath).
 export function normalizeOrganize(moves) {
   if (!Array.isArray(moves)) throw new Error('Expected {"moves":[...]}');
-  return moves
-    .filter((m) => m && m.bookmarkId != null)
+  return objects(moves)
+    .filter((m) => m.bookmarkId != null)
     .map((m) => {
       const out = { bookmarkId: String(m.bookmarkId), reason: String(m.reason ?? '') };
       if (m.targetFolderId != null) out.targetFolderId = String(m.targetFolderId);

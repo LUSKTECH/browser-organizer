@@ -35,7 +35,7 @@ Pick one (all cross-platform):
   ```
   npx @lusktech/browser-organizer-host
   ```
-- **From your clone (no npm):** `node native-host/installer.js`
+- **From your clone (no npm):** `node native-host/cli.js`
 - **A native package (once a release is published):** download your OS's file from the
   [Releases page](https://github.com/LUSKTECH/browser-organizer/releases):
   - Windows: `browser-organizer-<ver>-windows-x64-setup.exe`
@@ -60,12 +60,12 @@ Click the reload/recheck icon in the panel; it should read "… connected". Then
 
 - Works with Chrome, Chromium, and Edge on Linux.
 - The `.deb`/`.rpm` register the helper **system-wide** (all users on the machine); `npx`,
-  `install.sh`, and `node native-host/installer.js` are **per-user**.
+  `install.sh`, and `node native-host/cli.js` are **per-user**.
 
 ## When you're done
 
 - Remove the helper: `npx @lusktech/browser-organizer-host uninstall` (or uninstall the
-  package / run `node native-host/installer.js uninstall`).
+  package / run `node native-host/cli.js uninstall`).
 - Remove the extension from `chrome://extensions` (or `edge://extensions`).
 
 For the full reference (per-OS installers, admin MSI, etc.) see [INSTALL.md](../INSTALL.md).

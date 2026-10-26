@@ -46,8 +46,12 @@ export async function handle(msg, deps = {}) {
   // blast radius is the same as the existing `rules`/`instruction` fields.
   if (msg.type === 'prompt') {
     const payload = msg.payload || {};
-    const prompt = String(payload.prompt || '');
+    if (payload.prompt !== undefined && typeof payload.prompt !== 'string') throw new Error('payload.prompt must be a string');
+    const prompt = payload.prompt || '';
     if (!prompt) throw new Error('prompt task requires payload.prompt');
+    // A prompt that starts with '-' could be parsed as a CLI flag by adapters that
+    // pass it as the value of -p; refuse it for every adapter.
+    if (/^\s*-/.test(prompt)) throw new Error('payload.prompt must not start with "-"');
     const out = await adapter.run(prompt, opts);
     if (payload.parse) {
       let json = null;

@@ -13,7 +13,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "package": "node scripts/package.mjs",
     "package:selfhost": "node scripts/package.mjs selfhost",
-    "install-host": "node native-host/installer.js",
+    "install-host": "node native-host/cli.js",
     "build:sea": "node scripts/build-sea.mjs"
   },
   "devDependencies": {

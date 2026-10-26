@@ -24,7 +24,7 @@ Seven backends ship today. The first six are command-line tools; the last talks 
 
 | Backend | Command / transport | How it's invoked | Auth |
 |---------|---------|------------------|------|
-| Claude Code *(default)* | `claude` | `claude -p --output-format json --allowedTools ''` (prompt on stdin) | saved `claude` login |
+| Claude Code *(default)* | `claude` | `claude -p --output-format json --allowedTools '' --disallowedTools <built-in tools>` (prompt on stdin) | saved `claude` login |
 | Antigravity | `agy` | `agy --sandbox -p "<prompt>"` | saved `agy` login, or `GEMINI_API_KEY` / `ANTIGRAVITY_API_KEY` |
 | Kiro | `kiro-cli` | `kiro-cli chat --no-interactive "<prompt>"` | `KIRO_API_KEY` (Kiro Pro and up) |
 | GitHub Copilot | `copilot` | `copilot -s --no-ask-user -p "<prompt>"` | Copilot subscription via `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`, or an existing `gh` login |
@@ -63,7 +63,7 @@ One adapter covers OpenAI, OpenRouter, Groq, Together, and local servers like LM
    ```
    npx @lusktech/browser-organizer-host
    ```
-   From a clone you can instead run `node native-host/installer.js`, which defaults to the pinned ID and registers both Chrome and Edge. Either way the host is copied into `~/.browser-organizer` (macOS/Linux) or `%LOCALAPPDATA%\BrowserOrganizer` (Windows), so the repo or bundle is safe to delete afterward. Non-technical users can grab the per-OS installer from the releases page and skip Node entirely; see [INSTALL.md](INSTALL.md).
+   From a clone you can instead run `node native-host/cli.js`, which defaults to the pinned ID and registers both Chrome and Edge. Either way the host is copied into `~/.browser-organizer` (macOS/Linux) or `%LOCALAPPDATA%\BrowserOrganizer` (Windows), so the repo or bundle is safe to delete afterward. Non-technical users can grab the per-OS installer from the releases page and skip Node entirely; see [INSTALL.md](INSTALL.md).
 3. Open the side panel from the toolbar icon and click **Analyze my tabs & bookmarks**.
 
 ## How it works
