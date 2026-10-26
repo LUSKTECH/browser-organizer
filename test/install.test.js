@@ -302,3 +302,18 @@ test('resolveCliPath on win32 prefers .exe, then .com, over the extensionless sh
   assert.equal(resolveCliPath('win32', where('C:\\n\\claude\r\nC:\\n\\claude.cmd\r\n')), 'C:\\n\\claude');
   assert.equal(resolveCliPath('linux', where('/usr/bin/claude\n/opt/claude\n')), '/usr/bin/claude');
 });
+
+import { parseInstallArgs } from '../native-host/installer.js';
+
+test('parseInstallArgs accepts [browsers] [id], the swapped order, and defaults', () => {
+  const id = 'abcdefghijklmnopabcdefghijklmnop';
+  assert.deepEqual(parseInstallArgs(['chrome', id]), { browsers: ['chrome'], extensionId: id });
+  assert.deepEqual(parseInstallArgs([id, 'chrome,edge']), { browsers: ['chrome', 'edge'], extensionId: id });
+  assert.deepEqual(parseInstallArgs([id]), { browsers: ['chrome', 'edge'], extensionId: id });
+  assert.deepEqual(parseInstallArgs([]).browsers, ['chrome', 'edge']);
+});
+
+test('parseInstallArgs rejects a malformed extension id', () => {
+  assert.throws(() => parseInstallArgs(['chrome', 'not-an-id']), /Invalid extension id/);
+  assert.throws(() => parseInstallArgs(['chrome', 'A'.repeat(32)]), /Invalid extension id/);
+});

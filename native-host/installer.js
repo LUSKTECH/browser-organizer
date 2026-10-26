@@ -258,33 +258,21 @@ export function install({
 }
 
 // CLI entry (defaults extensionId to the pinned production id):
-//   node native-host/installer.js [<extensionId>] [chrome,edge]   → install
-//   node native-host/installer.js uninstall [chrome,edge]         → remove
-// import.meta.url is undefined inside the SEA bundle, where this file is imported
-// (not run as the entry) — guard so importing installer.js never throws there.
-if (import.meta.url && process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  if (process.argv[2] === 'uninstall') {
-    const browsers = (process.argv[3] || 'chrome,edge').split(',').filter(Boolean);
-    const removed = uninstall({ browsers });
-    console.log(removed.length ? 'Removed:\n' + removed.map((f) => '  ' + f).join('\n') : 'Nothing to remove.');
-    runRegistryCommands(removed._registryCommands);
-  } else {
-    // Support both `node installer.js [extensionId] [browsers]` and
-    // `node installer.js [browsers] [extensionId]` (matching cli.js)
-    const arg1 = process.argv[2];
-    const arg2 = process.argv[3];
-    let extensionId = PROD_EXTENSION_ID;
-    let browsers = (arg2 || 'chrome,edge').split(',').filter(Boolean);
-    if (arg1) {
-      if (/^[a-z]{32}$/.test(arg1)) {
-        extensionId = arg1;
-      } else {
-        browsers = arg1.split(',').filter(Boolean);
-        if (arg2) extensionId = arg2;
-      }
-    }
-    const files = install({ extensionId, browsers });
-    console.log('Wrote:\n' + files.map((f) => '  ' + f).join('\n'));
-    runRegistryCommands(files._registryCommands);
+const EXTENSION_ID_RE = /^[a-z]{32}$/;
+
+// Parses the install/repair positional args: `[browsers] [extensionId]` or the
+// swapped `[extensionId] [browsers]`. A malformed extension id is rejected
+// (it is baked into the host manifest's allowed_origins).
+export function parseInstallArgs(argv = []) {
+  const [a, b] = argv;
+  let browsersArg = a;
+  let extensionId = b;
+  if (a && EXTENSION_ID_RE.test(a)) { extensionId = a; browsersArg = b; }
+  if (extensionId !== undefined && !EXTENSION_ID_RE.test(extensionId)) {
+    throw new Error(`Invalid extension id: ${JSON.stringify(extensionId)} (expected 32 lowercase letters)`);
   }
+  return {
+    browsers: (browsersArg || 'chrome,edge').split(',').filter(Boolean),
+    extensionId: extensionId || PROD_EXTENSION_ID,
+  };
 }

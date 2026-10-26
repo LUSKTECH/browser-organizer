@@ -24,7 +24,7 @@ the repo/bundle/npx-cache can be deleted afterward. The extension ID is baked
    (extension + native-host + INSTALL.md/README.md/PRIVACY.md/security-model.md).
 2. **(you)** Tag `v<version>` and attach the self-host zip to a GitHub Release; paste
    `CHANGELOG.md` notes.
-3. Users follow `INSTALL.md`: load unpacked → `node native-host/installer.js` (or the npx
+3. Users follow `INSTALL.md`: load unpacked → `node native-host/cli.js` (or the npx
    command from Path C) → pick a backend.
 
 ## Path B — npm helper package (ready now; for technical users)

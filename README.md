@@ -63,7 +63,7 @@ One adapter covers OpenAI, OpenRouter, Groq, Together, and local servers like LM
    ```
    npx @lusktech/browser-organizer-host
    ```
-   From a clone you can instead run `node native-host/installer.js`, which defaults to the pinned ID and registers both Chrome and Edge. Either way the host is copied into `~/.browser-organizer` (macOS/Linux) or `%LOCALAPPDATA%\BrowserOrganizer` (Windows), so the repo or bundle is safe to delete afterward. Non-technical users can grab the per-OS installer from the releases page and skip Node entirely; see [INSTALL.md](INSTALL.md).
+   From a clone you can instead run `node native-host/cli.js`, which defaults to the pinned ID and registers both Chrome and Edge. Either way the host is copied into `~/.browser-organizer` (macOS/Linux) or `%LOCALAPPDATA%\BrowserOrganizer` (Windows), so the repo or bundle is safe to delete afterward. Non-technical users can grab the per-OS installer from the releases page and skip Node entirely; see [INSTALL.md](INSTALL.md).
 3. Open the side panel from the toolbar icon and click **Analyze my tabs & bookmarks**.
 
 ## How it works
