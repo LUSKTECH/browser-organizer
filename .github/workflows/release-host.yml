@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false   # don't leave the token in .git/config for later steps
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - run: npm ci
 
@@ -77,6 +77,18 @@ jobs:
       # 1) Compile the native host into a single self-contained executable.
       - name: Build SEA binary
         run: npm run build:sea
+
+      # Execute the produced binary so a broken SEA blob fails the build, not a user.
+      # The host has no version flag; with no install/uninstall flag it runs the
+      # native-messaging loop, which exits 0 as soon as stdin closes.
+      - name: Smoke-test SEA binary
+        shell: bash
+        run: |
+          set -eu
+          bin=dist/host/browser-organizer-host
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          "$bin" --smoke-test < /dev/null
+          echo "host binary ran and exited 0"
 
       # 1b) Sign the RAW host binary BEFORE it is embedded into the installers/pkg
       # (and before the raw-artifact copy). The executable the browser actually
@@ -98,6 +110,30 @@ jobs:
           & signtool sign /fd sha256 /f cert.pfx /p $Env:WINDOWS_CERT_PASSWORD `
             /tr http://timestamp.digicert.com /td sha256 dist\host\browser-organizer-host.exe
           Remove-Item cert.pfx
+
+      - name: Import macOS signing certificate
+        if: matrix.name == 'macos' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -eu
+          if [ -z "${MACOS_CERT_P12_BASE64:-}" ] || [ -z "${MACOS_CERT_PASSWORD:-}" ]; then
+            echo "::warning::MACOS_CERT_P12_BASE64/MACOS_CERT_PASSWORD not set — no certificate imported; macOS signing steps will fail or skip."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/browser-organizer-signing.keychain-db"
+          KEYCHAIN_PW="$(uuidgen)"
+          printf '%s' "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          security default-keychain -d user -s "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "BO_SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       - name: Codesign host binary (macOS)
         if: matrix.name == 'macos' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
@@ -193,7 +229,6 @@ jobs:
         if: matrix.name == 'macos' && startsWith(github.ref, 'refs/tags/host-v') && github.repository == 'LUSKTECH/browser-organizer'
         env:
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-          MACOS_NOTARY_PROFILE: ${{ secrets.MACOS_NOTARY_PROFILE }}
           MACOS_NOTARY_API_KEY: ${{ secrets.MACOS_NOTARY_API_KEY }}
           MACOS_NOTARY_API_KEY_ID: ${{ secrets.MACOS_NOTARY_API_KEY_ID }}
           MACOS_NOTARY_API_ISSUER: ${{ secrets.MACOS_NOTARY_API_ISSUER }}
@@ -226,13 +261,13 @@ jobs:
           arch=$(uname -m)
           case "$arch" in x86_64|amd64) arch=x64;; arm64|aarch64) arch=arm64;; esac
           # Raw SEA binary → versioned, os/arch-tagged copy for direct download.
-          [ -f host/browser-organizer-host.exe ] && cp host/browser-organizer-host.exe "browser-organizer-host-${VER}-${OS}-${arch}.exe" || true
-          [ -f host/browser-organizer-host ] && cp host/browser-organizer-host "browser-organizer-host-${VER}-${OS}-${arch}" || true
+          if [ -f host/browser-organizer-host.exe ]; then cp host/browser-organizer-host.exe "browser-organizer-host-${VER}-${OS}-${arch}.exe"; fi
+          if [ -f host/browser-organizer-host ]; then cp host/browser-organizer-host "browser-organizer-host-${VER}-${OS}-${arch}"; fi
           # Installers.
-          [ -f BrowserOrganizerSetup.exe ] && mv BrowserOrganizerSetup.exe "browser-organizer-${VER}-${OS}-${arch}-setup.exe" || true
-          [ -f BrowserOrganizer.msi ] && mv BrowserOrganizer.msi "browser-organizer-${VER}-${OS}-${arch}.msi" || true
-          [ -f BrowserOrganizer.pkg ] && mv BrowserOrganizer.pkg "browser-organizer-${VER}-${OS}-${arch}.pkg" || true
-          [ -f install.sh ] && mv install.sh "browser-organizer-host-${VER}-linux-install.sh" || true
+          if [ -f BrowserOrganizerSetup.exe ]; then mv BrowserOrganizerSetup.exe "browser-organizer-${VER}-${OS}-${arch}-setup.exe"; fi
+          if [ -f BrowserOrganizer.msi ]; then mv BrowserOrganizer.msi "browser-organizer-${VER}-${OS}-${arch}.msi"; fi
+          if [ -f BrowserOrganizer.pkg ]; then mv BrowserOrganizer.pkg "browser-organizer-${VER}-${OS}-${arch}.pkg"; fi
+          if [ -f install.sh ]; then mv install.sh "browser-organizer-host-${VER}-linux-install.sh"; fi
           ls -la
 
       # 4) Checksums for every shipped artifact (portable: sha256sum or shasum).
@@ -242,8 +277,16 @@ jobs:
           cd dist
           sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
           files=$(find . -maxdepth 1 -type f ! -name 'SHA256SUMS*' | sed 's|^\./||' | sort)
-          [ -n "$files" ] && sha $files > "SHA256SUMS-${{ matrix.name }}.txt" || true
-          cat "SHA256SUMS-${{ matrix.name }}.txt" || true
+          if [ -z "$files" ]; then echo "no files to checksum" >&2; exit 1; fi
+          sha $files > "SHA256SUMS-${{ matrix.name }}.txt"
+          cat "SHA256SUMS-${{ matrix.name }}.txt"
+
+      - name: Delete macOS signing keychain
+        if: always() && matrix.name == 'macos'
+        run: |
+          if [ -n "${BO_SIGNING_KEYCHAIN:-}" ]; then
+            security delete-keychain "$BO_SIGNING_KEYCHAIN" || true
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -311,7 +354,7 @@ jobs:
       - name: Read the package version
         run: echo "VERSION=$(node -p "require('./native-host/package.json').version")" >> "$GITHUB_ENV"
       - name: Ensure npm CLI supports trusted publishing
-        run: npm install -g npm@^11.5.1 && npm --version
+        run: npm install -g npm@11.21.1 && npm --version
       - name: Publish to npm
         run: |
           if npm view "@lusktech/browser-organizer-host@$VERSION" version >/dev/null 2>&1; then
