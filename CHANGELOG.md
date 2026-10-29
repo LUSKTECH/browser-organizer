@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-29
+**First-run setup wizard and a large audit pass.** Update the host to 0.2.0 together with the extension (the audit's host fixes ship there; the extension itself still works with host 0.1.5 or newer).
+
+- **First-run setup wizard.** A fresh install opens a welcome tab that shows how to find the extension (pin it, open the panel, the `Ctrl+Shift+O` shortcut), detects the helper and which AI CLIs are installed, lets you choose a backend (CLI, Ollama, or an OpenAI-compatible API key), walks through its setup, and tests the connection (an automatic health check plus an opt-in "Test sign-in" that sends only "Reply with OK"). Skippable at every step; reopen it from the side panel's connect card ("Set up…") or Settings ("Run setup again"). Never opens on an update. No new permissions.
+- **Extension options link.** `chrome://extensions` / `edge://extensions` → Details now shows "Extension options", which opens the settings in a full tab.
+- `release-extension.yml` prints the Web Store API's response body when an upload or submit is rejected.
 
 **Audit fixes (2026-10-26).** A full review of the extension, host, installers, CI and docs. Highlights:
 - Apply-time safety: the domain whitelist is re-checked when you click Apply, not only when the plan was built; `moveBookmark` checks protection against where the bookmark is now and records the live origin for undo; a "skipped" folder removal no longer counts as applied or shows up in Undo history.
@@ -14,9 +19,6 @@
 - Installers and release: the portable Linux install script finds the versioned release binary; the Windows per-user uninstaller removes the shared manifest; the macOS signing job imports the certificate into a temporary keychain (new secrets `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`); the host is built on Node 24 and the SEA binary is executed once in CI; artifact renames and checksums fail loudly; INSTALL.md documents removing the macOS package and uses the released Windows file names.
 - Docs: PRIVACY.md now matches `chrome.storage.sync` behaviour; the README backend table matches the adapters; stale claims, counts and planning references removed throughout.
 
-- **First-run setup wizard.** A fresh install opens a welcome tab that shows how to find the extension (pin it, open the panel, the `Ctrl+Shift+O` shortcut), detects the helper and which AI CLIs are installed, lets you choose a backend (CLI, Ollama, or an OpenAI-compatible API key), walks through its setup, and tests the connection (an automatic health check plus an opt-in "Test sign-in" that sends only "Reply with OK"). Skippable at every step; reopen it from the side panel's connect card ("Set up…") or Settings ("Run setup again"). Never opens on an update. No new permissions and no host change.
-- **Extension options link.** `chrome://extensions` / `edge://extensions` → Details now shows "Extension options", which opens the settings in a full tab (`options_ui`, same page as the side panel, `#settings` expanded).
-- `release-extension.yml` now prints the Web Store API's response body when an upload or submit is rejected (the 400 on a pending submission was previously silent).
 
 ## 0.1.9 — 2026-10-12
 Chrome Web Store readiness: the extension now uses its Web Store ID, the host trusts it, and releases to the store and to npm are automated.
