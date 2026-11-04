@@ -316,7 +316,8 @@ async function handleCloseTabs(m) {
   // actually removed, so "Undo" can't re-create still-open tabs.
   const runId = uniqueId('run-');
   const wanted = new Set(m.tabIds || []);
-  const targets = (await chrome.tabs.query({})).filter((t) => wanted.has(t.id));
+  const skipPinned = (await getSettings()).ignorePinnedTabs !== false;
+  const targets = (await chrome.tabs.query({})).filter((t) => wanted.has(t.id) && !(skipPinned && t.pinned));
   if (!targets.length) return { ok: true, closed: 0 };
   try { await chrome.tabs.remove(targets.map((t) => t.id)); } catch { /* a tab vanished mid-call; the re-query below tells which actually closed */ }
   const stillOpen = new Set((await chrome.tabs.query({})).map((t) => t.id));

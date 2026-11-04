@@ -67,3 +67,10 @@ test('setSettings deep merges advancedCli.extraArgs across multiple adapter upda
   assert.equal(s.advancedCli.extraArgs.claude, '--temp 0');
   assert.equal(s.advancedCli.extraArgs.ollama, '--num-ctx 4096');
 });
+
+test('ignorePinnedTabs defaults to on and can be switched off', async () => {
+  assert.equal(DEFAULTS.ignorePinnedTabs, true);
+  assert.equal((await getSettings()).ignorePinnedTabs, true);
+  await setSettings({ ignorePinnedTabs: false });
+  assert.equal((await getSettings()).ignorePinnedTabs, false);
+});

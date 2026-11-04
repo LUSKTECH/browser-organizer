@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- **Leave pinned tabs alone** (Settings → Protected Items, on by default). Pinned tabs are no longer sent to the AI for grouping or bookmark suggestions, a grouping plan that includes a tab pinned since the scan is refused at Apply (Chrome would move it out of the pinned strip), and the Open tabs list shows pinned tabs locked, skips them for "Select all", and the worker won't bulk-close them. Closing a pinned tab through a plan was already always refused. Turn the setting off to restore the old behaviour.
+
 ## 0.2.0 — 2026-10-29
 **First-run setup wizard and a large audit pass.** Update the host to 0.2.0 together with the extension (the audit's host fixes ship there; the extension itself still works with host 0.1.5 or newer).
 

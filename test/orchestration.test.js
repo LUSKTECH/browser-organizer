@@ -435,3 +435,33 @@ test('buildPlan surfaces the offline warning from a dead-link scan', async () =>
   await buildPlan({ settings, nativeClient: null, chromeApi, now: 1, onWarning: (w) => warnings.push(w), fetchFn });
   assert.ok(warnings.some((w) => /offline/i.test(w)), JSON.stringify(warnings));
 });
+
+function pinnedChrome() {
+  const tabs = [
+    { id: 1, url: 'https://pinned.example/a', title: 'Pinned mail', windowId: 1, index: 0, pinned: true, groupId: -1 },
+    { id: 2, url: 'https://news.example/b', title: 'News', windowId: 1, index: 1, pinned: false, groupId: -1 },
+  ];
+  return {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    tabs: { async query() { return tabs; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+}
+
+async function tabsSentToTheModel(settingsPatch) {
+  const sent = [];
+  const nativeClient = { request: async (msg) => { sent.push(...(msg.payload.tabs || [])); return { groups: [], important: [], close: [] }; } };
+  const settings = { adapter: 'claude', enabledFeatures: { groupTabs: true, importantBookmarks: true, staleTabs: false, cleanBookmarks: false, dupeTabs: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200, ...settingsPatch };
+  await buildPlan({ settings, nativeClient, chromeApi: pinnedChrome(), now: 1 });
+  return [...new Set(sent.map((t) => t.tabId))].sort();
+}
+
+test('buildPlan keeps pinned tabs away from grouping and bookmark suggestions when ignorePinnedTabs is on', async () => {
+  assert.deepEqual(await tabsSentToTheModel({ ignorePinnedTabs: true }), [2]);
+  assert.deepEqual(await tabsSentToTheModel({}), [2], 'a missing key means on, matching the default');
+});
+
+test('buildPlan includes pinned tabs when ignorePinnedTabs is off', async () => {
+  assert.deepEqual(await tabsSentToTheModel({ ignorePinnedTabs: false }), [1, 2]);
+});

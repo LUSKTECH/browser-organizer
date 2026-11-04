@@ -3,10 +3,13 @@
 // after a close so the just-closed tabs are one click from being reopened.
 import { $, request, setStatus, currentScopeWindowId } from './dom.js';
 import { filterTabs } from './viewmodel.js';
+import { getSettings } from '../lib/storage.js';
 import { showUndoToast } from './undo.js';
 
 let openTabs = [];
 let tabSelection = new Set();
+let lockPinned = true; // mirrors the "Leave pinned tabs alone" setting (refreshed each time the list loads)
+const isLocked = (t) => lockPinned && t.pinned;
 
 function drawTabs() {
   const shown = filterTabs(openTabs, $('tabFilter').value);
@@ -18,6 +21,7 @@ function drawTabs() {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = tabSelection.has(t.id);
+    if (isLocked(t)) { cb.disabled = true; cb.checked = false; cb.title = 'Pinned (change in Settings: Leave pinned tabs alone)'; }
     cb.addEventListener('change', () => { if (cb.checked) tabSelection.add(t.id); else tabSelection.delete(t.id); });
     const span = document.createElement('span');
     span.textContent = `${t.pinned ? '📌 ' : ''}${t.title || t.url}`;
@@ -48,7 +52,8 @@ async function renderTabs() {
     return;
   }
   openTabs = res.tabs || [];
-  tabSelection = new Set([...tabSelection].filter((id) => openTabs.some((t) => t.id === id)));
+  lockPinned = (await getSettings()).ignorePinnedTabs !== false;
+  tabSelection = new Set([...tabSelection].filter((id) => openTabs.some((t) => t.id === id && !isLocked(t))));
   drawTabs();
 }
 
@@ -57,7 +62,7 @@ export function initTabsView() {
   $('tabFilter').addEventListener('input', drawTabs);
   $('selectAllTabs')?.addEventListener('click', () => {
     const shown = filterTabs(openTabs, $('tabFilter').value);
-    for (const t of shown) tabSelection.add(t.id);
+    for (const t of shown) if (!isLocked(t)) tabSelection.add(t.id);
     drawTabs();
   });
   $('selectNoneTabs')?.addEventListener('click', () => {
