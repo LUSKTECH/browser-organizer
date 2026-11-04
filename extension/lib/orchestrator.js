@@ -89,7 +89,9 @@ export async function buildPlan(deps) {
     await chromeApi.storage.local.set({ tabActivity: next });
     return next;
   });
-  const tabs = await collectTabs(chromeApi, activity, now, deps.windowId ?? null);
+  const allTabs = await collectTabs(chromeApi, activity, now, deps.windowId ?? null);
+  // "Leave pinned tabs alone" (default on): pinned tabs never reach any phase or the AI.
+  const tabs = settings.ignorePinnedTabs === false ? allTabs : allTabs.filter((t) => !t.pinned);
   const byId = indexById(tabs);
   const items = [];
   const f = { ...settings.enabledFeatures, ...(deps.features || {}) };

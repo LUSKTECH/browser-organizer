@@ -55,3 +55,30 @@ test('moveBookmark undo record uses the live parent/index; vanished bookmark thr
   chrome.bookmarks.get = async () => { throw new Error('gone'); };
   await assert.rejects(() => applyItem(item, { chrome }), StaleTabError);
 });
+
+// "Leave pinned tabs alone": grouping would pull a tab out of the pinned strip.
+function chromeWithPinned(pinnedIds) {
+  const grouped = [];
+  return {
+    _grouped: grouped,
+    tabs: {
+      async get(id) { return { id, url: 'https://a.com', pinned: pinnedIds.includes(id) }; },
+      async group({ tabIds }) { grouped.push(tabIds); return 7; },
+    },
+    tabGroups: { async update() {} },
+  };
+}
+const groupItem = { itemId: 'g1', action: 'groupTabs', data: { tabIds: [1, 2], groupName: 'Dev', color: 'blue' } };
+
+test('groupTabs refuses a tab that is pinned now when ignorePinnedTabs is on', async () => {
+  const c = chromeWithPinned([2]);
+  await assert.rejects(() => applyItem(groupItem, { chrome: c, settings: { ignorePinnedTabs: true } }), ProtectedTargetError);
+  assert.deepEqual(c._grouped, []);
+});
+
+test('groupTabs treats a missing ignorePinnedTabs as on, and allows pinned tabs only when it is off', async () => {
+  await assert.rejects(() => applyItem(groupItem, { chrome: chromeWithPinned([1]), settings: {} }), ProtectedTargetError);
+  const c = chromeWithPinned([1]);
+  await applyItem(groupItem, { chrome: c, settings: { ignorePinnedTabs: false } });
+  assert.deepEqual(c._grouped, [[1, 2]]);
+});

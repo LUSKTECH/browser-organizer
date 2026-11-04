@@ -84,6 +84,11 @@ async function applyItemInner(item, c, deps = {}) {
     }
     case 'groupTabs': {
       const { tabIds, groupName, color } = item.data;
+      // Grouping moves a tab out of the pinned strip. Re-check live: it may have been pinned since the plan.
+      if (deps.settings && deps.settings.ignorePinnedTabs !== false) {
+        const live = await Promise.all(tabIds.map((id) => c.tabs.get(id).catch(() => null)));
+        if (live.some((t) => t && t.pinned)) throw new ProtectedTargetError('Grouping includes a pinned tab ("Leave pinned tabs alone" is on)');
+      }
       const groupId = await c.tabs.group({ tabIds });
       await c.tabGroups.update(groupId, { title: groupName, color: COLORS.has(color) ? color : 'grey' });
       return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds } };
