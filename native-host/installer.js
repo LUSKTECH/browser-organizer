@@ -277,15 +277,20 @@ const EXTENSION_ID_RE = /^[a-z]{32}$/;
 // swapped `[extensionId] [browsers]`. A malformed extension id is rejected
 // (it is baked into the host manifest's allowed_origins).
 export function parseInstallArgs(argv = []) {
-  const [a, b] = argv;
-  let browsersArg = a;
-  let extensionId = b;
-  if (a && EXTENSION_ID_RE.test(a)) { extensionId = a; browsersArg = b; }
-  if (extensionId !== undefined && !EXTENSION_ID_RE.test(extensionId)) {
-    throw new Error(`Invalid extension id: ${JSON.stringify(extensionId)} (expected 32 lowercase letters)`);
+  // Windows shells reshape `chrome,edge`: PowerShell joins it into the single argument
+  // "chrome edge" and cmd.exe (via npx.cmd) splits it into two. So split every argument
+  // on commas and whitespace and sort the tokens by what they are.
+  const tokens = argv.flatMap((arg) => String(arg).split(/[\s,]+/)).filter(Boolean);
+  const known = new Set([...Object.keys(WIN_REG_ROOTS), ...Object.values(DIRS).flatMap((d) => Object.keys(d))]);
+  const browsers = tokens.filter((t) => known.has(t));
+  const rest = tokens.filter((t) => !known.has(t));
+  const ids = rest.filter((t) => EXTENSION_ID_RE.test(t));
+  const bad = rest.filter((t) => !EXTENSION_ID_RE.test(t));
+  if (bad.length || ids.length > 1) {
+    throw new Error(`Invalid extension id or unknown browser: ${JSON.stringify(bad[0] ?? ids[1])} (an extension id is 32 lowercase letters; browsers: ${[...known].join(', ')})`);
   }
   return {
-    browsers: (browsersArg || 'chrome,edge').split(',').filter(Boolean),
-    extensionId: extensionId || PROD_EXTENSION_ID,
+    browsers: browsers.length ? browsers : ['chrome', 'edge'],
+    extensionId: ids[0] || PROD_EXTENSION_ID,
   };
 }

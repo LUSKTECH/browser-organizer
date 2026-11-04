@@ -313,6 +313,21 @@ test('parseInstallArgs accepts [browsers] [id], the swapped order, and defaults'
   assert.deepEqual(parseInstallArgs([]).browsers, ['chrome', 'edge']);
 });
 
+test('parseInstallArgs survives how Windows shells pass `chrome,edge`', () => {
+  const id = 'abcdefghijklmnopabcdefghijklmnop';
+  // PowerShell: the comma list becomes ONE argument joined with a space.
+  assert.deepEqual(parseInstallArgs(['chrome edge', id]), { browsers: ['chrome', 'edge'], extensionId: id });
+  // cmd.exe via npx.cmd: the comma is an argument separator.
+  assert.deepEqual(parseInstallArgs(['chrome', 'edge', id]), { browsers: ['chrome', 'edge'], extensionId: id });
+  assert.deepEqual(parseInstallArgs([id, 'chrome', 'edge']), { browsers: ['chrome', 'edge'], extensionId: id });
+});
+
+test('parseInstallArgs rejects an unknown browser and a second extension id', () => {
+  const id = 'abcdefghijklmnopabcdefghijklmnop';
+  assert.throws(() => parseInstallArgs(['chrom', id]), /Invalid extension id or unknown browser/);
+  assert.throws(() => parseInstallArgs([id, 'qrstuvwxyzabcdefqrstuvwxyzabcdef']), /Invalid extension id/);
+});
+
 test('parseInstallArgs rejects a malformed extension id', () => {
   assert.throws(() => parseInstallArgs(['chrome', 'not-an-id']), /Invalid extension id/);
   assert.throws(() => parseInstallArgs(['chrome', 'A'.repeat(32)]), /Invalid extension id/);
