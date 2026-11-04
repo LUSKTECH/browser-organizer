@@ -276,12 +276,13 @@ const EXTENSION_ID_RE = /^[a-z]{32}$/;
 // Parses the install/repair positional args: `[browsers] [extensionId]` or the
 // swapped `[extensionId] [browsers]`. A malformed extension id is rejected
 // (it is baked into the host manifest's allowed_origins).
-export function parseInstallArgs(argv = []) {
+export function parseInstallArgs(argv = [], platform = process.platform) {
   // Windows shells reshape `chrome,edge`: PowerShell joins it into the single argument
   // "chrome edge" and cmd.exe (via npx.cmd) splits it into two. So split every argument
   // on commas and whitespace and sort the tokens by what they are.
   const tokens = argv.flatMap((arg) => String(arg).split(/[\s,]+/)).filter(Boolean);
-  const known = new Set([...Object.keys(WIN_REG_ROOTS), ...Object.values(DIRS).flatMap((d) => Object.keys(d))]);
+  // Only this platform's browsers, so an unsupported one is rejected before any file is written.
+  const known = new Set(Object.keys(platform === 'win32' ? WIN_REG_ROOTS : DIRS[platform] || {}));
   const browsers = tokens.filter((t) => known.has(t));
   const rest = tokens.filter((t) => !known.has(t));
   const ids = rest.filter((t) => EXTENSION_ID_RE.test(t));

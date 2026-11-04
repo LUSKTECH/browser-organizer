@@ -328,6 +328,13 @@ test('parseInstallArgs rejects an unknown browser and a second extension id', ()
   assert.throws(() => parseInstallArgs([id, 'qrstuvwxyzabcdefqrstuvwxyzabcdef']), /Invalid extension id/);
 });
 
+test('parseInstallArgs only accepts browsers the platform supports', () => {
+  const id = 'abcdefghijklmnopabcdefghijklmnop';
+  assert.deepEqual(parseInstallArgs(['chrome-for-testing', id], 'linux').browsers, ['chrome-for-testing']);
+  assert.throws(() => parseInstallArgs(['chrome-for-testing', id], 'win32'), /unknown browser/);
+  assert.deepEqual(parseInstallArgs([id], 'win32').browsers, ['chrome', 'edge']);
+});
+
 test('parseInstallArgs rejects a malformed extension id', () => {
   assert.throws(() => parseInstallArgs(['chrome', 'not-an-id']), /Invalid extension id/);
   assert.throws(() => parseInstallArgs(['chrome', 'A'.repeat(32)]), /Invalid extension id/);
