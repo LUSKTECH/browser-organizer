@@ -289,10 +289,10 @@ async function ignoreItem(item) {
   setStatus('Won’t suggest that again.');
 }
 
-async function startScan(features) {
+async function startScan(features, label = 'Analyzing… (running your local AI CLI)') {
   ensureScanPort();
   $('cancelRun').hidden = false;
-  startScanClock('Analyzing… (running your local AI CLI)');
+  startScanClock(label);
   const windowId = await currentScopeWindowId();
   let res;
   try {
@@ -356,13 +356,17 @@ async function applyItems(itemIds) {
 }
 
 // Per-action run buttons: run just one feature without touching settings.
-const ALL_FEATURES = ['groupTabs', 'staleTabs', 'importantBookmarks', 'cleanBookmarks', 'organizeBookmarks'];
+const ALL_FEATURES = ['groupTabs', 'staleTabs', 'importantBookmarks', 'cleanBookmarks', 'organizeBookmarks', 'dupeTabs', 'dupeBookmarks'];
+
+// Duplicate open tabs and duplicate bookmarks only: deterministic, so it needs no AI backend.
+const DUPLICATES_ONLY = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === 'dupeTabs' || f === 'dupeBookmarks']));
 
 // Wire every control that reads or mutates the plan, load the panel-local
 // group-by-status pref, then paint the stored plan. Called once from the bootstrap.
 export async function initPlanView() {
   $('run').addEventListener('click', () => startScan());
   $('cancelRun').addEventListener('click', () => send({ cmd: 'cancel' }));
+  $('removeDupes').addEventListener('click', () => startScan(DUPLICATES_ONLY, 'Looking for duplicates…'));
   for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
     btn.addEventListener('click', () => {
       const only = btn.dataset.feature;

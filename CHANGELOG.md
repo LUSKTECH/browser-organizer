@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Remove duplicates button** ("Run one" row). Finds duplicate open tabs and duplicate bookmarks in one step, with no AI involved, so it works even when no helper or backend is connected. It goes through the normal review list and undo like any other run. "Same page" means the same URL ignoring `#fragment`, letter case and a trailing slash; pages that differ in their query string are kept. The other "Run one" buttons no longer also report duplicate tabs.
 - **Leave pinned tabs alone** (Settings → Protected Items, on by default). Pinned tabs are no longer sent to the AI for grouping or bookmark suggestions, a grouping plan that includes a tab pinned since the scan is refused at Apply (Chrome would move it out of the pinned strip), and the Open tabs list shows pinned tabs locked, skips them for "Select all", and the worker won't bulk-close them. Closing a pinned tab through a plan was already always refused. Turn the setting off to restore the old behaviour.
 
 ## 0.2.0 — 2026-10-29
