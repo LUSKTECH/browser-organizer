@@ -6,6 +6,7 @@ import { initTabsView } from './tabs-view.js';
 import { initSettingsView, loadSettings } from './settings-view.js';
 import { initSessionsView, renderSessions } from './sessions-view.js';
 import { initMutedView } from './muted-view.js';
+import { initBackupView } from './backup-view.js';
 import { initHealthView, checkHealth } from './health-view.js';
 import { initUndoHistory } from './undo.js';
 
@@ -26,6 +27,7 @@ function applyI18n() {
   initSettingsView();
   initSessionsView();
   initMutedView();
+  initBackupView();
   initHealthView();
   initUndoHistory();
   // "Extension options" (edge://extensions → Details) opens this page in a tab with #settings.

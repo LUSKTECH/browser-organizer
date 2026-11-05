@@ -12,6 +12,7 @@ import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
 import { getSecret } from '../lib/secret-store.js';
 import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
+import { needsBackup, buildSnapshot, saveSnapshot, listSnapshots, getSnapshot, pruneSnapshots, restoreSnapshot, toNetscapeHtml, snapshotLabel } from '../lib/bookmark-backup.js';
 
 const errText = (err) => String((err && err.message) || err);
 
@@ -135,6 +136,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   const settings = await getSettings();
   if (alarm.name === ALARM_PRUNE) {
     await pruneUndo(Date.now(), settings.undoRetentionDays);
+    await pruneSnapshots();
     return;
   }
   if (alarm.name === ALARM_SCAN && settings.automationMode === 'auto') {
@@ -194,6 +196,7 @@ function runScan(deps = {}) {
       if (autoApply.length) {
         const runId = uniqueId('run-');
         const { folders, rootIds, barId, otherId } = await collectTree(chrome);
+        await backupBeforeApply(autoApply);
         const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId, otherId }), recordUndo });
         await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
       } else if (needsReview.length && deps.background) {
@@ -246,6 +249,19 @@ async function notify(message) {
   try {
     await chrome.notifications.create({ type: 'basic', iconUrl: await notificationIcon(), title: 'Browser Organizer', message });
   } catch { /* notifications are best-effort */ }
+}
+
+// Snapshot the bookmark tree before a batch that deletes or rearranges bookmarks. A failed backup
+// is reported, never fatal: the user still gets the run they asked for (and per-run undo).
+async function backupBeforeApply(items) {
+  if (!needsBackup(items)) return { taken: false };
+  try {
+    await saveSnapshot(buildSnapshot(await chrome.bookmarks.getTree()));
+    return { taken: true };
+  } catch (err) {
+    console.warn('[organizer] bookmark backup failed:', err);
+    return { taken: false, error: errText(err) };
+  }
 }
 
 // ---- Message handlers (one function per command; dispatched by the map below) ----
@@ -353,10 +369,11 @@ async function handleApply(m) {
     // blocks a now-stale moveBookmark/removeFolder item (see executor.js).
     const settings = await getSettings();
     const { folders, rootIds, barId, otherId } = await collectTree(chrome);
+    const backup = await backupBeforeApply(chosen);
     const res = await applyItems(chosen, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId, otherId }), recordUndo });
     const remaining = currentPlan.filter((i) => !res.applied.includes(i.itemId));
     await chrome.storage.local.set({ currentPlan: remaining });
-    return { ok: true, ...res };
+    return { ok: true, ...res, backupError: backup.error };
   });
 }
 
@@ -479,7 +496,30 @@ async function handleTestPrompt(m) {
   } finally { client.disconnect(); }
 }
 
+async function handleListBackups() {
+  return { ok: true, backups: await listSnapshots() };
+}
+
+// format: 'json' (the snapshot itself) or 'html' (Netscape bookmarks file) for the panel to download.
+async function handleGetBackup(m) {
+  const snap = await getSnapshot(m.id);
+  if (!snap) return { ok: false, error: 'Backup not found (it may have expired)' };
+  const text = m.format === 'html' ? toNetscapeHtml(snap) : JSON.stringify(snap);
+  return { ok: true, text, name: `browser-organizer-backup-${new Date(snap.ts).toISOString().slice(0, 10)}.${m.format === 'html' ? 'html' : 'json'}` };
+}
+
+async function handleRestoreBackup(m) {
+  const snap = await getSnapshot(m.id);
+  if (!snap) return { ok: false, error: 'Backup not found (it may have expired)' };
+  const { otherId } = await collectTree(chrome);
+  const created = await restoreSnapshot(snap, otherId);
+  return { ok: true, created, label: snapshotLabel(snap) };
+}
+
 const HANDLERS = {
+  listBackups: handleListBackups,
+  getBackup: handleGetBackup,
+  restoreBackup: handleRestoreBackup,
   probe: handleProbe,
   testPrompt: handleTestPrompt,
   run: handleRun,

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Automatic bookmark backups.** Before any run that deletes or moves bookmarks (or removes an empty folder), a snapshot of the whole bookmark tree is saved on this device: the last 3, kept 30 days. New "Bookmark backups" section in the panel: download a backup as JSON or as a `bookmarks.html` file that Chrome, Edge, Firefox and Safari can import, or restore it. Restore adds a new "Restored <date>" folder to Other bookmarks and never changes or removes what you have now. A backup that can't be saved is reported but doesn't block the run. Per-run undo is unchanged. No new permissions (downloads use a plain link).
 - **Leave pinned tabs alone** (Settings → Protected Items, on by default). Pinned tabs are no longer sent to the AI for grouping or bookmark suggestions, a grouping plan that includes a tab pinned since the scan is refused at Apply (Chrome would move it out of the pinned strip), and the Open tabs list shows pinned tabs locked, skips them for "Select all", and the worker won't bulk-close them. Closing a pinned tab through a plan was already always refused. Turn the setting off to restore the old behaviour.
 
 ## 0.2.0 — 2026-10-29
