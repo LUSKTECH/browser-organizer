@@ -243,6 +243,13 @@
       <button id="exportSessions">Export sessions (JSON)</button>
     </details>
 
+    <details id="backupPanel">
+      <summary>Bookmark backups</summary>
+      <p class="hint">Before any run that deletes or moves bookmarks, a copy of your whole bookmark tree is saved on this device (the last 3, kept 30 days). Restoring adds a new folder and never changes what you have now.</p>
+      <p id="backupEmpty" class="hint">No backups yet. One is taken automatically the next time a run changes your bookmarks.</p>
+      <ul id="backupList"></ul>
+    </details>
+
     <details id="mutedPanel">
       <summary data-i18n="mutedTitle">Muted &amp; learned</summary>
       <ul id="mutedList"></ul>

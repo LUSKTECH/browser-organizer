@@ -25,8 +25,9 @@ extension operator receives none of this data and operates no server that stores
   your other signed-in Chrome browsers the same way your bookmarks or browser preferences
   do. That data passes through Google's Chrome Sync infrastructure, not through us. With
   Sync off, or with Extensions excluded from it, it stays on-device. Tab-activity
-  timestamps, the undo log, and your API key (if you use the OpenAI-compatible API backend)
-  are kept in local storage only and are never synced anywhere. The key is **encrypted at
+  timestamps, the undo log, up to three automatic copies of your bookmark tree (taken before a
+  run that deletes or moves bookmarks, kept 30 days), and your API key (if you use the
+  OpenAI-compatible API backend) are kept in local storage only and are never synced anywhere. The key is **encrypted at
   rest** (AES-GCM). None of it is ever sent to the extension developer; we operate no server
   that stores it.
 - **What we never do:** sell data, run analytics, or transmit your data to the developer.

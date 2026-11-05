@@ -346,7 +346,7 @@ async function applyItems(itemIds) {
     plan = await fetchPlan();
     selection = new Set();
     renderPlan();
-    setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}`);
+    setStatus(`Applied ${res.applied.length}. ${res.failed.length ? res.failed.length + ' failed.' : ''}${res.backupError ? ' Backup could not be saved: ' + res.backupError : ''}`);
     await showUndoToast();
   } catch (err) {
     setStatus(`Error: ${err.message}`);
