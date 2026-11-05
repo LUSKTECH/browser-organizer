@@ -484,7 +484,8 @@ function dupeChrome() {
 }
 
 test('a duplicates-only run finds duplicate tabs and bookmarks without touching the AI or stale/dead checks', async () => {
-  const nativeClient = { request: async () => { throw new Error('the AI must not be called'); } };
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); throw new Error('the AI must not be called'); } };
   const settings = { adapter: 'claude', enabledFeatures: {}, staleTabDays: 14, staleBookmarkDays: 1, deadLinkBatchSize: 200, whitelist: [], protectedFolders: [] };
   const items = await buildPlan({
     settings, nativeClient, chromeApi: dupeChrome(), now: Date.now() + 40 * 86400000, // far enough out that every bookmark would be "stale"
@@ -493,4 +494,22 @@ test('a duplicates-only run finds duplicate tabs and bookmarks without touching 
   assert.equal(items.filter((i) => i.action === 'closeTab').length, 1, 'one of the two matching tabs');
   assert.equal(items.filter((i) => i.action === 'deleteBookmark').length, 1, 'only the duplicate bookmark, no stale deletions');
   assert.ok(items.every((i) => i.data.category !== 'stale'));
+  // The phase catch blocks swallow errors, so count the requests instead of relying on the throw.
+  assert.equal(requests.length, 0, 'a duplicates-only run must never call the AI');
+});
+
+test('a duplicates-only run makes no history or fetch calls, even with dead-link scanning enabled and all URLs granted', async () => {
+  const chromeApi = dupeChrome();
+  let visitCalls = 0;
+  let fetchCalls = 0;
+  chromeApi.history.getVisits = async () => { visitCalls += 1; return []; };
+  chromeApi.permissions.contains = async () => true;
+  const fetchFn = async () => { fetchCalls += 1; throw new Error('no fetch expected'); };
+  await buildPlan({
+    settings: { adapter: 'claude', enabledFeatures: { deadLinkScan: true }, staleTabDays: 14, staleBookmarkDays: 1, deadLinkBatchSize: 200, whitelist: [], protectedFolders: [] },
+    nativeClient: null, chromeApi, fetchFn, now: Date.now() + 40 * 86400000,
+    features: { groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false, dupeTabs: true, dupeBookmarks: true, deadLinkScan: true },
+  });
+  assert.equal(visitCalls, 0, 'history must not be read for duplicates-only runs');
+  assert.equal(fetchCalls, 0, 'dead links must not be fetched for duplicates-only runs');
 });

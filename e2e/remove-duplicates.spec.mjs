@@ -31,4 +31,6 @@ test('Remove duplicates proposes the duplicate tab and bookmark, and applying re
   const applied = await send(panel, { cmd: 'apply', itemIds: [...tabCloses, ...bmDeletes].map((i) => i.itemId) });
   expect(applied.applied).toHaveLength(2);
   await expect.poll(() => countTabsWithUrl(panel, dup)).toBe(1);
+  // The duplicate bookmark is really gone too: exactly one copy remains.
+  await expect.poll(() => panel.evaluate(async (u) => (await chrome.bookmarks.search({ url: u })).length, dup)).toBe(1);
 });
