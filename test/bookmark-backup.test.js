@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
 import {
   needsBackup, buildSnapshot, toTree, toNetscapeHtml, addToRing, saveSnapshot, listSnapshots, getSnapshot,
-  pruneSnapshots, restoreSnapshot, MAX_SNAPSHOTS, MAX_SNAPSHOT_BYTES,
+  pruneSnapshots, restoreSnapshot, stamp, MAX_SNAPSHOTS, MAX_SNAPSHOT_BYTES,
 } from '../extension/lib/bookmark-backup.js';
 
 beforeEach(() => installChromeMock());
@@ -79,9 +79,10 @@ test('restoreSnapshot rebuilds the tree in a new Restored folder and touches not
   const created = [];
   let n = 100;
   const chromeApi = { bookmarks: { async create(node) { const c = { id: String(n++), ...node }; created.push(c); return c; } } };
-  const count = await restoreSnapshot(buildSnapshot(tree(), Date.UTC(2026, 9, 1, 12, 30)), '2', chromeApi);
+  const count = await restoreSnapshot(buildSnapshot(tree(), new Date(2026, 9, 1, 12, 30).getTime()), '2', chromeApi);
   assert.equal(count, 3);
-  assert.equal(created[0].title, 'Restored 2026-10-01 12:30');
+  assert.equal(created[0].title, 'Restored 2026-10-01 12:30', 'local time, whatever the machine time zone');
+  assert.match(created[0].title, /^Restored \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   assert.equal(created[0].parentId, '2');
   const bar = created.find((c) => c.title === 'Bookmarks bar');
   assert.equal(bar.parentId, created[0].id);
@@ -120,4 +121,17 @@ test('a failed restore removes the half-built folder instead of leaving it to be
   } };
   await assert.rejects(restoreSnapshot(buildSnapshot(tree(), 1), '2', chromeApi), /quota/);
   assert.deepEqual(removed, ['id1'], 'the Restored holder folder is removed');
+});
+
+test('restoreSnapshot rejects a snapshot without a valid date before creating anything', async () => {
+  const created = [];
+  const chromeApi = { bookmarks: { async create(node) { created.push(node); return { id: 'x', ...node }; } } };
+  await assert.rejects(restoreSnapshot({ ...buildSnapshot(tree(), 1), ts: undefined }, '2', chromeApi), /no valid date/);
+  assert.deepEqual(created, []);
+});
+
+test('stamp pads the year to four digits', () => {
+  assert.equal(stamp(new Date(2026, 0, 5, 9, 7).getTime()), '2026-01-05 09:07');
+  const old = new Date(2000, 0, 1, 0, 0); old.setFullYear(100);
+  assert.match(stamp(old.getTime()), /^0100-01-01 00:00$/);
 });

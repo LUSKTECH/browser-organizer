@@ -196,9 +196,9 @@ function runScan(deps = {}) {
       if (autoApply.length) {
         const runId = uniqueId('run-');
         const { folders, rootIds, barId, otherId } = await collectTree(chrome);
-        await backupBeforeApply(autoApply);
+        const backup = await backupBeforeApply(autoApply);
         const res = await applyItems(autoApply, { runId, applyItem: (i) => applyItem(i, { runId, settings, folders, rootIds, barId, otherId }), recordUndo });
-        await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.`);
+        await notify(`Applied ${res.applied.length} changes (${res.failed.length} failed). Undo available.${backup.error ? ` Bookmark backup could not be saved: ${backup.error}` : ''}`);
       } else if (needsReview.length && deps.background) {
         // Only notify for background/scheduled scans; a foreground run already shows the panel.
         await notify(digestText(needsReview));

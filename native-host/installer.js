@@ -283,7 +283,7 @@ export function parseInstallArgs(argv = [], platform = process.platform) {
   const tokens = argv.flatMap((arg) => String(arg).split(/[\s,]+/)).filter(Boolean);
   // Only this platform's browsers, so an unsupported one is rejected before any file is written.
   const known = new Set(Object.keys(platform === 'win32' ? WIN_REG_ROOTS : DIRS[platform] || {}));
-  const browsers = tokens.filter((t) => known.has(t));
+  const browsers = [...new Set(tokens.filter((t) => known.has(t)))];
   const rest = tokens.filter((t) => !known.has(t));
   const ids = rest.filter((t) => EXTENSION_ID_RE.test(t));
   const bad = rest.filter((t) => !EXTENSION_ID_RE.test(t));
