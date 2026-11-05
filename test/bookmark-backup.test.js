@@ -89,3 +89,35 @@ test('restoreSnapshot rebuilds the tree in a new Restored folder and touches not
   assert.equal(mdn.parentId, created.find((c) => c.title === 'Dev').id);
   assert.ok(created.every((c) => c.parentId !== undefined));
 });
+
+test('addToRing measures encoded bytes, so non-ASCII titles count for their real size', () => {
+  const list = [{ id: 'old', ts: 1, count: 0, nodes: [] }];
+  // ~700k characters of 3-byte text is ~2.1 MB encoded but only ~0.7M UTF-16 units.
+  const wide = { id: 'wide', ts: 2, count: 0, nodes: [{ id: 'x', parentId: '0', index: 0, title: '日'.repeat(700_000) }] };
+  assert.deepEqual(addToRing(list, wide).map((s) => s.id), ['wide']);
+});
+
+test('saveSnapshot refuses to eat the storage headroom the undo log needs', async () => {
+  const stored = {};
+  const mk = (used) => ({
+    QUOTA_BYTES: 10_000_000,
+    async get(k) { return { [k]: stored[k] }; },
+    async set(o) { Object.assign(stored, o); },
+    async getBytesInUse() { return used; },
+  });
+  await assert.rejects(saveSnapshot(buildSnapshot(tree(), 1), mk(9_500_000)), /not enough free browser storage/);
+  assert.equal(stored.bookmarkSnapshots, undefined);
+  await saveSnapshot(buildSnapshot(tree(), 2), mk(1_000));
+  assert.equal(stored.bookmarkSnapshots.length, 1);
+});
+
+test('a failed restore removes the half-built folder instead of leaving it to be duplicated by a retry', async () => {
+  const removed = [];
+  let n = 0;
+  const chromeApi = { bookmarks: {
+    async create(node) { n += 1; if (n === 4) throw new Error('quota'); return { id: `id${n}`, ...node }; },
+    async removeTree(id) { removed.push(id); },
+  } };
+  await assert.rejects(restoreSnapshot(buildSnapshot(tree(), 1), '2', chromeApi), /quota/);
+  assert.deepEqual(removed, ['id1'], 'the Restored holder folder is removed');
+});

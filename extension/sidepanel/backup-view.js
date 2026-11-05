@@ -58,4 +58,8 @@ export async function renderBackups() {
 
 export function initBackupView() {
   $('backupPanel').addEventListener('toggle', () => { if ($('backupPanel').open) renderBackups(); });
+  // A backup taken by an apply (or removed by the daily prune) while the section is open shows up without reopening it.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.bookmarkSnapshots && $('backupPanel').open) renderBackups();
+  });
 }

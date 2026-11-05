@@ -142,29 +142,33 @@ export async function buildPlan(deps) {
 
   step('Cleaning bookmarks');
   if (shouldCancel()) return finalizePlan(items, settings, folders);
-  if (f.cleanBookmarks) {
+  // Duplicates have their own switch (the "Remove duplicates" button); stale and dead-link
+  // detection stay under cleanBookmarks, which includes duplicates.
+  if (f.cleanBookmarks || f.dupeBookmarks) {
    try {
     const bookmarks = await collectBookmarks(chromeApi);
-    const visits = await getVisitsMap(bookmarks, chromeApi);
     const deletes = [];
     deletes.push(...findDuplicateBookmarks(bookmarks));
-    deletes.push(...findStaleBookmarks(bookmarks, visits, settings.staleBookmarkDays, now));
-    if (f.deadLinkScan && await hasAllUrls(chromeApi)) {
-      const httpBookmarks = bookmarks.filter((b) => /^https?:/i.test(b.url));
-      const cursor = (await chromeApi.storage.local.get('deadCursor')).deadCursor || 0;
-      const { slice, nextCursor } = sliceForScan(httpBookmarks, cursor, settings.deadLinkBatchSize);
-      await chromeApi.storage.local.set({ deadCursor: nextCursor });
-      const deadCandidates = await checkDeadLinks(slice, { fetchFn: deps.fetchFn });
-      if (deadCandidates.warning) onWarning(deadCandidates.warning); // scan looked offline; network failures were not counted
-      const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
-      // Pass the ids actually scanned this batch so strikes for bookmarks in
-      // OTHER (unscanned) slices are carried forward, not silently reset —
-      // otherwise pagination means a strike never survives to reach 2.
-      const scannedIds = slice.map((b) => b.id);
-      const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId), scannedIds);
-      await chromeApi.storage.local.set({ deadStrikes: strikes });
-      const confirmedSet = new Set(confirmed);
-      deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
+    if (f.cleanBookmarks) {
+      const visits = await getVisitsMap(bookmarks, chromeApi);
+      deletes.push(...findStaleBookmarks(bookmarks, visits, settings.staleBookmarkDays, now));
+      if (f.deadLinkScan && await hasAllUrls(chromeApi)) {
+        const httpBookmarks = bookmarks.filter((b) => /^https?:/i.test(b.url));
+        const cursor = (await chromeApi.storage.local.get('deadCursor')).deadCursor || 0;
+        const { slice, nextCursor } = sliceForScan(httpBookmarks, cursor, settings.deadLinkBatchSize);
+        await chromeApi.storage.local.set({ deadCursor: nextCursor });
+        const deadCandidates = await checkDeadLinks(slice, { fetchFn: deps.fetchFn });
+        if (deadCandidates.warning) onWarning(deadCandidates.warning); // scan looked offline; network failures were not counted
+        const prevStrikes = (await chromeApi.storage.local.get('deadStrikes')).deadStrikes || {};
+        // Pass the ids actually scanned this batch so strikes for bookmarks in
+        // OTHER (unscanned) slices are carried forward, not silently reset —
+        // otherwise pagination means a strike never survives to reach 2.
+        const scannedIds = slice.map((b) => b.id);
+        const { strikes, confirmed } = recordDeadStrikes(prevStrikes, deadCandidates.map((d) => d.data.bookmarkId), scannedIds);
+        await chromeApi.storage.local.set({ deadStrikes: strikes });
+        const confirmedSet = new Set(confirmed);
+        deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
+      }
     }
     items.push(...dedupeDeletes(deletes));
    } catch (e) { console.warn('[organizer] bookmark-cleanup phase failed:', e); onWarning('Cleaning bookmarks failed. See the service-worker console for details.'); }

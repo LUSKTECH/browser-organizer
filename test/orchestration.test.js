@@ -465,3 +465,51 @@ test('buildPlan keeps pinned tabs away from grouping and bookmark suggestions wh
 test('buildPlan includes pinned tabs when ignorePinnedTabs is off', async () => {
   assert.deepEqual(await tabsSentToTheModel({ ignorePinnedTabs: false }), [1, 2]);
 });
+
+function dupeChrome() {
+  const tabs = [
+    { id: 1, url: 'https://news.example/a#top', title: 'News', windowId: 1, index: 0, pinned: false, groupId: -1 },
+    { id: 2, url: 'https://news.example/a', title: 'News again', windowId: 1, index: 1, pinned: false, groupId: -1 },
+    { id: 3, url: 'https://other.example/z', title: 'Other', windowId: 1, index: 2, pinned: false, groupId: -1 },
+  ];
+  const bm = (id, url) => ({ id, parentId: '2', url, title: url, dateAdded: Date.now() });
+  const tree = [{ id: '0', children: [{ id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p'), bm('b3', 'https://b.example/q')] }] }];
+  return {
+    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    tabs: { async query() { return tabs; } },
+    bookmarks: { async getTree() { return tree; } },
+    history: { async getVisits() { return []; } },
+    permissions: { async contains() { return false; } },
+  };
+}
+
+test('a duplicates-only run finds duplicate tabs and bookmarks without touching the AI or stale/dead checks', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); throw new Error('the AI must not be called'); } };
+  const settings = { adapter: 'claude', enabledFeatures: {}, staleTabDays: 14, staleBookmarkDays: 1, deadLinkBatchSize: 200, whitelist: [], protectedFolders: [] };
+  const items = await buildPlan({
+    settings, nativeClient, chromeApi: dupeChrome(), now: Date.now() + 40 * 86400000, // far enough out that every bookmark would be "stale"
+    features: { groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false, dupeTabs: true, dupeBookmarks: true },
+  });
+  assert.equal(items.filter((i) => i.action === 'closeTab').length, 1, 'one of the two matching tabs');
+  assert.equal(items.filter((i) => i.action === 'deleteBookmark').length, 1, 'only the duplicate bookmark, no stale deletions');
+  assert.ok(items.every((i) => i.data.category !== 'stale'));
+  // The phase catch blocks swallow errors, so count the requests instead of relying on the throw.
+  assert.equal(requests.length, 0, 'a duplicates-only run must never call the AI');
+});
+
+test('a duplicates-only run makes no history or fetch calls, even with dead-link scanning enabled and all URLs granted', async () => {
+  const chromeApi = dupeChrome();
+  let visitCalls = 0;
+  let fetchCalls = 0;
+  chromeApi.history.getVisits = async () => { visitCalls += 1; return []; };
+  chromeApi.permissions.contains = async () => true;
+  const fetchFn = async () => { fetchCalls += 1; throw new Error('no fetch expected'); };
+  await buildPlan({
+    settings: { adapter: 'claude', enabledFeatures: { deadLinkScan: true }, staleTabDays: 14, staleBookmarkDays: 1, deadLinkBatchSize: 200, whitelist: [], protectedFolders: [] },
+    nativeClient: null, chromeApi, fetchFn, now: Date.now() + 40 * 86400000,
+    features: { groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false, dupeTabs: true, dupeBookmarks: true, deadLinkScan: true },
+  });
+  assert.equal(visitCalls, 0, 'history must not be read for duplicates-only runs');
+  assert.equal(fetchCalls, 0, 'dead links must not be fetched for duplicates-only runs');
+});

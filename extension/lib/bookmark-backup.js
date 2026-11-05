@@ -9,6 +9,7 @@ const LOCK = 'backup';
 export const MAX_SNAPSHOTS = 3;
 export const MAX_SNAPSHOT_BYTES = 2_000_000; // above this, only the newest snapshot is kept
 export const SNAPSHOT_MAX_AGE_DAYS = 30;
+export const STORAGE_RESERVE_BYTES = 1_000_000; // always leave this much of storage.local free for the undo log and plan
 
 const BOOKMARK_MUTATIONS = new Set(['deleteBookmark', 'moveBookmark', 'removeFolder']);
 
@@ -81,15 +82,28 @@ async function readAll(storage) {
 }
 
 // Ring buffer of the newest MAX_SNAPSHOTS; an oversized snapshot evicts all older ones.
+// Encoded size, not string length: non-ASCII titles take 2-4 bytes per character in storage.
+const byteSize = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
+
 export function addToRing(list, snapshot) {
-  const bytes = JSON.stringify(snapshot).length;
-  if (bytes > MAX_SNAPSHOT_BYTES) return [snapshot];
+  if (byteSize(snapshot) > MAX_SNAPSHOT_BYTES) return [snapshot];
   return [...list, snapshot].slice(-MAX_SNAPSHOTS);
 }
 
+// Saves unless that would leave less than STORAGE_RESERVE_BYTES free: the undo log has to be able to
+// record the run that follows, and a missing undo entry is worse than a missing backup.
 export function saveSnapshot(snapshot, storage = chrome.storage.local) {
   return withLock(LOCK, async () => {
-    await storage.set({ [KEY]: addToRing(await readAll(storage), snapshot) });
+    const before = await readAll(storage);
+    const after = addToRing(before, snapshot);
+    if (storage.getBytesInUse && storage.QUOTA_BYTES) {
+      const used = await storage.getBytesInUse(null);
+      const growth = byteSize(after) - byteSize(before);
+      if (used + growth > storage.QUOTA_BYTES - STORAGE_RESERVE_BYTES) {
+        throw new Error('not enough free browser storage for a backup (undo still works)');
+      }
+    }
+    await storage.set({ [KEY]: after });
     return snapshot.id;
   });
 }
@@ -118,13 +132,19 @@ export async function restoreSnapshot(snapshot, parentId, chromeApi = chrome) {
   const label = `Restored ${new Date(snapshot.ts).toISOString().slice(0, 16).replace('T', ' ')}`;
   const holder = await chromeApi.bookmarks.create({ parentId, title: label });
   let created = 0;
-  const make = async (nodes, pid) => {
-    for (const n of nodes) {
-      if (n.url) { await chromeApi.bookmarks.create({ parentId: pid, title: n.title, url: n.url }); created += 1; continue; }
-      const folder = await chromeApi.bookmarks.create({ parentId: pid, title: n.title });
-      await make(n.children, folder.id);
-    }
-  };
-  await make(toTree(snapshot), holder.id);
+  try {
+    const make = async (nodes, pid) => {
+      for (const n of nodes) {
+        if (n.url) { await chromeApi.bookmarks.create({ parentId: pid, title: n.title, url: n.url }); created += 1; continue; }
+        const folder = await chromeApi.bookmarks.create({ parentId: pid, title: n.title });
+        await make(n.children, folder.id);
+      }
+    };
+    await make(toTree(snapshot), holder.id);
+  } catch (err) {
+    // Don't leave a half-restored folder behind: a retry would add a second copy of what got through.
+    try { await chromeApi.bookmarks.removeTree(holder.id); } catch { /* best effort */ }
+    throw err;
+  }
   return created;
 }
