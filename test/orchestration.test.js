@@ -6,6 +6,9 @@ import { dedupeTabActions, finalizePlan, runCommand, selectOrganizeCandidates, p
 import { applyWhitelist, applyFolderProtection } from '../extension/lib/protections.js';
 import { applyItem } from '../extension/lib/executor.js';
 
+// A chrome.storage.local that holds nothing and ignores writes (buildPlan only needs it to exist).
+const emptyLocalStorage = () => ({ async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} });
+
 test('findEmptyFolders proposes empty/emptied leaf folders; skips roots, non-empty, and folders with subfolders', () => {
   const folders = [
     { id: '1', parentId: '0', index: 0, title: 'Bar', path: ['Bar'], isRoot: true },
@@ -407,7 +410,7 @@ test('applyItems puts skipped results in their own bucket: not applied, not reco
 
 test('buildPlan surfaces AI phase failures as warnings naming the phase', async () => {
   const chromeApi = {
-    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    storage: { local: emptyLocalStorage() },
     tabs: { async query() { return [{ id: 1, url: 'https://a.com', windowId: 1, index: 0, pinned: false }]; } },
     bookmarks: { async getTree() { return []; } },
     history: { async getVisits() { return []; } },
@@ -423,7 +426,7 @@ test('buildPlan surfaces AI phase failures as warnings naming the phase', async 
 test('buildPlan surfaces the offline warning from a dead-link scan', async () => {
   const bm = (id, host) => ({ id, parentId: '1', url: `https://${host}/p`, title: host, dateAdded: 1 });
   const chromeApi = {
-    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    storage: { local: emptyLocalStorage() },
     tabs: { async query() { return []; } },
     bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '1', title: 'Bookmarks bar', children: [bm('b1', 'a.example'), bm('b2', 'b.example'), bm('b3', 'c.example')] }] }]; } },
     history: { async getVisits() { return []; } },
@@ -442,7 +445,7 @@ function pinnedChrome() {
     { id: 2, url: 'https://news.example/b', title: 'News', windowId: 1, index: 1, pinned: false, groupId: -1 },
   ];
   return {
-    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    storage: { local: emptyLocalStorage() },
     tabs: { async query() { return tabs; } },
     bookmarks: { async getTree() { return []; } },
     history: { async getVisits() { return []; } },
@@ -475,7 +478,7 @@ function dupeChrome() {
   const bm = (id, url) => ({ id, parentId: '2', url, title: url, dateAdded: Date.now() });
   const tree = [{ id: '0', children: [{ id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p'), bm('b3', 'https://b.example/q')] }] }];
   return {
-    storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} } },
+    storage: { local: emptyLocalStorage() },
     tabs: { async query() { return tabs; } },
     bookmarks: { async getTree() { return tree; } },
     history: { async getVisits() { return []; } },
@@ -512,4 +515,17 @@ test('a duplicates-only run makes no history or fetch calls, even with dead-link
   });
   assert.equal(visitCalls, 0, 'history must not be read for duplicates-only runs');
   assert.equal(fetchCalls, 0, 'dead links must not be fetched for duplicates-only runs');
+});
+
+test('a normal tab that duplicates a PINNED tab is still proposed for closing, and the pinned one is kept', async () => {
+  const tab = (id, pinned) => ({ id, url: 'https://mail.example/inbox', title: 'Mail', windowId: 1, index: id, pinned, groupId: -1 });
+  const chromeApi = {
+    storage: { local: emptyLocalStorage() },
+    tabs: { async query() { return [tab(1, true), tab(2, false)]; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+  const settings = { adapter: 'claude', ignorePinnedTabs: true, enabledFeatures: {}, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  const items = await buildPlan({ settings, nativeClient: null, chromeApi, now: 1, features: { dupeTabs: true, groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false } });
+  assert.deepEqual(items.map((i) => `${i.action}:${i.data.tabId}`), ['closeTab:2']);
 });

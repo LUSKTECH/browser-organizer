@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
 import {
   needsBackup, buildSnapshot, toTree, toNetscapeHtml, addToRing, saveSnapshot, listSnapshots, getSnapshot,
-  pruneSnapshots, restoreSnapshot, MAX_SNAPSHOTS, MAX_SNAPSHOT_BYTES,
+  pruneSnapshots, restoreSnapshot, stamp, MAX_SNAPSHOTS, MAX_SNAPSHOT_BYTES,
 } from '../extension/lib/bookmark-backup.js';
 
 beforeEach(() => installChromeMock());
@@ -81,7 +81,8 @@ test('restoreSnapshot rebuilds the tree in a new Restored folder and touches not
   const chromeApi = { bookmarks: { async create(node) { const c = { id: String(n++), ...node }; created.push(c); return c; } } };
   const count = await restoreSnapshot(buildSnapshot(tree(), Date.UTC(2026, 9, 1, 12, 30)), '2', chromeApi);
   assert.equal(count, 3);
-  assert.equal(created[0].title, 'Restored 2026-10-01 12:30');
+  assert.equal(created[0].title, `Restored ${stamp(Date.UTC(2026, 9, 1, 12, 30))}`);
+  assert.match(created[0].title, /^Restored \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   assert.equal(created[0].parentId, '2');
   const bar = created.find((c) => c.title === 'Bookmarks bar');
   assert.equal(bar.parentId, created[0].id);

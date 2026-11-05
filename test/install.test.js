@@ -322,6 +322,11 @@ test('parseInstallArgs survives how Windows shells pass `chrome,edge`', () => {
   assert.deepEqual(parseInstallArgs([id, 'chrome', 'edge']), { browsers: ['chrome', 'edge'], extensionId: id });
 });
 
+test('parseInstallArgs lists each browser once', () => {
+  const id = 'abcdefghijklmnopabcdefghijklmnop';
+  assert.deepEqual(parseInstallArgs(['chrome,chrome edge', id]).browsers, ['chrome', 'edge']);
+});
+
 test('parseInstallArgs rejects an unknown browser and a second extension id', () => {
   const id = 'abcdefghijklmnopabcdefghijklmnop';
   assert.throws(() => parseInstallArgs(['chrom', id]), /Invalid extension id or unknown browser/);

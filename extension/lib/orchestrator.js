@@ -100,8 +100,10 @@ export async function buildPlan(deps) {
 
   step('Finding duplicate tabs');
   if (shouldCancel()) return finalizePlan(items, settings, folders);
-  if (f.dupeTabs && tabs.length) {
-    try { items.push(...findDuplicateTabs(tabs)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); onWarning('Finding duplicate tabs failed. See the service-worker console for details.'); }
+  // Judged against every tab, pinned included: findDuplicateTabs keeps a pinned copy and never closes one,
+  // so a normal tab that duplicates a pinned tab is still caught.
+  if (f.dupeTabs && allTabs.length) {
+    try { items.push(...findDuplicateTabs(allTabs)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); onWarning('Finding duplicate tabs failed. See the service-worker console for details.'); }
   }
 
   step('Grouping tabs');

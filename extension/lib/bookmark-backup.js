@@ -73,8 +73,16 @@ export function toNetscapeHtml(snapshot) {
   return out.join('\n');
 }
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
+// Local-time "YYYY-MM-DD HH:MM", the same moment the panel shows, so a Restored folder matches its list row.
+export function stamp(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 export function snapshotLabel(snapshot) {
-  return `${new Date(snapshot.ts).toISOString().slice(0, 16).replace('T', ' ')} (${snapshot.count} bookmarks)`;
+  return `${stamp(snapshot.ts)} (${snapshot.count} bookmarks)`;
 }
 
 async function readAll(storage) {
@@ -129,7 +137,7 @@ export function pruneSnapshots(now = Date.now(), maxAgeDays = SNAPSHOT_MAX_AGE_D
 // Recreates the snapshot under a new "Restored <date>" folder inside `parentId` (Other Bookmarks).
 // Existing bookmarks are never touched. Returns the number of bookmarks created.
 export async function restoreSnapshot(snapshot, parentId, chromeApi = chrome) {
-  const label = `Restored ${new Date(snapshot.ts).toISOString().slice(0, 16).replace('T', ' ')}`;
+  const label = `Restored ${stamp(snapshot.ts)}`;
   const holder = await chromeApi.bookmarks.create({ parentId, title: label });
   let created = 0;
   try {

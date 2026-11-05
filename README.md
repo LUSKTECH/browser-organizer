@@ -70,6 +70,13 @@ One adapter covers OpenAI, OpenRouter, Groq, Together, and local servers like LM
 
 The extension collects tab and bookmark metadata, then passes it to the local Node host over Chrome Native Messaging. The host runs whichever backend you selected, gets a set of suggestions back, and returns them. The only network traffic is your chosen provider's normal subscription or API call; no server of ours sits in the path. Destructive actions wait for your approval, and in auto mode they're logged so one click undoes them.
 
+## Safety features
+
+- **Leave pinned tabs alone** (Settings, on by default): pinned tabs are never sent to the AI, never grouped or bulk-closed, and a plan can't close one. A normal tab that duplicates a pinned tab can still be flagged; the pinned copy is the one kept.
+- **Remove duplicates**: one button, no AI needed, finds duplicate open tabs and duplicate bookmarks (same URL ignoring `#fragment`, letter case and a trailing slash) and sends them through the usual review and undo.
+- **Bookmark backups**: before a run that deletes or moves bookmarks, a copy of the whole bookmark tree is saved on your device (last 3, kept 30 days). Download one as JSON or as a `bookmarks.html` file any browser can import, or restore it into a new folder; restoring never changes what you have now.
+- **Protected folders and domains**, per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
+
 ## Development
 
 `npm test` runs the unit suite (`node --test`, no browser needed).
