@@ -517,11 +517,11 @@ test('a duplicates-only run makes no history or fetch calls, even with dead-link
   assert.equal(fetchCalls, 0, 'dead links must not be fetched for duplicates-only runs');
 });
 
-test('a normal tab that duplicates a PINNED tab is still proposed for closing, and the pinned one is kept', async () => {
+for (const order of ['pinned-first', 'pinned-last']) test(`a normal tab that duplicates a PINNED tab is still proposed for closing, and the pinned one is kept (${order})`, async () => {
   const tab = (id, pinned) => ({ id, url: 'https://mail.example/inbox', title: 'Mail', windowId: 1, index: id, pinned, groupId: -1 });
   const chromeApi = {
     storage: { local: emptyLocalStorage() },
-    tabs: { async query() { return [tab(1, true), tab(2, false)]; } },
+    tabs: { async query() { return order === 'pinned-first' ? [tab(1, true), tab(2, false)] : [tab(2, false), tab(1, true)]; } },
     bookmarks: { async getTree() { return []; } },
     history: { async getVisits() { return []; } },
   };
