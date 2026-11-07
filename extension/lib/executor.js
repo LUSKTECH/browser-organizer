@@ -58,12 +58,22 @@ export async function ensureFolder(pathParts, chromeApi, rootId = '1') {
 
 // A rule item may name a group to join. Re-check it still exists in that window; if not, the
 // caller creates a new group as usual. The existing group's title/color are left alone.
-async function joinExistingGroup({ existingGroupId, windowId, tabIds }, c) {
+async function joinExistingGroup({ existingGroupId, windowId }, tabIds, liveTabs, c) {
   if (existingGroupId == null) return false;
   const g = await c.tabGroups.get(existingGroupId).catch(() => null);
   if (!g || (windowId != null && g.windowId !== windowId)) return false;
+  // A tab moved to another window since the plan must not be pulled back into this one.
+  if (liveTabs.some((t) => t.windowId !== g.windowId)) return false;
   await c.tabs.group({ groupId: existingGroupId, tabIds });
   return true;
+}
+
+// The tabs of a group item that still exist. Another item (e.g. a duplicate close) may have
+// removed some since the plan was built; chrome.tabs.group rejects the whole call on a missing id.
+async function liveGroupTabs(tabIds, c) {
+  const live = (await Promise.all(tabIds.map((id) => c.tabs.get(id).catch(() => null)))).filter(Boolean);
+  if (!live.length) throw new StaleTabError('None of the tabs to group exist any more');
+  return live;
 }
 
 export async function applyItem(item, deps = {}) {
@@ -94,15 +104,16 @@ async function applyItemInner(item, c, deps = {}) {
     }
     case 'groupTabs': {
       const { tabIds, groupName, color } = item.data;
+      const live = await liveGroupTabs(tabIds, c);
       // Grouping moves a tab out of the pinned strip. Re-check live: it may have been pinned since the plan.
-      if (deps.settings && deps.settings.ignorePinnedTabs !== false) {
-        const live = await Promise.all(tabIds.map((id) => c.tabs.get(id).catch(() => null)));
-        if (live.some((t) => t && t.pinned)) throw new ProtectedTargetError('Grouping includes a pinned tab ("Leave pinned tabs alone" is on)');
+      if (deps.settings && deps.settings.ignorePinnedTabs !== false && live.some((t) => t.pinned)) {
+        throw new ProtectedTargetError('Grouping includes a pinned tab ("Leave pinned tabs alone" is on)');
       }
-      if (await joinExistingGroup(item.data, c)) return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds } };
-      const groupId = await c.tabs.group({ tabIds });
+      const liveIds = live.map((t) => t.id);
+      if (await joinExistingGroup(item.data, liveIds, live, c)) return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds: liveIds } };
+      const groupId = await c.tabs.group({ tabIds: liveIds });
       await c.tabGroups.update(groupId, { title: groupName, color: COLORS.has(color) ? color : 'grey' });
-      return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds } };
+      return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds: liveIds } };
     }
     case 'createBookmark': {
       const { url, title, folderPath, rootId } = item.data;
