@@ -25,29 +25,42 @@ function isTrackingParam(key) {
   return k.startsWith('utm_') || TRACKING_PARAMS.has(k);
 }
 
+// The raw `key=value` pieces of a query, without re-encoding anything: URLSearchParams would turn
+// `%20` and `+` into the same thing, but a site may treat them differently.
+function queryParts(search) {
+  return search.replace(/^\?/, '').split('&').filter(Boolean);
+}
+
+function partKey(part) {
+  const raw = part.split('=')[0];
+  try { return decodeURIComponent(raw.replace(/\+/g, ' ')); } catch { return raw; }
+}
+
+function hasTrackingParam(url) {
+  try { return queryParts(new URL(url).search).some((p) => isTrackingParam(partKey(p))); } catch { return false; }
+}
+
 // Looser key for "same page" duplicate detection: normalizeUrl, minus tracking
 // parameters, with the rest sorted so their order doesn't matter. Deliberately a
 // separate function: normalizeUrl also keys history lookups and ignore keys.
 export function dupeKey(url) {
   try {
     const u = new URL(url);
-    const kept = [...u.searchParams].filter(([k]) => !isTrackingParam(k));
-    kept.sort(([a, av], [b, bv]) => (a < b ? -1 : a > b ? 1 : av < bv ? -1 : av > bv ? 1 : 0));
+    const kept = queryParts(u.search).filter((p) => !isTrackingParam(partKey(p))).sort();
     u.search = '';
-    for (const [k, v] of kept) u.searchParams.append(k, v);
-    const query = u.search;
-    u.search = '';
-    // Normalize without the query so the trailing-slash rule sees the path, then re-append it.
-    return normalizeUrl(u.toString()) + query;
+    // Normalize without the query so the trailing-slash rule sees the path, then re-append it as written.
+    return normalizeUrl(u.toString()) + (kept.length ? `?${kept.join('&')}` : '');
   } catch {
     return url;
   }
 }
 
-// Reason text for a duplicate proposal; says so when only tracking parameters made the URLs differ.
+// Reason text for a duplicate proposal; mentions tracking parameters only when one of the two URLs had some.
 export function duplicateReason(keep, dup, loose) {
   const base = `Duplicate of "${keep.title || keep.url}"`;
-  return loose && normalizeUrl(keep.url) !== normalizeUrl(dup.url) ? `${base} (same page, tracking parameters ignored)` : base;
+  const trackingMadeTheDifference = loose && normalizeUrl(keep.url) !== normalizeUrl(dup.url)
+    && (hasTrackingParam(keep.url) || hasTrackingParam(dup.url));
+  return trackingMadeTheDifference ? `${base} (same page, tracking parameters ignored)` : base;
 }
 
 export function redactUrl(url) {

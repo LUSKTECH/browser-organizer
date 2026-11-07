@@ -112,3 +112,19 @@ test('dupeKey makes ?a=1&b=2 and ?b=2&a=1 equal, and leaves normalizeUrl alone',
 test('dupeKey returns an invalid URL unchanged', () => {
   assert.equal(dupeKey('not a url'), 'not a url');
 });
+
+test('dupeKey keeps query encodings as written: + and %20 stay different', async () => {
+  const { dupeKey } = await import('../extension/lib/url-utils.js');
+  assert.notEqual(dupeKey('https://a.example/s?q=a+b'), dupeKey('https://a.example/s?q=a%20b'));
+  assert.equal(dupeKey('https://a.example/s?q=a+b&utm_source=x'), dupeKey('https://a.example/s?q=a+b'));
+  assert.equal(dupeKey('https://a.example/s?b=2&a=1'), dupeKey('https://a.example/s?a=1&b=2'));
+  assert.equal(dupeKey('https://a.example/s?UTM_Source=x'), 'https://a.example/s');
+});
+
+test('duplicateReason mentions tracking parameters only when they made the difference', async () => {
+  const { duplicateReason } = await import('../extension/lib/url-utils.js');
+  const reorder = duplicateReason({ title: 'S', url: 'https://a.example/s?a=1&b=2' }, { url: 'https://a.example/s?b=2&a=1' }, true);
+  assert.equal(reorder, 'Duplicate of "S"');
+  const tracked = duplicateReason({ title: 'S', url: 'https://a.example/s' }, { url: 'https://a.example/s?utm_source=x' }, true);
+  assert.match(tracked, /tracking parameters ignored/);
+});
