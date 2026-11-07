@@ -120,6 +120,12 @@ Tab titles and URLs go only to the AI backend the user chose; nothing is sent to
 ```
 
 ## Version history
+- **0.3.0** (2026-11-07): Grouping rules (no AI), snooze tabs, automatic bookmark backups before
+  runs that delete or move bookmarks, a Remove duplicates button that ignores tracking parameters,
+  and a "Leave pinned tabs alone" setting. No new permissions.
+- **0.2.0** (2026-10-29): First-run setup wizard, Extension options link, and fixes from a full
+  code audit.
+- **0.1.9** (2026-10-12): Store extension ID adopted; release automation.
 - **0.1.8** (2026-09-22): UX/UI refresh and accessibility enhancements (WCAG 2.1 AA); native
   host packaged for npm.
 - **0.1.7** (2026-09-20): Reliability/bug-fix release addressing 11 findings from a systematic
