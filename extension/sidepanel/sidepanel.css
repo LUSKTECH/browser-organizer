@@ -714,3 +714,17 @@ li.nonHttp span:not(.tabTag) { color: var(--text-muted); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Snooze ---------- */
+.snoozeRow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.snoozeRow select, .snoozeRow input { font-size: 11px; min-width: 0; }
+.snoozeRow button { padding: 3px 8px; font-size: 11px; }
+.snoozeRow input[hidden] { display: none; }
+#snoozedPanel { margin-top: 14px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+#snoozedPanel > summary { cursor: pointer; padding: 10px 12px; font-weight: 600; }
+#snoozedList { list-style: none; margin: 0; padding: 0 12px 4px; display: grid; gap: 4px; max-height: 40vh; overflow: auto; }
+#snoozedList li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+#snoozedList .snoozedText { flex: 1 1 auto; min-width: 0; display: grid; }
+#snoozedList .snoozedText span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#snoozedList .snoozedWhen { color: var(--text-faint); font-size: 11px; }
+#snoozedList button { padding: 3px 8px; font-size: 11px; }

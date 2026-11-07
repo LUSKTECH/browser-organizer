@@ -128,8 +128,24 @@
             <button type="button" id="closeTabsBtn" class="danger-btn" data-i18n="closeSelected">Close selected</button>
           </div>
           <span id="tabCount" class="hint" aria-live="polite"></span>
+          <div class="snoozeRow">
+            <select id="snoozePreset" aria-label="Snooze selected tabs until">
+              <option value="laterToday">Later today (3 hours)</option>
+              <option value="tomorrow">Tomorrow 9:00</option>
+              <option value="nextMonday">Next Monday 9:00</option>
+              <option value="custom">Pick date and time…</option>
+            </select>
+            <input type="datetime-local" id="snoozeCustom" aria-label="Snooze until" hidden />
+            <button type="button" id="snoozeTabsBtn">Snooze selected</button>
+          </div>
         </div>
         <ul id="tabList"></ul>
+      </details>
+
+      <details id="snoozedPanel">
+        <summary id="snoozedSummary">Snoozed (0)</summary>
+        <ul id="snoozedList"></ul>
+        <p class="hint">A snoozed page reopens as a plain link in the background: logins, form contents and scroll position are not restored.</p>
       </details>
 
     <details id="settings">

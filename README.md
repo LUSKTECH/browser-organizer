@@ -75,6 +75,7 @@ The extension collects tab and bookmark metadata, then passes it to the local No
 - **Leave pinned tabs alone** (Settings, on by default): pinned tabs are never sent to the AI, never grouped or bulk-closed, and a plan can't close one. A normal tab that duplicates a pinned tab can still be flagged; the pinned copy is the one kept.
 - **Remove duplicates**: one button, no AI needed, finds duplicate open tabs and duplicate bookmarks (same URL ignoring `#fragment`, letter case and a trailing slash) and sends them through the usual review and undo.
 - **Bookmark backups** (best effort): before a run that deletes or moves bookmarks, a copy of the whole bookmark tree is saved on your device (last 3, kept 30 days). If a backup can't be saved, for example because browser storage is nearly full, you're told and the run still goes ahead; per-run undo still applies. Download one as JSON or as a `bookmarks.html` file any browser can import, or restore it into a new folder; restoring never changes what you have now.
+- **Snooze tabs**: close the ticked tabs now and have them reopen later (in 3 hours, tomorrow 9:00, next Monday 9:00, or a time you pick) as background tabs; pinned tabs are skipped, undo reopens one at once, and the Snoozed list has Wake now and Delete. A snoozed page comes back as a plain link, so logins and form contents aren't restored.
 - **Protected folders and domains**, per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
 
 ## Development
@@ -87,6 +88,7 @@ The extension collects tab and bookmark metadata, then passes it to the local No
 
 Specs that run without a CLI:
 - **tab-panel**: search, filter, and bulk-close on open tabs (no AI); closing the selected tabs, then restoring them with undo
+- **snooze**: snoozes a tab from the panel, wakes it, rejects a past time, undoes a snooze, and skips a pinned tab
 - **duplicate-tabs**: spots a duplicate open tab, closes it on apply, restores it on undo
 - **sessions**: saves the current window as a session (closing its tabs), then restores them
 - **bookmark-cleanup**: spots a duplicate bookmark, deletes it on apply, restores it on undo

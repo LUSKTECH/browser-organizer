@@ -2,6 +2,7 @@
 // labels) and the panel UI, so they can't drift ("Bookmark" vs "Bookmark tab").
 export const ACTION_LABELS = {
   closeTab: 'Close tab',
+  snoozeTab: 'Snooze tab',
   groupTabs: 'Group tabs',
   createBookmark: 'Bookmark tab',
   deleteBookmark: 'Delete bookmark',

@@ -6,6 +6,7 @@ import { initTabsView } from './tabs-view.js';
 import { initSettingsView, loadSettings } from './settings-view.js';
 import { initSessionsView, renderSessions } from './sessions-view.js';
 import { initMutedView } from './muted-view.js';
+import { initSnoozedView } from './snoozed-view.js';
 import { initBackupView } from './backup-view.js';
 import { initHealthView, checkHealth } from './health-view.js';
 import { initUndoHistory } from './undo.js';
@@ -27,6 +28,7 @@ function applyI18n() {
   initSettingsView();
   initSessionsView();
   initMutedView();
+  initSnoozedView();
   initBackupView();
   initHealthView();
   initUndoHistory();

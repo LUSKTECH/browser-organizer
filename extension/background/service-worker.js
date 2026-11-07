@@ -10,6 +10,7 @@ import { parseOmnibox } from '../lib/omnibox.js';
 import { digestText } from '../lib/plan-summary.js';
 import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
+import { makeSnooze, dueSnoozed, nextWake, addSnoozes } from '../lib/snooze.js';
 import { getSecret } from '../lib/secret-store.js';
 import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
 import { needsBackup, buildSnapshot, saveSnapshot, listSnapshots, getSnapshot, pruneSnapshots, restoreSnapshot, toNetscapeHtml, snapshotLabel } from '../lib/bookmark-backup.js';
@@ -49,6 +50,7 @@ async function makeClient(settings, override = null) {
 
 const ALARM_SCAN = 'organizer-scan';
 const ALARM_PRUNE = 'organizer-prune';
+const ALARM_SNOOZE = 'organizer-snooze';
 
 // Progress streaming: the panel opens a port named 'scan' before requesting a
 // run; runScan broadcasts {progress} to every connected scan port.
@@ -80,6 +82,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   const settings = await getSettings();
   await chrome.alarms.create(ALARM_SCAN, { periodInMinutes: settings.scanIntervalMinutes });
   await chrome.alarms.create(ALARM_PRUNE, { periodInMinutes: 1440 });
+  await reconcileSnoozed();
 });
 
 // Keep the scheduled-scan cadence in sync when it changes — but ONLY when the
@@ -105,6 +108,7 @@ chrome.runtime.onStartup.addListener(async () => {
     await chrome.storage.local.set({ tabActivity: reconcile(tabActivity, rawTabs, now) });
   });
   await chrome.storage.local.remove('currentPlan'); // a plan saved by an earlier install is stale
+  await reconcileSnoozed();
 });
 
 installActivityListeners(chrome);
@@ -133,6 +137,7 @@ chrome.omnibox.onInputEntered.addListener(async (text) => {
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === ALARM_SNOOZE) { await reconcileSnoozed(); return; }
   const settings = await getSettings();
   if (alarm.name === ALARM_PRUNE) {
     await pruneUndo(Date.now(), settings.undoRetentionDays);
@@ -143,6 +148,54 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     await backgroundScan('Scheduled scan failed');
   }
 });
+
+// ---- Snoozed tabs ----
+// chrome.storage.local.snoozed holds the entries; ONE alarm tracks the earliest wake time.
+// Every read-modify-write runs under withLock('snoozed') (undo-log.js takes the same lock).
+
+const getSnoozed = async () => (await chrome.storage.local.get('snoozed')).snoozed || [];
+
+async function scheduleSnoozeAlarm(list) {
+  const when = nextWake(list);
+  if (when == null) await chrome.alarms.clear(ALARM_SNOOZE);
+  else await chrome.alarms.create(ALARM_SNOOZE, { when });
+}
+
+// Open `entry` as a background tab in the last-focused normal window (any window if that lookup fails).
+async function openSnoozed(entry) {
+  let windowId;
+  try { windowId = (await chrome.windows.getLastFocused({ windowTypes: ['normal'] })).id; } catch { /* none focused */ }
+  try {
+    await chrome.tabs.create({ url: entry.url, active: false, windowId });
+  } catch {
+    await chrome.tabs.create({ url: entry.url, active: false });
+  }
+}
+
+// Reopens the entries named by `ids` (or every due one when `ids` is null), drops the ones that
+// opened from the store, reschedules the alarm, and returns how many woke.
+async function wakeSnoozed(ids = null) {
+  return withLock('snoozed', async () => {
+    const list = await getSnoozed();
+    const picked = ids ? list.filter((e) => ids.includes(e.id)) : dueSnoozed(list, Date.now());
+    const woke = new Set();
+    for (const entry of picked) {
+      try { await openSnoozed(entry); woke.add(entry.id); } catch (err) { console.warn('[organizer] could not reopen snoozed tab:', err); }
+    }
+    const rest = list.filter((e) => !woke.has(e.id));
+    if (woke.size) await chrome.storage.local.set({ snoozed: rest });
+    await scheduleSnoozeAlarm(rest);
+    return woke.size;
+  });
+}
+
+// Alarm, browser start and install all land here: wake what is due, tell the user once.
+async function reconcileSnoozed() {
+  try {
+    const n = await wakeSnoozed();
+    if (n) await notify(`${n} snoozed tab${n === 1 ? '' : 's'} woke up`);
+  } catch (err) { console.warn('[organizer] snooze reconcile failed:', err); }
+}
 
 // Hotkey and alarm scans have no panel to show an error in, so surface a failure as a notification.
 async function backgroundScan(failLabel) {
@@ -344,6 +397,56 @@ async function handleCloseTabs(m) {
   return { ok: true, closed: entries.length };
 }
 
+async function handleSnoozeTabs(m) {
+  const wakeAt = Number(m.wakeAt);
+  if (!Number.isFinite(wakeAt) || wakeAt <= Date.now()) throw new Error('Pick a time in the future.');
+  const wanted = new Set(m.tabIds || []);
+  const skipPinned = (await getSettings()).ignorePinnedTabs !== false;
+  const targets = (await chrome.tabs.query({})).filter((t) => wanted.has(t.id) && /^https?:/i.test(t.url || '') && !(skipPinned && t.pinned));
+  if (!targets.length) return { ok: true, snoozed: 0, skipped: wanted.size };
+  const now = Date.now();
+  const made = targets.map((t) => ({ tab: t, entry: makeSnooze({ url: t.url, title: t.title, wakeAt }, now) }));
+  await withLock('snoozed', async () => {
+    const next = addSnoozes(await getSnoozed(), made.map((x) => x.entry)); // throws over the cap
+    await chrome.storage.local.set({ snoozed: next });
+    await scheduleSnoozeAlarm(next);
+  });
+  try { await chrome.tabs.remove(targets.map((t) => t.id)); } catch { /* a tab vanished mid-call; the re-query below tells which actually closed */ }
+  const stillOpen = new Set((await chrome.tabs.query({})).map((t) => t.id));
+  const closed = made.filter((x) => !stillOpen.has(x.tab.id));
+  const kept = new Set(made.filter((x) => stillOpen.has(x.tab.id)).map((x) => x.entry.id));
+  if (kept.size) { // a tab that is still open must not also be waiting to reopen
+    await withLock('snoozed', async () => {
+      const next = (await getSnoozed()).filter((e) => !kept.has(e.id));
+      await chrome.storage.local.set({ snoozed: next });
+      await scheduleSnoozeAlarm(next);
+    });
+  }
+  const runId = uniqueId('run-');
+  const undo = closed.map(({ tab: t, entry }) => ({ undoId: uniqueId(), runId, ts: now, action: 'snoozeTab', label: `Snooze tab: ${t.title || t.url}`, reverse: { snoozeId: entry.id, url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } }));
+  if (undo.length) await recordUndo(undo);
+  return { ok: true, snoozed: closed.length, skipped: wanted.size - closed.length };
+}
+
+async function handleListSnoozed() {
+  return { ok: true, snoozed: (await getSnoozed()).sort((a, b) => a.wakeAt - b.wakeAt) };
+}
+
+async function handleWakeSnoozed(m) {
+  return { ok: true, woke: await wakeSnoozed(m.ids || []) };
+}
+
+async function handleDeleteSnoozed(m) {
+  const gone = new Set(m.ids || []);
+  return withLock('snoozed', async () => {
+    const list = await getSnoozed();
+    const rest = list.filter((e) => !gone.has(e.id));
+    await chrome.storage.local.set({ snoozed: rest });
+    await scheduleSnoozeAlarm(rest);
+    return { ok: true, deleted: list.length - rest.length };
+  });
+}
+
 async function handleGetPlan() {
   const { currentPlan = [] } = await chrome.storage.local.get('currentPlan');
   return { ok: true, items: currentPlan };
@@ -529,6 +632,10 @@ const HANDLERS = {
   listOpenTabs: handleListOpenTabs,
   focusTab: handleFocusTab,
   closeTabs: handleCloseTabs,
+  snoozeTabs: handleSnoozeTabs,
+  listSnoozed: handleListSnoozed,
+  wakeSnoozed: handleWakeSnoozed,
+  deleteSnoozed: handleDeleteSnoozed,
   getPlan: handleGetPlan,
   updatePlan: handleUpdatePlan,
   apply: handleApply,

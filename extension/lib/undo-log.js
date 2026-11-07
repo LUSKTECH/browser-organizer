@@ -102,6 +102,22 @@ export async function reverseEntry(entry, chromeApi = chrome, idRemap = new Map(
       if (savedBookmarkId) { try { await chromeApi.bookmarks.remove(savedBookmarkId); } catch { /* already gone */ } }
       return;
     }
+    case 'snoozeTab': {
+      const { snoozeId, url, windowId, index, pinned } = entry.reverse;
+      // Drop the snooze first so the alarm can't reopen it a second time. It may
+      // already have woken (entry gone), which is fine.
+      await withLock('snoozed', async () => {
+        const { snoozed = [] } = await chromeApi.storage.local.get('snoozed');
+        const next = snoozed.filter((e) => e.id !== snoozeId);
+        if (next.length !== snoozed.length) await chromeApi.storage.local.set({ snoozed: next });
+      });
+      try {
+        await chromeApi.tabs.create({ url, windowId, index, pinned, active: false });
+      } catch {
+        await chromeApi.tabs.create({ url, pinned, active: false });
+      }
+      return;
+    }
     case 'groupTabs':
       await chromeApi.tabs.ungroup(entry.reverse.tabIds);
       return;
