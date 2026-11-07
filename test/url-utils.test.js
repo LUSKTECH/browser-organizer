@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isHttpUrl, normalizeUrl, redactUrl, isPrivateHost } from '../extension/lib/url-utils.js';
+import { isHttpUrl, normalizeUrl, dupeKey, redactUrl, isPrivateHost } from '../extension/lib/url-utils.js';
 
 test('isHttpUrl accepts http/https, rejects chrome/file', () => {
   assert.equal(isHttpUrl('https://a.com'), true);
@@ -76,4 +76,55 @@ test('isPrivateHost flags *.localhost and the CGNAT range 100.64.0.0/10', () => 
   assert.equal(isPrivateHost('http://100.128.0.1/'), false);
   assert.equal(isPrivateHost('http://100.63.255.255/'), false);
   assert.equal(isPrivateHost('https://notlocalhost.example/'), false);
+});
+
+const DUPE_KEY_CASES = [
+  ['utm_ prefix, any suffix', 'https://a.com/p?utm_source=x&utm_whatever=1', 'https://a.com/p'],
+  ['mixed-case UTM_Source', 'https://a.com/p?UTM_Source=x', 'https://a.com/p'],
+  ['fbclid', 'https://a.com/p?fbclid=1', 'https://a.com/p'],
+  ['gclid', 'https://a.com/p?gclid=1', 'https://a.com/p'],
+  ['dclid', 'https://a.com/p?dclid=1', 'https://a.com/p'],
+  ['msclkid', 'https://a.com/p?msclkid=1', 'https://a.com/p'],
+  ['mc_cid', 'https://a.com/p?mc_cid=1', 'https://a.com/p'],
+  ['mc_eid', 'https://a.com/p?mc_eid=1', 'https://a.com/p'],
+  ['igshid', 'https://a.com/p?igshid=1', 'https://a.com/p'],
+  ['yclid', 'https://a.com/p?yclid=1', 'https://a.com/p'],
+  ['_hsenc', 'https://a.com/p?_hsenc=1', 'https://a.com/p'],
+  ['_hsmi', 'https://a.com/p?_hsmi=1', 'https://a.com/p'],
+  ['mixed-case FBCLID', 'https://a.com/p?FBCLID=1', 'https://a.com/p'],
+  ['params are sorted', 'https://a.com/p?b=2&a=1', 'https://a.com/p?a=1&b=2'],
+  ['non-tracking param kept, tracking dropped', 'https://a.com/p?id=7&utm_source=x', 'https://a.com/p?id=7'],
+  ['ref, source, page and q are kept', 'https://a.com/p?q=z&page=2&source=s&ref=r', 'https://a.com/p?page=2&q=z&ref=r&source=s'],
+  ['fragment ignored', 'https://a.com/p?a=1#top', 'https://a.com/p?a=1'],
+  ['trailing slash ignored', 'https://a.com/p/?a=1', 'https://a.com/p?a=1'],
+  ['all params removed leaves no ?', 'https://a.com/p?utm_source=x&fbclid=1', 'https://a.com/p'],
+  ['all params removed at the root', 'https://A.com/?gclid=1', 'https://a.com'],
+];
+for (const [name, input, expected] of DUPE_KEY_CASES) {
+  test(`dupeKey: ${name}`, () => assert.equal(dupeKey(input), expected));
+}
+
+test('dupeKey makes ?a=1&b=2 and ?b=2&a=1 equal, and leaves normalizeUrl alone', () => {
+  assert.equal(dupeKey('https://a.com/p?a=1&b=2'), dupeKey('https://a.com/p?b=2&a=1'));
+  assert.equal(normalizeUrl('https://a.com/p?utm_source=x'), 'https://a.com/p?utm_source=x');
+});
+
+test('dupeKey returns an invalid URL unchanged', () => {
+  assert.equal(dupeKey('not a url'), 'not a url');
+});
+
+test('dupeKey keeps query encodings as written: + and %20 stay different', async () => {
+  const { dupeKey } = await import('../extension/lib/url-utils.js');
+  assert.notEqual(dupeKey('https://a.example/s?q=a+b'), dupeKey('https://a.example/s?q=a%20b'));
+  assert.equal(dupeKey('https://a.example/s?q=a+b&utm_source=x'), dupeKey('https://a.example/s?q=a+b'));
+  assert.equal(dupeKey('https://a.example/s?b=2&a=1'), dupeKey('https://a.example/s?a=1&b=2'));
+  assert.equal(dupeKey('https://a.example/s?UTM_Source=x'), 'https://a.example/s');
+});
+
+test('duplicateReason mentions tracking parameters only when they made the difference', async () => {
+  const { duplicateReason } = await import('../extension/lib/url-utils.js');
+  const reorder = duplicateReason({ title: 'S', url: 'https://a.example/s?a=1&b=2' }, { url: 'https://a.example/s?b=2&a=1' }, true);
+  assert.equal(reorder, 'Duplicate of "S"');
+  const tracked = duplicateReason({ title: 'S', url: 'https://a.example/s' }, { url: 'https://a.example/s?utm_source=x' }, true);
+  assert.match(tracked, /tracking parameters ignored/);
 });

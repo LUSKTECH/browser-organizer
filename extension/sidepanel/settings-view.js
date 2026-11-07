@@ -81,6 +81,7 @@ export async function loadSettings() {
   form.protectBookmarkBar.checked = s.protectBookmarkBar !== false;
   form.removeEmptyFolders.checked = !!s.removeEmptyFolders;
   form.ignorePinnedTabs.checked = s.ignorePinnedTabs !== false;
+  form.dupeIgnoreTrackingParams.checked = s.dupeIgnoreTrackingParams !== false;
   form.protectedFolders.value = (s.protectedFolders || []).join('\n');
   form.staleTabDays.value = s.staleTabDays;
   form.staleBookmarkDays.value = s.staleBookmarkDays;
@@ -173,6 +174,7 @@ export function initSettingsView() {
         protectBookmarkBar: form.protectBookmarkBar.checked,
         removeEmptyFolders: form.removeEmptyFolders.checked,
         ignorePinnedTabs: form.ignorePinnedTabs.checked,
+        dupeIgnoreTrackingParams: form.dupeIgnoreTrackingParams.checked,
         protectedFolders: form.protectedFolders.value.split('\n').map((s) => s.trim()).filter(Boolean),
         staleTabDays: clampedInt(form.staleTabDays.value),
         staleBookmarkDays: clampedInt(form.staleBookmarkDays.value),
