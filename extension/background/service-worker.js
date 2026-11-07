@@ -10,7 +10,7 @@ import { parseOmnibox } from '../lib/omnibox.js';
 import { digestText } from '../lib/plan-summary.js';
 import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
-import { makeSnooze, nextWake, addSnoozes, wakeAtError, wakeEntries } from '../lib/snooze.js';
+import { makeSnooze, nextWake, addSnoozes, wakeAtError, wakeEntries, reconcileSnoozes, selectSnoozable, cleanSnoozed } from '../lib/snooze.js';
 import { getSecret } from '../lib/secret-store.js';
 import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
 import { needsBackup, buildSnapshot, saveSnapshot, listSnapshots, getSnapshot, pruneSnapshots, restoreSnapshot, toNetscapeHtml, snapshotLabel } from '../lib/bookmark-backup.js';
@@ -172,28 +172,32 @@ async function openSnoozed(entry) {
   }
 }
 
+const openTabUrls = async () => (await chrome.tabs.query({})).map((t) => t.url);
+
 // Reopens the entries named by `ids` (or every due one when `ids` is null) and returns how many woke.
-// wakeEntries takes them out of the store before opening, and puts back any that fail to open.
-async function wakeSnoozed(ids = null) {
-  return withLock('snoozed', async () => {
-    const { woke, rest } = await wakeEntries({
+// wakeEntries marks them under the 'snoozed' lock, opens them outside it and removes the opened ones,
+// so a worker that dies mid-wake loses nothing. The outer 'snoozeWake' lock keeps two wakes from
+// mistaking each other's in-flight entries for interrupted ones.
+function wakeSnoozed(ids = null) {
+  return withLock('snoozeWake', async () => {
+    const { woke } = await wakeEntries({
       read: getSnoozed,
-      write: (snoozed) => chrome.storage.local.set({ snoozed }),
+      write: async (snoozed) => { await chrome.storage.local.set({ snoozed }); await scheduleSnoozeAlarm(snoozed); },
       open: openSnoozed,
+      openUrls: openTabUrls,
+      lock: (fn) => withLock('snoozed', fn),
       ids,
     });
-    await scheduleSnoozeAlarm(rest);
     return woke;
   });
 }
 
 // Alarm, browser start and install all land here: wake what is due, tell the user once.
-async function reconcileSnoozed() {
-  try {
-    const n = await wakeSnoozed();
-    if (n) await notify(`${n} snoozed tab${n === 1 ? '' : 's'} woke up`);
-  } catch (err) { console.warn('[organizer] snooze reconcile failed:', err); }
-}
+const reconcileSnoozed = () => reconcileSnoozes({
+  wake: wakeSnoozed,
+  notify: (n) => notify(`${n} snoozed tab${n === 1 ? '' : 's'} woke up`),
+  rearm: (when) => chrome.alarms.create(ALARM_SNOOZE, { when }),
+});
 
 // Hotkey and alarm scans have no panel to show an error in, so surface a failure as a notification.
 async function backgroundScan(failLabel) {
@@ -406,42 +410,62 @@ async function keepWindowsOpen(targets) {
   }
 }
 
-async function handleSnoozeTabs(m) {
-  const wakeAt = m.wakeAt;
-  const badTime = wakeAtError(wakeAt);
-  if (badTime) throw new Error(badTime);
-  const wanted = new Set(m.tabIds || []);
-  const skipPinned = (await getSettings()).ignorePinnedTabs !== false;
-  const targets = (await chrome.tabs.query({})).filter((t) => wanted.has(t.id) && /^https?:/i.test(t.url || '') && !(skipPinned && t.pinned));
-  if (!targets.length) return { ok: true, snoozed: 0, skipped: wanted.size };
-  await keepWindowsOpen(targets);
-  const now = Date.now();
-  const made = targets.map((t) => ({ tab: t, entry: makeSnooze({ url: t.url, title: t.title, wakeAt }, now) }));
+// Removes entries by id (best effort on the alarm: a stale alarm only fires early and finds nothing).
+const dropSnoozed = (ids) => withLock('snoozed', async () => {
+  const next = (await getSnoozed()).filter((e) => !ids.has(e.id));
+  await chrome.storage.local.set({ snoozed: next });
+  try { await scheduleSnoozeAlarm(next); } catch (err) { console.warn('[organizer] could not update snooze alarm:', err); }
+});
+
+// Stores the entries and arms the alarm; if the alarm can't be set, takes them out again and throws.
+async function storeSnoozes(entries) {
   await withLock('snoozed', async () => {
-    const next = addSnoozes(await getSnoozed(), made.map((x) => x.entry)); // throws over the cap
+    const next = addSnoozes(await getSnoozed(), entries); // throws over the cap
     await chrome.storage.local.set({ snoozed: next });
-    await scheduleSnoozeAlarm(next);
+    try { await scheduleSnoozeAlarm(next); } catch (err) {
+      await chrome.storage.local.set({ snoozed: next.filter((e) => !entries.includes(e)) });
+      throw err;
+    }
   });
+}
+
+async function snoozeTabsNow(m) {
+  const wanted = new Set(m.tabIds || []);
+  const ignorePinned = (await getSettings()).ignorePinnedTabs !== false;
+  const { targets, privateCount } = selectSnoozable((await chrome.tabs.query({})).filter((t) => wanted.has(t.id)), { ignorePinned });
+  if (!targets.length) return { ok: true, snoozed: 0, skipped: wanted.size, privateSkipped: privateCount };
+  const now = Date.now();
+  const made = targets.map((t) => ({ tab: t, entry: makeSnooze({ url: t.url, title: t.title, wakeAt: m.wakeAt }, now) }));
+  addSnoozes(await getSnoozed(), made.map((x) => x.entry)); // cap check first: a refused snooze leaves windows alone
+  await keepWindowsOpen(targets);
+  await storeSnoozes(made.map((x) => x.entry));
   try { await chrome.tabs.remove(targets.map((t) => t.id)); } catch { /* a tab vanished mid-call; the re-query below tells which actually closed */ }
   const stillOpen = new Set((await chrome.tabs.query({})).map((t) => t.id));
   const closed = made.filter((x) => !stillOpen.has(x.tab.id));
   const kept = new Set(made.filter((x) => stillOpen.has(x.tab.id)).map((x) => x.entry.id));
-  if (kept.size) { // a tab that is still open must not also be waiting to reopen
-    await withLock('snoozed', async () => {
-      const next = (await getSnoozed()).filter((e) => !kept.has(e.id));
-      await chrome.storage.local.set({ snoozed: next });
-      await scheduleSnoozeAlarm(next);
-    });
-  }
+  if (kept.size) await dropSnoozed(kept); // a tab that is still open must not also be waiting to reopen
   const runId = uniqueId('run-');
   const undo = closed.map(({ tab: t, entry }) => ({ undoId: uniqueId(), runId, ts: now, action: 'snoozeTab', label: `Snooze tab: ${t.title || t.url}`, reverse: { snoozeId: entry.id, url: t.url, windowId: t.windowId, index: t.index, pinned: t.pinned } }));
   if (undo.length) await recordUndo(undo);
-  return { ok: true, snoozed: closed.length, skipped: wanted.size - closed.length };
+  return { ok: true, snoozed: closed.length, skipped: wanted.size - closed.length, privateSkipped: privateCount };
 }
 
-async function handleListSnoozed() {
-  return { ok: true, snoozed: (await getSnoozed()).sort((a, b) => a.wakeAt - b.wakeAt) };
+// One request at a time, so two clicks can't snooze the same tab twice.
+async function handleSnoozeTabs(m) {
+  const badTime = wakeAtError(m.wakeAt);
+  if (badTime) throw new Error(badTime);
+  return withLock('snoozeRequest', () => snoozeTabsNow(m));
 }
+
+// Reads the list, dropping (and persisting the removal of) malformed entries. Caller holds the lock.
+async function readCleanSnoozed() {
+  const raw = await getSnoozed();
+  const list = cleanSnoozed(raw);
+  if (list.length !== raw.length) await chrome.storage.local.set({ snoozed: list });
+  return list;
+}
+
+const handleListSnoozed = () => withLock('snoozed', async () => ({ ok: true, snoozed: (await readCleanSnoozed()).sort((a, b) => a.wakeAt - b.wakeAt) }));
 
 async function handleWakeSnoozed(m) {
   return { ok: true, woke: await wakeSnoozed(m.ids || []) };
@@ -450,7 +474,7 @@ async function handleWakeSnoozed(m) {
 async function handleDeleteSnoozed(m) {
   const gone = new Set(m.ids || []);
   return withLock('snoozed', async () => {
-    const list = await getSnoozed();
+    const list = await readCleanSnoozed();
     const rest = list.filter((e) => !gone.has(e.id));
     await chrome.storage.local.set({ snoozed: rest });
     await scheduleSnoozeAlarm(rest);

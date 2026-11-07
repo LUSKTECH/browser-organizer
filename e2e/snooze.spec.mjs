@@ -125,3 +125,23 @@ test('an entry with a corrupt wakeAt is dropped and does not stop the others', a
   expect(await send(panel, { cmd: 'wakeSnoozed', ids: [] })).toMatchObject({ ok: true, woke: 0 });
   expect(await listSnoozed(panel)).toEqual([]);
 });
+
+test('a snooze refused over the cap leaves the window alone (no blank tab added)', async ({ server, panel }) => {
+  const url = `${server}/news/tech`;
+  const winId = await panel.evaluate(async (u) => (await chrome.windows.create({ url: u })).id, url);
+  await expect.poll(() => panel.evaluate(async (w) => (await chrome.tabs.query({ windowId: w })).length, winId)).toBe(1);
+  const tabId = await panel.evaluate(async (w) => (await chrome.tabs.query({ windowId: w }))[0].id, winId);
+  const full = Array.from({ length: 200 }, (_, i) => ({ id: `fill${i}`, url: `http://example.com/${i}`, title: '', wakeAt: Date.now() + 9e6, createdAt: 1 }));
+  await panel.evaluate((snoozed) => chrome.storage.local.set({ snoozed }), full);
+  const res = await send(panel, { cmd: 'snoozeTabs', tabIds: [tabId], wakeAt: Date.now() + 3600000 });
+  expect(res).toMatchObject({ ok: false, error: expect.stringMatching(/Too many snoozed/) });
+  expect(await panel.evaluate(async (w) => (await chrome.tabs.query({ windowId: w })).map((t) => t.url), winId)).toEqual([url]);
+  await panel.evaluate(() => chrome.storage.local.set({ snoozed: [] }));
+});
+
+test('listSnoozed drops a null entry instead of failing', async ({ panel }) => {
+  await panel.evaluate(() => chrome.storage.local.set({ snoozed: [null, { id: 'ok', url: 'http://example.com/ok', title: '', wakeAt: Date.now() + 9e6, createdAt: 1 }] }));
+  const list = await listSnoozed(panel);
+  expect(list.map((e) => e.id)).toEqual(['ok']);
+  await panel.evaluate(() => chrome.storage.local.set({ snoozed: [] }));
+});

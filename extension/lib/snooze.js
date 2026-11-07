@@ -34,14 +34,38 @@ export function makeSnooze({ url, title, wakeAt }, now = Date.now()) {
 // Storage can hold anything; an entry without a finite wakeAt can never be scheduled.
 export const hasWakeTime = (e) => Number.isFinite(e?.wakeAt);
 
+// A snooze entry the list UI can show and the wake code can open.
+export const isSnoozeEntry = (e) => e != null && typeof e === 'object' && typeof e.id === 'string' && typeof e.url === 'string' && hasWakeTime(e);
+export const cleanSnoozed = (list) => (Array.isArray(list) ? list.filter(isSnoozeEntry) : []);
+
+// After a failed reopen an entry carries retryAt (always >= wakeAt); that is when it is next due.
+const dueAt = (e) => (Number.isFinite(e.retryAt) ? Math.max(e.wakeAt, e.retryAt) : e.wakeAt);
+
 export function dueSnoozed(list, now = Date.now()) {
   const t = toDate(now).getTime();
-  return list.filter((e) => hasWakeTime(e) && e.wakeAt <= t);
+  return list.filter((e) => hasWakeTime(e) && dueAt(e) <= t);
 }
 
+// An entry still marked `waking` was interrupted mid-wake, so it counts as due right away.
 export function nextWake(list) {
-  const times = list.filter(hasWakeTime).map((e) => e.wakeAt);
+  const times = list.filter(hasWakeTime).map((e) => (Number.isFinite(e.waking) ? e.waking : dueAt(e)));
   return times.length ? Math.min(...times) : null;
+}
+
+const RETRY_BASE = 5 * 60000;
+const RETRY_MAX = 6 * HOUR;
+export const retryDelay = (attempts) => Math.min(RETRY_BASE * 2 ** Math.max(0, attempts - 1), RETRY_MAX);
+
+// Splits tabs into what can be snoozed and a count of what cannot. Private (incognito) tabs are
+// never stored: the snooze list lives in persistent storage, which would leak the page.
+export function selectSnoozable(tabs, { ignorePinned = true } = {}) {
+  const targets = [];
+  let privateCount = 0;
+  for (const t of tabs) {
+    if (t.incognito === true) privateCount += 1;
+    else if (/^https?:/i.test(t.url || '') && !(ignorePinned && t.pinned)) targets.push(t);
+  }
+  return { targets, skipped: tabs.length - targets.length, privateCount };
 }
 
 const MIN_AHEAD = 60000;
@@ -56,25 +80,66 @@ export function wakeAtError(wakeAt, now = Date.now()) {
   return null;
 }
 
-// Wakes the entries named by `ids` (or every due one when `ids` is null). The caller holds the
-// 'snoozed' lock. Entries leave storage BEFORE they open, so a crash in between can lose a tab's
-// reopen but never duplicates it; an entry whose open throws is put back to retry later.
-// Entries with no usable wakeAt are dropped. Returns { woke, rest } (rest = what is stored now).
-export async function wakeEntries({ read, write, open, ids = null, now = Date.now() }) {
+// Phase 1 (caller holds the lock): mark what to wake with `waking: now` and persist that, so a
+// worker that dies later leaves a trail. Entries already marked are interrupted wakes from an
+// earlier attempt and are picked up regardless of their time.
+async function markWaking({ read, write, ids, now }) {
   const list = await read();
   const valid = list.filter(hasWakeTime);
-  const picked = ids ? valid.filter((e) => ids.includes(e.id)) : dueSnoozed(valid, now);
-  const gone = new Set(picked);
-  const rest = valid.filter((e) => !gone.has(e));
-  if (picked.length || valid.length !== list.length) await write(rest);
-  const failed = [];
-  for (const entry of picked) {
-    try { await open(entry); } catch (err) { console.warn('[organizer] could not reopen snoozed tab:', err); failed.push(entry); }
+  const wanted = ids ? valid.filter((e) => ids.includes(e.id)) : [...new Set([...dueSnoozed(valid, now), ...valid.filter((e) => e.waking != null)])];
+  const picked = wanted.map((entry) => ({ entry, resumed: entry.waking != null }));
+  const chosen = new Set(wanted);
+  if (picked.length || valid.length !== list.length) await write(valid.map((e) => (chosen.has(e) ? { ...e, waking: now } : e)));
+  return picked;
+}
+
+// Phase 2 (no lock held): open each entry, skipping resumed ones whose URL is already open.
+async function openAll(picked, { open, openUrls }) {
+  const openNow = new Set(picked.some((p) => p.resumed) ? await openUrls() : []);
+  const done = new Set();
+  const failed = new Set();
+  for (const { entry, resumed } of picked) {
+    if (resumed && openNow.has(entry.url)) { done.add(entry.id); continue; }
+    try { await open(entry); done.add(entry.id); } catch (err) { console.warn('[organizer] could not reopen snoozed tab:', err); failed.add(entry.id); }
   }
-  if (!failed.length) return { woke: picked.length, rest };
-  const back = [...rest, ...failed];
-  await write(back);
-  return { woke: picked.length - failed.length, rest: back };
+  return { done, failed };
+}
+
+// Phase 3 (caller holds the lock): drop the opened entries, back off the failed ones.
+async function settle({ read, write, done, failed, now }) {
+  const rest = (await read()).filter(hasWakeTime).filter((e) => !done.has(e.id)).map((e) => {
+    if (!failed.has(e.id)) return e;
+    const { waking, ...kept } = e;
+    const attempts = (e.attempts || 0) + 1;
+    return { ...kept, attempts, retryAt: now + retryDelay(attempts) };
+  });
+  await write(rest);
+  return rest;
+}
+
+// Wakes the entries named by `ids` (or every due one when `ids` is null) without ever losing one:
+// mark under the lock, open outside it, then remove the opened ones under the lock. A crash after
+// marking leaves the entry stored, and the next call reopens it unless a tab with that exact URL
+// is already open. Failed opens stay stored with attempts/retryAt (exponential backoff).
+// `lock` wraps the two storage phases; callers serialize whole calls themselves.
+// Entries with no usable wakeAt are dropped. Returns { woke, rest }.
+export async function wakeEntries({ read, write, open, openUrls = async () => [], lock = (fn) => fn(), ids = null, now = Date.now() }) {
+  const picked = await lock(() => markWaking({ read, write, ids, now }));
+  if (!picked.length) return { woke: 0, rest: (await read()).filter(hasWakeTime) };
+  const { done, failed } = await openAll(picked, { open, openUrls });
+  const rest = await lock(() => settle({ read, write, done, failed, now }));
+  return { woke: done.size, rest };
+}
+
+// Alarm/startup entry point: wake what is due; if anything throws, try again in a minute.
+export async function reconcileSnoozes({ wake, notify, rearm, retryMs = 60000, now = Date.now }) {
+  try {
+    const n = await wake();
+    if (n) await notify(n);
+  } catch (err) {
+    console.warn('[organizer] snooze reconcile failed:', err);
+    try { await rearm(now() + retryMs); } catch (e) { console.warn('[organizer] could not rearm snooze alarm:', e); }
+  }
 }
 
 // Returns a new list; throws (leaving the input untouched) if it would exceed the cap.

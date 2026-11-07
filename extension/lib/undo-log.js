@@ -104,22 +104,26 @@ export async function reverseEntry(entry, chromeApi = chrome, idRemap = new Map(
     }
     case 'snoozeTab': {
       const { snoozeId, url, windowId, index, pinned } = entry.reverse;
-      // Drop the snooze first so the alarm can't reopen it a second time.
-      const stillSnoozed = await withLock('snoozed', async () => {
+      // Hold the lock across the reopen: drop the snooze first so the alarm can't reopen it a second
+      // time, and put it back if the tab can't be created so it still wakes later.
+      await withLock('snoozed', async () => {
         const { snoozed = [] } = await chromeApi.storage.local.get('snoozed');
         const next = snoozed.filter((e) => e.id !== snoozeId);
-        if (next.length === snoozed.length) return false;
+        // Already woken (or deleted from the Snoozed list): the tab is open or was dismissed on
+        // purpose, so reopening it here would only add a duplicate.
+        if (next.length === snoozed.length) return;
         await chromeApi.storage.local.set({ snoozed: next });
-        return true;
+        try {
+          try {
+            await chromeApi.tabs.create({ url, windowId, index, pinned, active: false });
+          } catch {
+            await chromeApi.tabs.create({ url, pinned, active: false });
+          }
+        } catch (err) {
+          await chromeApi.storage.local.set({ snoozed });
+          throw err;
+        }
       });
-      // Already woken (or deleted from the Snoozed list): the tab is open or was dismissed on purpose,
-      // so reopening it here would only add a duplicate.
-      if (!stillSnoozed) return;
-      try {
-        await chromeApi.tabs.create({ url, windowId, index, pinned, active: false });
-      } catch {
-        await chromeApi.tabs.create({ url, pinned, active: false });
-      }
       return;
     }
     case 'groupTabs':

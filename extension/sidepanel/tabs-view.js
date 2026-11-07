@@ -101,7 +101,7 @@ export function initTabsView() {
       return;
     }
     tabSelection = new Set();
-    setStatus(`Snoozed ${res.snoozed} tab${res.snoozed === 1 ? '' : 's'} until ${new Date(wakeAt).toLocaleString()}.${res.skipped ? ` Skipped ${res.skipped}.` : ''}`);
+    setStatus(`Snoozed ${res.snoozed} tab${res.snoozed === 1 ? '' : 's'} until ${new Date(wakeAt).toLocaleString()}.${res.skipped ? ` Skipped ${res.skipped}.` : ''}${res.privateSkipped ? " Private (incognito) tabs can't be snoozed." : ''}`);
     await renderTabs();
     await showUndoToast();
   });

@@ -10,7 +10,10 @@ function actionButton(label, cmd, id, failText) {
   b.type = 'button';
   b.textContent = label;
   b.addEventListener('click', async () => {
-    try { await request({ cmd, ids: [id] }); } catch (err) { setStatus(`${failText}: ${err.message}`); }
+    try {
+      const res = await request({ cmd, ids: [id] });
+      if (cmd === 'wakeSnoozed' && !res?.woke) setStatus("Couldn't reopen that tab; it will be retried.");
+    } catch (err) { setStatus(`${failText}: ${err.message}`); }
     await renderSnoozed();
   });
   return b;
