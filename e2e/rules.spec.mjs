@@ -70,3 +70,22 @@ test('saving 41 rules is rejected with a clear error', async ({ panel }) => {
   expect(res.error).toMatch(/Too many rules/);
   expect((await send(panel, { cmd: 'getRules' })).rules.length).toBeLessThan(41);
 });
+
+test('the Grouping rules editor adds and saves a rule, and shows a validation error', async ({ panel }) => {
+  await panel.click('#rulesPanel summary');
+  await panel.getByRole('button', { name: 'Add rule' }).click();
+  await panel.getByLabel('Rule 1 name').fill('Docs');
+  await panel.getByLabel('Rule 1 match type').selectOption('urlPrefix');
+  await panel.getByLabel('Rule 1 match value').fill('https://developer.mozilla.org/');
+  await panel.getByLabel('Rule 1 group name').fill('Reference');
+  await panel.getByLabel('Rule 1 group color').selectOption('purple');
+  await panel.getByRole('button', { name: 'Save rules' }).click();
+  await expect.poll(async () => (await send(panel, { cmd: 'getRules' })).rules?.[0]).toMatchObject({
+    name: 'Docs', match: { kind: 'urlPrefix', value: 'https://developer.mozilla.org/' }, group: { name: 'Reference', color: 'purple' },
+  });
+
+  // An empty match value is rejected and the reason reaches the status line.
+  await panel.getByLabel('Rule 1 match value').fill('');
+  await panel.getByRole('button', { name: 'Save rules' }).click();
+  await expect(panel.locator('#status')).toContainText(/rule 1/i);
+});

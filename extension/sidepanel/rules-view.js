@@ -10,6 +10,17 @@ let openTabs = [];
 
 const newRule = () => ({ id: `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, name: '', match: { kind: 'domain', value: '' }, group: { name: '', color: 'grey' } });
 
+// A visible caption above each field: once filled, the placeholders vanish and "Dev" in one box
+// and "Dev" in another would otherwise be indistinguishable. The aria-label stays rule-specific.
+function captioned(caption, field) {
+  const wrap = document.createElement('label');
+  wrap.className = 'ruleField';
+  const text = document.createElement('span');
+  text.textContent = caption;
+  wrap.append(text, field);
+  return wrap;
+}
+
 function textInput(label, value, placeholder, onInput) {
   const el = document.createElement('input');
   el.type = 'text';
@@ -65,11 +76,11 @@ function ruleRow(rule, i) {
   count.textContent = countText(rule);
   const refresh = () => { count.textContent = countText(rule); };
   li.append(
-    textInput(`${n} name`, rule.name, 'Rule name', (v) => { rule.name = v; }),
-    select(`${n} match type`, RULE_KINDS.map((k) => [k, KIND_LABELS[k]]), rule.match.kind, (v) => { rule.match.kind = v; refresh(); }),
-    textInput(`${n} match value`, rule.match.value, 'e.g. github.com', (v) => { rule.match.value = v; refresh(); }),
-    textInput(`${n} group name`, rule.group.name, 'Group name', (v) => { rule.group.name = v; }),
-    select(`${n} group color`, TAB_GROUP_COLORS.map((c) => [c, c]), rule.group.color, (v) => { rule.group.color = v; }),
+    captioned('Rule name', textInput(`${n} name`, rule.name, 'e.g. Work code', (v) => { rule.name = v; })),
+    captioned('Match by', select(`${n} match type`, RULE_KINDS.map((k) => [k, KIND_LABELS[k]]), rule.match.kind, (v) => { rule.match.kind = v; refresh(); })),
+    captioned('Matches', textInput(`${n} match value`, rule.match.value, 'e.g. github.com', (v) => { rule.match.value = v; refresh(); })),
+    captioned('Put in group', textInput(`${n} group name`, rule.group.name, 'e.g. Dev', (v) => { rule.group.name = v; })),
+    captioned('Group color', select(`${n} group color`, TAB_GROUP_COLORS.map((c) => [c, c]), rule.group.color, (v) => { rule.group.color = v; })),
   );
   const btns = document.createElement('div');
   btns.className = 'ruleBtns';
