@@ -75,3 +75,16 @@ test('ignorePinnedTabs defaults to on and can be switched off', async () => {
   await setSettings({ ignorePinnedTabs: false });
   assert.equal((await getSettings()).ignorePinnedTabs, false);
 });
+
+test('rules are stored under their own sync key, validated, and not inside settings', async () => {
+  const { getRules, setRules } = await import('../extension/lib/storage.js');
+  assert.deepEqual(await getRules(), []);
+  const saved = await setRules([{ id: 'a', name: 'Dev', match: { kind: 'domain', value: 'github.com' }, group: { name: 'Code' } }]);
+  assert.equal(saved[0].group.color, 'grey');
+  assert.deepEqual((await chrome.storage.sync.get('rules')).rules, saved);
+  assert.deepEqual(await getRules(), saved);
+  await setSettings({ staleTabDays: 9 });
+  assert.equal((await chrome.storage.sync.get('settings')).settings.rules, undefined);
+  await assert.rejects(() => setRules([{ name: '', match: { kind: 'domain', value: 'x' }, group: { name: 'G' } }]), /needs a name/);
+  assert.deepEqual(await getRules(), saved, 'a rejected write leaves the stored rules untouched');
+});

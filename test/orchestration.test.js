@@ -529,6 +529,51 @@ for (const order of ['pinned-first', 'pinned-last']) test(`a normal tab that dup
   const items = await buildPlan({ settings, nativeClient: null, chromeApi, now: 1, features: { dupeTabs: true, groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false } });
   assert.deepEqual(items.map((i) => `${i.action}:${i.data.tabId}`), ['closeTab:2']);
 });
+
+// Rules + AI
+function rulesChrome(groups = []) {
+  const tabs = [
+    { id: 1, url: 'https://github.com/a', title: 'A', windowId: 1, index: 0, pinned: false, groupId: -1 },
+    { id: 2, url: 'https://gist.github.com/b', title: 'B', windowId: 1, index: 1, pinned: false, groupId: -1 },
+    { id: 3, url: 'https://news.example/c', title: 'C', windowId: 1, index: 2, pinned: false, groupId: -1 },
+    { id: 4, url: 'https://blog.example/d', title: 'D', windowId: 1, index: 3, pinned: false, groupId: -1 },
+  ];
+  return {
+    storage: { local: emptyLocalStorage() },
+    tabs: { async query() { return tabs; } },
+    tabGroups: { async query() { return groups; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+}
+const devRule = [{ id: 'dev', name: 'Dev', match: { kind: 'domain', value: 'github.com' }, group: { name: 'Code', color: 'blue' } }];
+const rulesSettings = { adapter: 'claude', enabledFeatures: { groupTabs: true, importantBookmarks: false, staleTabs: false, cleanBookmarks: false, dupeTabs: false }, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+
+test('rule-matched tabs never reach the model, and their group item comes from the rule', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); return { groups: [] }; } };
+  const items = await buildPlan({ settings: rulesSettings, nativeClient, chromeApi: rulesChrome([{ id: 10, title: 'code', windowId: 1 }]), now: 1, rules: devRule });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].payload.tabs.map((t) => t.tabId).sort(), [3, 4]);
+  const ruleItem = items.find((i) => i.itemId === 'rule-dev-w1');
+  assert.deepEqual(ruleItem.data.tabIds, [1, 2]);
+  assert.equal(ruleItem.data.existingGroupId, 10);
+});
+
+test('an applyRules-only run groups by rule and makes no AI request', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); throw new Error('the AI must not be called'); } };
+  const features = { groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false, dupeTabs: false, dupeBookmarks: false, applyRules: true };
+  const items = await buildPlan({ settings: rulesSettings, nativeClient, chromeApi: rulesChrome(), now: 1, rules: devRule, features });
+  assert.equal(requests.length, 0);
+  assert.deepEqual(items.map((i) => i.itemId), ['rule-dev-w1']);
+});
+
+test('rules do not run when neither applyRules nor groupTabs is on', async () => {
+  const features = { groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, dupeTabs: false };
+  const items = await buildPlan({ settings: rulesSettings, nativeClient: null, chromeApi: rulesChrome(), now: 1, rules: devRule, features });
+  assert.deepEqual(items, []);
+});
 async function trackingDupePlan(settingsPatch) {
   const tab = (id, url) => ({ id, url, title: `Docs ${id}`, windowId: 1, index: id, pinned: false, groupId: -1 });
   const bm = (id, url) => ({ id, parentId: '2', url, title: url, dateAdded: Date.now() });
