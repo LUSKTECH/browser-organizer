@@ -1,4 +1,5 @@
 import { TAB_GROUP_COLORS } from './colors.js';
+import { uniqueId } from './ids.js';
 
 // User-defined tab-grouping rules. Pure: no chrome.* access, so it is testable and the
 // orchestrator decides what to feed it. First matching rule (list order) wins.
@@ -37,7 +38,7 @@ export function firstMatch(rules, tab) {
   return (rules || []).find((r) => matchRule(r, tab)) || null;
 }
 
-function cleanRule(r, i) {
+function cleanRule(r, i, used) {
   const at = `Rule ${i + 1}`;
   if (!r || typeof r !== 'object') throw new Error(`${at} is not valid`);
   const name = String(r.name ?? '').trim();
@@ -53,17 +54,26 @@ function cleanRule(r, i) {
   if (groupName.length > MAX_NAME) throw new Error(`${at}: group name is longer than ${MAX_NAME} characters`);
   const color = (r.group && r.group.color) || 'grey';
   if (!TAB_GROUP_COLORS.includes(color)) throw new Error(`${at}: unknown color "${color}"`);
-  const id = typeof r.id === 'string' && r.id ? r.id.slice(0, 40) : `r${i + 1}-${Math.random().toString(36).slice(2, 8)}`;
+  const kept = typeof r.id === 'string' && r.id ? r.id.slice(0, 40) : '';
+  const id = kept && !used.has(kept) ? kept : uniqueId('r-').slice(0, 40);
+  used.add(id);
   return { id, name, match: { kind, value }, group: { name: groupName, color } };
 }
 
 export function validateRules(rules) {
   if (!Array.isArray(rules)) throw new Error('Rules must be a list');
   if (rules.length > MAX_RULES) throw new Error(`Too many rules: the limit is ${MAX_RULES}`);
-  const clean = rules.map(cleanRule);
+  const used = new Set();
+  const clean = rules.map((r, i) => cleanRule(r, i, used));
   const bytes = new TextEncoder().encode(JSON.stringify(clean)).length;
   if (bytes > MAX_RULES_BYTES) throw new Error(`Rules are too large to sync (${bytes} of ${MAX_RULES_BYTES} bytes). Shorten some names or values`);
   return clean;
+}
+
+// How many open tabs a rule would actually group: ungrouped ones, and not pinned when pinned tabs are left alone.
+export function countMatches(rule, tabs, ignorePinned) {
+  if (!String(rule.match.value || '').trim()) return 0;
+  return tabs.filter((t) => (t.groupId ?? -1) === -1 && !(ignorePinned && t.pinned) && matchRule(rule, t)).length;
 }
 
 // One groupTabs item per (rule, window): Chrome groups cannot span windows. Only ungrouped tabs.

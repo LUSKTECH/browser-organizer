@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchRule, firstMatch, validateRules, planRuleGroups, MAX_RULES } from '../extension/lib/rules.js';
+import { matchRule, firstMatch, validateRules, planRuleGroups, countMatches, MAX_RULES } from '../extension/lib/rules.js';
 
 const rule = (kind, value, extra = {}) => ({ id: extra.id || 'r1', name: extra.name || 'Dev', match: { kind, value }, group: { name: extra.group || 'Dev', color: 'blue' } });
 const tab = (url, title = '', extra = {}) => ({ tabId: 1, windowId: 1, groupId: -1, url, title, ...extra });
@@ -112,4 +112,21 @@ test('planRuleGroups sets existingGroupId only for a same-window, same-title gro
   const items = planRuleGroups(rules, tabs, groups);
   assert.equal(items.find((i) => i.data.windowId === 1).data.existingGroupId, 10);
   assert.equal('existingGroupId' in items.find((i) => i.data.windowId === 2).data, false);
+});
+
+test('validateRules makes ids unique and keeps valid ids stable', () => {
+  const out = validateRules([good({ id: 'a' }), good({ id: 'a' }), good({ id: '' }), good({ id: undefined }), good({ id: 'b' })]);
+  assert.equal(out[0].id, 'a');
+  assert.equal(out[4].id, 'b');
+  assert.equal(new Set(out.map((r) => r.id)).size, 5);
+  assert.ok(out.every((r) => typeof r.id === 'string' && r.id));
+  assert.deepEqual(validateRules(out).map((r) => r.id), out.map((r) => r.id));
+});
+
+test('countMatches skips grouped tabs, and pinned ones unless asked not to', () => {
+  const r = rule('domain', 'github.com');
+  const tabs = [tab('https://github.com/a'), tab('https://github.com/b', '', { groupId: 4 }), tab('https://github.com/c', '', { pinned: true }), tab('https://other.com')];
+  assert.equal(countMatches(r, tabs, true), 1);
+  assert.equal(countMatches(r, tabs, false), 2);
+  assert.equal(countMatches(rule('domain', ''), tabs, true), 0);
 });

@@ -317,7 +317,7 @@ async function handleListOpenTabs(m) {
   const all = await chrome.tabs.query(m.windowId ? { windowId: m.windowId } : {});
   const tabs = all
     .filter((t) => t.id != null && t.url && t.url !== 'about:blank' && !/^chrome-extension:|^moz-extension:/i.test(t.url))
-    .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
+    .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId, groupId: t.groupId }));
   return { ok: true, tabs };
 }
 
