@@ -356,7 +356,10 @@ async function applyItems(itemIds) {
 }
 
 // Per-action run buttons: run just one feature without touching settings.
-const ALL_FEATURES = ['groupTabs', 'staleTabs', 'importantBookmarks', 'cleanBookmarks', 'organizeBookmarks', 'dupeTabs', 'dupeBookmarks'];
+const ALL_FEATURES = ['groupTabs', 'staleTabs', 'importantBookmarks', 'cleanBookmarks', 'organizeBookmarks', 'dupeTabs', 'dupeBookmarks', 'applyRules'];
+
+// Rules only: the user's own grouping rules, deterministic, so it needs no AI backend.
+const RULES_ONLY = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === 'applyRules']));
 
 // Duplicate open tabs and duplicate bookmarks only: deterministic, so it needs no AI backend.
 const DUPLICATES_ONLY = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === 'dupeTabs' || f === 'dupeBookmarks']));
@@ -366,6 +369,7 @@ const DUPLICATES_ONLY = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === 'du
 export async function initPlanView() {
   $('run').addEventListener('click', () => startScan());
   $('cancelRun').addEventListener('click', () => send({ cmd: 'cancel' }));
+  $('applyRulesBtn').addEventListener('click', () => startScan(RULES_ONLY, 'Applying your rules…'));
   $('removeDupes').addEventListener('click', () => startScan(DUPLICATES_ONLY, 'Looking for duplicates…'));
   for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
     btn.addEventListener('click', () => {

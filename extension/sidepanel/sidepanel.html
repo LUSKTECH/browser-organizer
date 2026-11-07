@@ -55,6 +55,7 @@
         <button type="button" data-feature="importantBookmarks" data-i18n="featBookmarkImportant">Bookmark important</button>
         <button type="button" data-feature="cleanBookmarks" data-i18n="featCleanBookmarks">Clean bookmarks</button>
         <button type="button" data-feature="organizeBookmarks" data-i18n="featOrganizeBookmarks">Sort bookmarks</button>
+        <button type="button" id="applyRulesBtn" title="Group open tabs using your own rules. Local only, no AI needed.">Apply rules</button>
         <button type="button" id="removeDupes" title="Find duplicate open tabs and duplicate bookmarks. Local only, no AI needed.">Remove duplicates</button>
       </div>
     </div>
@@ -248,6 +249,16 @@
       <p class="hint">Before any run that deletes or moves bookmarks, a copy of your whole bookmark tree is saved on this device (the last 3, kept 30 days). Restoring adds a new folder and never changes what you have now.</p>
       <p id="backupEmpty" class="hint">No backups yet. One is taken automatically the next time a run changes your bookmarks.</p>
       <ul id="backupList"></ul>
+    </details>
+
+    <details id="rulesPanel">
+      <summary>Grouping rules</summary>
+      <p class="hint">Rules group matching open tabs by domain, URL prefix or title, with no AI. The first matching rule wins and runs before the AI. If a group with the same name already exists in a window, tabs join it.</p>
+      <ul id="rulesList"></ul>
+      <div class="rulesActions">
+        <button type="button" id="addRule">Add rule</button>
+        <button type="button" id="saveRules">Save rules</button>
+      </div>
     </details>
 
     <details id="mutedPanel">

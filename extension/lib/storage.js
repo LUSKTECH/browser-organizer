@@ -1,3 +1,5 @@
+import { validateRules } from './rules.js';
+
 export const DEFAULTS = {
   automationMode: 'review',            // 'review' | 'auto'
   enabledFeatures: {
@@ -81,4 +83,17 @@ export async function setSettings(patch) {
   const { ignore, decisions, ...syncable } = next;
   await chrome.storage.sync.set({ settings: syncable });
   return next;
+}
+
+// Grouping rules live under their own sync key (not inside `settings`): they have their own
+// size budget and validation, and a bad rules write must never block a settings write.
+export async function getRules(api = chrome) {
+  const { rules = [] } = await api.storage.sync.get('rules');
+  return Array.isArray(rules) ? rules : [];
+}
+
+export async function setRules(rules) {
+  const clean = validateRules(rules);
+  await chrome.storage.sync.set({ rules: clean });
+  return clean;
 }

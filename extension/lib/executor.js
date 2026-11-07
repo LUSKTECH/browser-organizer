@@ -56,6 +56,16 @@ export async function ensureFolder(pathParts, chromeApi, rootId = '1') {
   return { id: parentId };
 }
 
+// A rule item may name a group to join. Re-check it still exists in that window; if not, the
+// caller creates a new group as usual. The existing group's title/color are left alone.
+async function joinExistingGroup({ existingGroupId, windowId, tabIds }, c) {
+  if (existingGroupId == null) return false;
+  const g = await c.tabGroups.get(existingGroupId).catch(() => null);
+  if (!g || (windowId != null && g.windowId !== windowId)) return false;
+  await c.tabs.group({ groupId: existingGroupId, tabIds });
+  return true;
+}
+
 export async function applyItem(item, deps = {}) {
   const c = deps.chrome || chrome;
   const runId = deps.runId || 'run';
@@ -89,6 +99,7 @@ async function applyItemInner(item, c, deps = {}) {
         const live = await Promise.all(tabIds.map((id) => c.tabs.get(id).catch(() => null)));
         if (live.some((t) => t && t.pinned)) throw new ProtectedTargetError('Grouping includes a pinned tab ("Leave pinned tabs alone" is on)');
       }
+      if (await joinExistingGroup(item.data, c)) return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds } };
       const groupId = await c.tabs.group({ tabIds });
       await c.tabGroups.update(groupId, { title: groupName, color: COLORS.has(color) ? color : 'grey' });
       return { undoId: undoId(), ts: Date.now(), action: 'groupTabs', reverse: { tabIds } };

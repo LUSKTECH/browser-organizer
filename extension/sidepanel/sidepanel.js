@@ -8,6 +8,7 @@ import { initSessionsView, renderSessions } from './sessions-view.js';
 import { initMutedView } from './muted-view.js';
 import { initBackupView } from './backup-view.js';
 import { initHealthView, checkHealth } from './health-view.js';
+import { initRulesView } from './rules-view.js';
 import { initUndoHistory } from './undo.js';
 
 // chrome.i18n scaffolding: replace the text of any [data-i18n] element with its
@@ -27,6 +28,7 @@ function applyI18n() {
   initSettingsView();
   initSessionsView();
   initMutedView();
+  initRulesView();
   initBackupView();
   initHealthView();
   initUndoHistory();

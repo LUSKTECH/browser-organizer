@@ -82,3 +82,43 @@ test('groupTabs treats a missing ignorePinnedTabs as on, and allows pinned tabs 
   await applyItem(groupItem, { chrome: c, settings: { ignorePinnedTabs: false } });
   assert.deepEqual(c._grouped, [[1, 2]]);
 });
+
+// Rules: join an existing group instead of creating one.
+function chromeWithGroups(groups, pinnedIds = []) {
+  const calls = { group: [], update: [] };
+  return {
+    _calls: calls,
+    tabs: {
+      async get(id) { return { id, url: 'https://a.com', pinned: pinnedIds.includes(id) }; },
+      async group(opts) { calls.group.push(opts); return opts.groupId ?? 99; },
+    },
+    tabGroups: {
+      async get(id) { const g = groups.find((x) => x.id === id); if (!g) throw new Error('No group'); return g; },
+      async update(id, props) { calls.update.push([id, props]); },
+    },
+  };
+}
+const ruleItem = (extra = {}) => ({ itemId: 'rule-r-w1', action: 'groupTabs', data: { tabIds: [1, 2], groupName: 'Dev', color: 'blue', windowId: 1, existingGroupId: 10, ...extra } });
+
+test('groupTabs joins the existing group and leaves its title and color alone', async () => {
+  const c = chromeWithGroups([{ id: 10, windowId: 1, title: 'Dev', color: 'red' }]);
+  const entry = await applyItem(ruleItem(), { chrome: c, settings: {} });
+  assert.deepEqual(c._calls.group, [{ groupId: 10, tabIds: [1, 2] }]);
+  assert.deepEqual(c._calls.update, []);
+  assert.deepEqual(entry.reverse, { tabIds: [1, 2] }, 'undo ungroups only the tabs this item added');
+});
+
+test('groupTabs falls back to a new group when the existing group vanished or moved windows', async () => {
+  for (const groups of [[], [{ id: 10, windowId: 2, title: 'Dev' }]]) {
+    const c = chromeWithGroups(groups);
+    await applyItem(ruleItem(), { chrome: c, settings: {} });
+    assert.deepEqual(c._calls.group, [{ tabIds: [1, 2] }]);
+    assert.deepEqual(c._calls.update, [[99, { title: 'Dev', color: 'blue' }]]);
+  }
+});
+
+test('the pinned-tab guard still wins over joining an existing group', async () => {
+  const c = chromeWithGroups([{ id: 10, windowId: 1, title: 'Dev' }], [2]);
+  await assert.rejects(() => applyItem(ruleItem(), { chrome: c, settings: { ignorePinnedTabs: true } }), ProtectedTargetError);
+  assert.deepEqual(c._calls.group, []);
+});

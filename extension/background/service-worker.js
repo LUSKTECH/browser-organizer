@@ -1,4 +1,4 @@
-import { getSettings, setSettings } from '../lib/storage.js';
+import { getSettings, setSettings, getRules, setRules } from '../lib/storage.js';
 import { installActivityListeners, reconcile } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
 import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision, ignoreKey } from '../lib/orchestrator.js';
@@ -516,7 +516,17 @@ async function handleRestoreBackup(m) {
   return { ok: true, created, label: snapshotLabel(snap) };
 }
 
+async function handleGetRules() {
+  return { ok: true, rules: await getRules() };
+}
+
+async function handleSetRules(m) {
+  return withLock('rules', async () => ({ ok: true, rules: await setRules(m.rules) }));
+}
+
 const HANDLERS = {
+  getRules: handleGetRules,
+  setRules: handleSetRules,
   listBackups: handleListBackups,
   getBackup: handleGetBackup,
   restoreBackup: handleRestoreBackup,
