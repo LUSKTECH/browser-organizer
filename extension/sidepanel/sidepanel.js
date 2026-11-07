@@ -9,6 +9,7 @@ import { initMutedView } from './muted-view.js';
 import { initSnoozedView } from './snoozed-view.js';
 import { initBackupView } from './backup-view.js';
 import { initHealthView, checkHealth } from './health-view.js';
+import { initRulesView } from './rules-view.js';
 import { initUndoHistory } from './undo.js';
 
 // chrome.i18n scaffolding: replace the text of any [data-i18n] element with its
@@ -29,6 +30,7 @@ function applyI18n() {
   initSessionsView();
   initMutedView();
   initSnoozedView();
+  initRulesView();
   initBackupView();
   initHealthView();
   initUndoHistory();

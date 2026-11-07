@@ -8,6 +8,8 @@ import { applyItem as defaultApplyItem } from './executor.js';
 import { recordUndo as defaultRecordUndo } from './undo-log.js';
 import { redactUrl, isPrivateHost } from './url-utils.js';
 import { withLock } from './mutex.js';
+import { planRuleGroups, firstMatch } from './rules.js';
+import { getRules } from './storage.js';
 import { applyWhitelist, applyFolderProtection } from './protections.js';
 
 // High-impact/destructive actions are never auto-applied — they always wait for
@@ -74,7 +76,7 @@ export async function buildPlan(deps) {
   const onProgress = deps.onProgress || (() => {});
   const onWarning = deps.onWarning || (() => {});
   const shouldCancel = deps.shouldCancel || (() => false);
-  const PHASES = 6;
+  const PHASES = 7;
   let done = 0;
   let folders = []; // folder inventory captured by the organize phase, for finalize protection
   let rootIds, barId; // real root ids/bar id from the live tree (browser-specific)
@@ -107,13 +109,27 @@ export async function buildPlan(deps) {
     try { items.push(...findDuplicateTabs(allTabs, dupeOptions)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); onWarning('Finding duplicate tabs failed. See the service-worker console for details.'); }
   }
 
+  step('Applying rules');
+  if (shouldCancel()) return finalizePlan(items, settings, folders);
+  let activeRules = [];
+  if ((f.applyRules || f.groupTabs) && tabs.length) {
+    try {
+      activeRules = deps.rules || (chromeApi.storage?.sync ? await getRules(chromeApi) : []);
+      if (activeRules.length) {
+        const existing = chromeApi.tabGroups?.query ? await chromeApi.tabGroups.query({}) : [];
+        items.push(...planRuleGroups(activeRules, tabs, existing));
+      }
+    } catch (e) { console.warn('[organizer] rules phase failed:', e); activeRules = []; onWarning('Applying rules failed. See the service-worker console for details.'); }
+  }
+
   step('Grouping tabs');
   if (shouldCancel()) return finalizePlan(items, settings, folders);
   if (f.groupTabs && tabs.length) {
     // Respect existing Chrome tab groups: only offer to group currently-ungrouped
     // tabs, so re-running doesn't propose new groups over already-organized ones.
     try {
-      const ungrouped = tabs.filter((t) => (t.groupId ?? -1) === -1);
+      // Rule-matched tabs are already claimed by a rule, so the model never sees them.
+      const ungrouped = tabs.filter((t) => (t.groupId ?? -1) === -1 && !firstMatch(activeRules, t));
       if (ungrouped.length) {
         const r = await nativeClient.request({ type: 'organize', task: 'group', adapter, payload: { tabs: projectTabsForHost(ungrouped), rules } });
         items.push(...mapGroupResult(r.groups, byId));

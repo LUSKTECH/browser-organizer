@@ -1,4 +1,4 @@
-import { getSettings, setSettings } from '../lib/storage.js';
+import { getSettings, setSettings, getRules, setRules } from '../lib/storage.js';
 import { installActivityListeners, reconcile } from '../lib/activity-tracker.js';
 import { createNativeClient } from '../lib/native-client.js';
 import { buildPlan, partitionForApply, applyItems, runCommand, recordDecision, ignoreKey } from '../lib/orchestrator.js';
@@ -372,7 +372,7 @@ async function handleListOpenTabs(m) {
   const all = await chrome.tabs.query(m.windowId ? { windowId: m.windowId } : {});
   const tabs = all
     .filter((t) => t.id != null && t.url && t.url !== 'about:blank' && !/^chrome-extension:|^moz-extension:/i.test(t.url))
-    .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId }));
+    .map((t) => ({ id: t.id, title: t.title || '', url: t.url, pinned: !!t.pinned, windowId: t.windowId, groupId: t.groupId }));
   return { ok: true, tabs };
 }
 
@@ -654,7 +654,17 @@ async function handleRestoreBackup(m) {
   return { ok: true, created, label: snapshotLabel(snap) };
 }
 
+async function handleGetRules() {
+  return { ok: true, rules: await getRules() };
+}
+
+async function handleSetRules(m) {
+  return withLock('rules', async () => ({ ok: true, rules: await setRules(m.rules) }));
+}
+
 const HANDLERS = {
+  getRules: handleGetRules,
+  setRules: handleSetRules,
   listBackups: handleListBackups,
   getBackup: handleGetBackup,
   restoreBackup: handleRestoreBackup,

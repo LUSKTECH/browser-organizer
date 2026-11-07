@@ -82,3 +82,83 @@ test('groupTabs treats a missing ignorePinnedTabs as on, and allows pinned tabs 
   await applyItem(groupItem, { chrome: c, settings: { ignorePinnedTabs: false } });
   assert.deepEqual(c._grouped, [[1, 2]]);
 });
+
+// Rules: join an existing group instead of creating one.
+function chromeWithGroups(groups, pinnedIds = []) {
+  const calls = { group: [], update: [] };
+  return {
+    _calls: calls,
+    tabs: {
+      async get(id) { return { id, url: 'https://a.com', windowId: 1, pinned: pinnedIds.includes(id) }; },
+      async group(opts) { calls.group.push(opts); return opts.groupId ?? 99; },
+    },
+    tabGroups: {
+      async get(id) { const g = groups.find((x) => x.id === id); if (!g) throw new Error('No group'); return g; },
+      async update(id, props) { calls.update.push([id, props]); },
+    },
+  };
+}
+const ruleItem = (extra = {}) => ({ itemId: 'rule-r-w1', action: 'groupTabs', data: { tabIds: [1, 2], groupName: 'Dev', color: 'blue', windowId: 1, existingGroupId: 10, ...extra } });
+
+test('groupTabs joins the existing group and leaves its title and color alone', async () => {
+  const c = chromeWithGroups([{ id: 10, windowId: 1, title: 'Dev', color: 'red' }]);
+  const entry = await applyItem(ruleItem(), { chrome: c, settings: {} });
+  assert.deepEqual(c._calls.group, [{ groupId: 10, tabIds: [1, 2] }]);
+  assert.deepEqual(c._calls.update, []);
+  assert.deepEqual(entry.reverse, { tabIds: [1, 2] }, 'undo ungroups only the tabs this item added');
+});
+
+test('groupTabs falls back to a new group when the existing group vanished or moved windows', async () => {
+  for (const groups of [[], [{ id: 10, windowId: 2, title: 'Dev' }]]) {
+    const c = chromeWithGroups(groups);
+    await applyItem(ruleItem(), { chrome: c, settings: {} });
+    assert.deepEqual(c._calls.group, [{ tabIds: [1, 2] }]);
+    assert.deepEqual(c._calls.update, [[99, { title: 'Dev', color: 'blue' }]]);
+  }
+});
+
+test('the pinned-tab guard still wins over joining an existing group', async () => {
+  const c = chromeWithGroups([{ id: 10, windowId: 1, title: 'Dev' }], [2]);
+  await assert.rejects(() => applyItem(ruleItem(), { chrome: c, settings: { ignorePinnedTabs: true } }), ProtectedTargetError);
+  assert.deepEqual(c._calls.group, []);
+});
+
+// A tab can vanish between planning and applying (e.g. closed as a duplicate by an earlier item).
+function chromeWithGone(goneIds, tabWindows = {}) {
+  const grouped = [];
+  const c = chromeWithGroups([{ id: 10, windowId: 1, title: 'Dev', color: 'red' }]);
+  c._grouped = grouped;
+  c.tabs.get = async (id) => {
+    if (goneIds.includes(id)) throw new Error('No tab');
+    return { id, url: 'https://a.com', windowId: tabWindows[id] ?? 1, pinned: false };
+  };
+  return c;
+}
+
+test('groupTabs groups only the tabs that still exist', async () => {
+  const c = chromeWithGone([2]);
+  const item = { itemId: 'g', action: 'groupTabs', data: { tabIds: [1, 2, 3], groupName: 'Dev', color: 'blue' } };
+  const entry = await applyItem(item, { chrome: c, settings: {} });
+  assert.deepEqual(c._calls.group, [{ tabIds: [1, 3] }]);
+  assert.deepEqual(entry.reverse, { tabIds: [1, 3] });
+});
+
+test('groupTabs throws StaleTabError when every tab is gone', async () => {
+  const c = chromeWithGone([1, 2, 3]);
+  const item = { itemId: 'g', action: 'groupTabs', data: { tabIds: [1, 2, 3], groupName: 'Dev', color: 'blue' } };
+  await assert.rejects(() => applyItem(item, { chrome: c, settings: {} }), StaleTabError);
+  assert.deepEqual(c._calls.group, []);
+});
+
+test('groupTabs does not join a group when a tab has moved to another window; it makes a new group', async () => {
+  const c = chromeWithGone([], { 2: 5 });
+  await applyItem(ruleItem(), { chrome: c, settings: {} });
+  assert.deepEqual(c._calls.group, [{ tabIds: [1, 2] }]);
+  assert.equal(c._calls.update.length, 1);
+});
+
+test('groupTabs still joins when every tab is live in the group window', async () => {
+  const c = chromeWithGone([3]);
+  await applyItem(ruleItem({ tabIds: [1, 2, 3] }), { chrome: c, settings: {} });
+  assert.deepEqual(c._calls.group, [{ groupId: 10, tabIds: [1, 2] }]);
+});
