@@ -4,7 +4,7 @@
 import { $, request, setStatus, currentScopeWindowId } from './dom.js';
 import { filterTabs } from './viewmodel.js';
 import { getSettings } from '../lib/storage.js';
-import { presetTime } from '../lib/snooze.js';
+import { presetTime, wakeAtError } from '../lib/snooze.js';
 import { showUndoToast } from './undo.js';
 
 let openTabs = [];
@@ -91,7 +91,8 @@ export function initTabsView() {
     if (!ids.length) { setStatus('No tabs selected.'); return; }
     const kind = $('snoozePreset').value;
     const wakeAt = kind === 'custom' ? new Date($('snoozeCustom').value).getTime() : presetTime(kind);
-    if (!Number.isFinite(wakeAt) || wakeAt <= Date.now()) { setStatus('Pick a date and time in the future.'); return; }
+    const badTime = wakeAtError(wakeAt);
+    if (badTime) { setStatus(badTime); return; }
     let res;
     try {
       res = await request({ cmd: 'snoozeTabs', tabIds: ids, wakeAt });

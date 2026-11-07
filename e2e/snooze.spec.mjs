@@ -56,10 +56,12 @@ test('a wake time in the past is rejected', async ({ context, server, panel }) =
   const url = `${server}/news/politics`;
   await openTab(context, panel, url);
   const id = await tabIdFor(panel, url);
-  for (const wakeAt of [Date.now() - 1000, NaN, 'soon']) {
+  for (const wakeAt of [Date.now() - 1000, Date.now() + 30000, NaN, 'soon']) {
     const res = await send(panel, { cmd: 'snoozeTabs', tabIds: [id], wakeAt });
     expect(res.ok).toBe(false);
   }
+  const far = await send(panel, { cmd: 'snoozeTabs', tabIds: [id], wakeAt: Date.now() + 400 * 86400000 });
+  expect(far).toMatchObject({ ok: false, error: expect.stringMatching(/within a year/) });
   expect(await countTabsWithUrl(panel, url)).toBe(1);
   expect(await listSnoozed(panel)).toEqual([]);
 });
@@ -88,5 +90,38 @@ test('a pinned tab is skipped while "Leave pinned tabs alone" is on', async ({ c
   const res = await send(panel, { cmd: 'snoozeTabs', tabIds: [id], wakeAt: Date.now() + 3600000 });
   expect(res).toMatchObject({ ok: true, snoozed: 0, skipped: 1 });
   expect(await countTabsWithUrl(panel, url)).toBe(1);
+  expect(await listSnoozed(panel)).toEqual([]);
+});
+
+test('the custom date path shows the bounds error in the status line', async ({ context, server, panel }) => {
+  const url = `${server}/react/docs`;
+  await openTab(context, panel, url);
+  await panel.click('#tabsPanel summary');
+  await panel.locator('#tabList li', { hasText: 'Documentation' }).locator('input[type="checkbox"]').check();
+  await panel.selectOption('#snoozePreset', 'custom');
+  await panel.fill('#snoozeCustom', '2099-01-01T09:00');
+  await panel.click('#snoozeTabsBtn');
+  await expect(panel.locator('#statusText')).toContainText('within a year');
+  expect(await countTabsWithUrl(panel, url)).toBe(1);
+});
+
+test('snoozing every tab of a window keeps the window with one blank tab', async ({ server, panel }) => {
+  const url = `${server}/news/tech`;
+  const winId = await panel.evaluate(async (u) => (await chrome.windows.create({ url: u })).id, url);
+  await expect.poll(() => panel.evaluate(async (w) => (await chrome.tabs.query({ windowId: w })).map((t) => t.url), winId)).toEqual([url]);
+  const tabId = await panel.evaluate(async (w) => (await chrome.tabs.query({ windowId: w }))[0].id, winId);
+  const res = await send(panel, { cmd: 'snoozeTabs', tabIds: [tabId], wakeAt: Date.now() + 3600000 });
+  expect(res).toMatchObject({ ok: true, snoozed: 1 });
+  const left = await panel.evaluate(async (w) => (await chrome.tabs.query({ windowId: w })).length, winId);
+  expect(left).toBe(1);
+  expect(await countTabsWithUrl(panel, url)).toBe(0);
+});
+
+test('an entry with a corrupt wakeAt is dropped and does not stop the others', async ({ panel }) => {
+  await panel.evaluate(() => chrome.storage.local.set({ snoozed: [
+    { id: 'bad1', url: 'http://example.com/a', title: '', wakeAt: 'soon', createdAt: 1 },
+    { id: 'bad2', url: 'http://example.com/b', title: '', createdAt: 1 },
+  ] }));
+  expect(await send(panel, { cmd: 'wakeSnoozed', ids: [] })).toMatchObject({ ok: true, woke: 0 });
   expect(await listSnoozed(panel)).toEqual([]);
 });

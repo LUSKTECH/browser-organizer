@@ -10,7 +10,7 @@ import { parseOmnibox } from '../lib/omnibox.js';
 import { digestText } from '../lib/plan-summary.js';
 import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
-import { makeSnooze, dueSnoozed, nextWake, addSnoozes } from '../lib/snooze.js';
+import { makeSnooze, nextWake, addSnoozes, wakeAtError, wakeEntries } from '../lib/snooze.js';
 import { getSecret } from '../lib/secret-store.js';
 import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
 import { needsBackup, buildSnapshot, saveSnapshot, listSnapshots, getSnapshot, pruneSnapshots, restoreSnapshot, toNetscapeHtml, snapshotLabel } from '../lib/bookmark-backup.js';
@@ -172,20 +172,18 @@ async function openSnoozed(entry) {
   }
 }
 
-// Reopens the entries named by `ids` (or every due one when `ids` is null), drops the ones that
-// opened from the store, reschedules the alarm, and returns how many woke.
+// Reopens the entries named by `ids` (or every due one when `ids` is null) and returns how many woke.
+// wakeEntries takes them out of the store before opening, and puts back any that fail to open.
 async function wakeSnoozed(ids = null) {
   return withLock('snoozed', async () => {
-    const list = await getSnoozed();
-    const picked = ids ? list.filter((e) => ids.includes(e.id)) : dueSnoozed(list, Date.now());
-    const woke = new Set();
-    for (const entry of picked) {
-      try { await openSnoozed(entry); woke.add(entry.id); } catch (err) { console.warn('[organizer] could not reopen snoozed tab:', err); }
-    }
-    const rest = list.filter((e) => !woke.has(e.id));
-    if (woke.size) await chrome.storage.local.set({ snoozed: rest });
+    const { woke, rest } = await wakeEntries({
+      read: getSnoozed,
+      write: (snoozed) => chrome.storage.local.set({ snoozed }),
+      open: openSnoozed,
+      ids,
+    });
     await scheduleSnoozeAlarm(rest);
-    return woke.size;
+    return woke;
   });
 }
 
@@ -397,13 +395,26 @@ async function handleCloseTabs(m) {
   return { ok: true, closed: entries.length };
 }
 
+// Closing every tab of a window closes the window (and the browser, if it is the last one), so
+// give each such window a blank New Tab page first.
+async function keepWindowsOpen(targets) {
+  const closing = new Set(targets.map((t) => t.id));
+  const byWindow = new Map();
+  for (const t of await chrome.tabs.query({})) byWindow.set(t.windowId, [...(byWindow.get(t.windowId) || []), t]);
+  for (const [windowId, tabs] of byWindow) {
+    if (tabs.every((t) => closing.has(t.id))) await chrome.tabs.create({ windowId, active: true });
+  }
+}
+
 async function handleSnoozeTabs(m) {
-  const wakeAt = Number(m.wakeAt);
-  if (!Number.isFinite(wakeAt) || wakeAt <= Date.now()) throw new Error('Pick a time in the future.');
+  const wakeAt = m.wakeAt;
+  const badTime = wakeAtError(wakeAt);
+  if (badTime) throw new Error(badTime);
   const wanted = new Set(m.tabIds || []);
   const skipPinned = (await getSettings()).ignorePinnedTabs !== false;
   const targets = (await chrome.tabs.query({})).filter((t) => wanted.has(t.id) && /^https?:/i.test(t.url || '') && !(skipPinned && t.pinned));
   if (!targets.length) return { ok: true, snoozed: 0, skipped: wanted.size };
+  await keepWindowsOpen(targets);
   const now = Date.now();
   const made = targets.map((t) => ({ tab: t, entry: makeSnooze({ url: t.url, title: t.title, wakeAt }, now) }));
   await withLock('snoozed', async () => {

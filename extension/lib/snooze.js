@@ -31,13 +31,50 @@ export function makeSnooze({ url, title, wakeAt }, now = Date.now()) {
   return { id: uniqueId('snz-'), url, title: title || '', wakeAt, createdAt: toDate(now).getTime() };
 }
 
+// Storage can hold anything; an entry without a finite wakeAt can never be scheduled.
+export const hasWakeTime = (e) => Number.isFinite(e?.wakeAt);
+
 export function dueSnoozed(list, now = Date.now()) {
   const t = toDate(now).getTime();
-  return list.filter((e) => e.wakeAt <= t);
+  return list.filter((e) => hasWakeTime(e) && e.wakeAt <= t);
 }
 
 export function nextWake(list) {
-  return list.length ? Math.min(...list.map((e) => e.wakeAt)) : null;
+  const times = list.filter(hasWakeTime).map((e) => e.wakeAt);
+  return times.length ? Math.min(...times) : null;
+}
+
+const MIN_AHEAD = 60000;
+const MAX_AHEAD = 366 * 24 * HOUR;
+
+// Returns an error message for a wake time that is not usable, or null when it is fine.
+export function wakeAtError(wakeAt, now = Date.now()) {
+  if (typeof wakeAt !== 'number' || !Number.isFinite(wakeAt)) return 'Pick a valid date and time.';
+  const t = toDate(now).getTime();
+  if (wakeAt < t + MIN_AHEAD) return 'Pick a time at least a minute from now.';
+  if (wakeAt > t + MAX_AHEAD) return 'Pick a time within a year from now.';
+  return null;
+}
+
+// Wakes the entries named by `ids` (or every due one when `ids` is null). The caller holds the
+// 'snoozed' lock. Entries leave storage BEFORE they open, so a crash in between can lose a tab's
+// reopen but never duplicates it; an entry whose open throws is put back to retry later.
+// Entries with no usable wakeAt are dropped. Returns { woke, rest } (rest = what is stored now).
+export async function wakeEntries({ read, write, open, ids = null, now = Date.now() }) {
+  const list = await read();
+  const valid = list.filter(hasWakeTime);
+  const picked = ids ? valid.filter((e) => ids.includes(e.id)) : dueSnoozed(valid, now);
+  const gone = new Set(picked);
+  const rest = valid.filter((e) => !gone.has(e));
+  if (picked.length || valid.length !== list.length) await write(rest);
+  const failed = [];
+  for (const entry of picked) {
+    try { await open(entry); } catch (err) { console.warn('[organizer] could not reopen snoozed tab:', err); failed.push(entry); }
+  }
+  if (!failed.length) return { woke: picked.length, rest };
+  const back = [...rest, ...failed];
+  await write(back);
+  return { woke: picked.length - failed.length, rest: back };
 }
 
 // Returns a new list; throws (leaving the input untouched) if it would exceed the cap.
