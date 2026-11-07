@@ -574,3 +574,30 @@ test('rules do not run when neither applyRules nor groupTabs is on', async () =>
   const items = await buildPlan({ settings: rulesSettings, nativeClient: null, chromeApi: rulesChrome(), now: 1, rules: devRule, features });
   assert.deepEqual(items, []);
 });
+async function trackingDupePlan(settingsPatch) {
+  const tab = (id, url) => ({ id, url, title: `Docs ${id}`, windowId: 1, index: id, pinned: false, groupId: -1 });
+  const bm = (id, url) => ({ id, parentId: '2', url, title: url, dateAdded: Date.now() });
+  const tree = [{ id: '0', children: [{ id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p?utm_source=x')] }] }];
+  const chromeApi = {
+    storage: { local: emptyLocalStorage() },
+    tabs: { async query() { return [tab(1, 'https://a.example/docs'), tab(2, 'https://a.example/docs?utm_source=x')]; } },
+    bookmarks: { async getTree() { return tree; } },
+    history: { async getVisits() { return []; } },
+  };
+  const settings = { adapter: 'claude', enabledFeatures: {}, staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200, ...settingsPatch };
+  return buildPlan({ settings, nativeClient: null, chromeApi, now: 1, features: { dupeTabs: true, dupeBookmarks: true, groupTabs: false, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, organizeBookmarks: false } });
+}
+
+test('buildPlan treats ?utm_source copies as duplicates (tabs and bookmarks) unless dupeIgnoreTrackingParams is false', async () => {
+  for (const patch of [{}, { dupeIgnoreTrackingParams: true }]) {
+    const items = await trackingDupePlan(patch);
+    assert.equal(items.filter((i) => i.action === 'closeTab').length, 1);
+    assert.equal(items.filter((i) => i.action === 'deleteBookmark').length, 1);
+  }
+});
+
+test('buildPlan with dupeIgnoreTrackingParams: false keeps ?utm_source copies apart', async () => {
+  const items = await trackingDupePlan({ dupeIgnoreTrackingParams: false });
+  assert.equal(items.length, 0);
+});
+

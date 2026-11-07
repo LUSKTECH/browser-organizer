@@ -18,6 +18,51 @@ export function normalizeUrl(url) {
   }
 }
 
+const TRACKING_PARAMS = new Set(['fbclid', 'gclid', 'dclid', 'msclkid', 'mc_cid', 'mc_eid', 'igshid', 'yclid', '_hsenc', '_hsmi']);
+
+function isTrackingParam(key) {
+  const k = key.toLowerCase();
+  return k.startsWith('utm_') || TRACKING_PARAMS.has(k);
+}
+
+// The raw `key=value` pieces of a query, without re-encoding anything: URLSearchParams would turn
+// `%20` and `+` into the same thing, but a site may treat them differently.
+function queryParts(search) {
+  return search.replace(/^\?/, '').split('&').filter(Boolean);
+}
+
+function partKey(part) {
+  const raw = part.split('=')[0];
+  try { return decodeURIComponent(raw.replace(/\+/g, ' ')); } catch { return raw; }
+}
+
+function hasTrackingParam(url) {
+  try { return queryParts(new URL(url).search).some((p) => isTrackingParam(partKey(p))); } catch { return false; }
+}
+
+// Looser key for "same page" duplicate detection: normalizeUrl, minus tracking
+// parameters, with the rest sorted so their order doesn't matter. Deliberately a
+// separate function: normalizeUrl also keys history lookups and ignore keys.
+export function dupeKey(url) {
+  try {
+    const u = new URL(url);
+    const kept = queryParts(u.search).filter((p) => !isTrackingParam(partKey(p))).sort();
+    u.search = '';
+    // Normalize without the query so the trailing-slash rule sees the path, then re-append it as written.
+    return normalizeUrl(u.toString()) + (kept.length ? `?${kept.join('&')}` : '');
+  } catch {
+    return url;
+  }
+}
+
+// Reason text for a duplicate proposal; mentions tracking parameters only when one of the two URLs had some.
+export function duplicateReason(keep, dup, loose) {
+  const base = `Duplicate of "${keep.title || keep.url}"`;
+  const trackingMadeTheDifference = loose && normalizeUrl(keep.url) !== normalizeUrl(dup.url)
+    && (hasTrackingParam(keep.url) || hasTrackingParam(dup.url));
+  return trackingMadeTheDifference ? `${base} (same page, tracking parameters ignored)` : base;
+}
+
 export function redactUrl(url) {
   try {
     const u = new URL(url);

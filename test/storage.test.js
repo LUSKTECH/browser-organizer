@@ -20,6 +20,7 @@ test('getSettings returns defaults when nothing stored', async () => {
   assert.equal(s.protectBookmarkBar, true);
   assert.deepEqual(s.protectedFolders, []);
   assert.equal(s.removeEmptyFolders, false);
+  assert.equal(s.dupeIgnoreTrackingParams, true);
 });
 
 test('setSettings merges a patch over defaults', async () => {

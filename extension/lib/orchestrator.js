@@ -99,13 +99,14 @@ export async function buildPlan(deps) {
   const f = { ...settings.enabledFeatures, ...(deps.features || {}) };
   const rules = decisionRules(settings.decisions || {}).keep.join('; ');
   const adapter = settings.adapter || 'claude';
+  const dupeOptions = { loose: settings.dupeIgnoreTrackingParams !== false };
 
   step('Finding duplicate tabs');
   if (shouldCancel()) return finalizePlan(items, settings, folders);
   // Judged against every tab, pinned included: findDuplicateTabs keeps a pinned copy and never closes one,
   // so a normal tab that duplicates a pinned tab is still caught.
   if (f.dupeTabs && allTabs.length) {
-    try { items.push(...findDuplicateTabs(allTabs)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); onWarning('Finding duplicate tabs failed. See the service-worker console for details.'); }
+    try { items.push(...findDuplicateTabs(allTabs, dupeOptions)); } catch (e) { console.warn('[organizer] duplicate-tabs phase failed:', e); onWarning('Finding duplicate tabs failed. See the service-worker console for details.'); }
   }
 
   step('Applying rules');
@@ -166,7 +167,7 @@ export async function buildPlan(deps) {
    try {
     const bookmarks = await collectBookmarks(chromeApi);
     const deletes = [];
-    deletes.push(...findDuplicateBookmarks(bookmarks));
+    deletes.push(...findDuplicateBookmarks(bookmarks, dupeOptions));
     if (f.cleanBookmarks) {
       const visits = await getVisitsMap(bookmarks, chromeApi);
       deletes.push(...findStaleBookmarks(bookmarks, visits, settings.staleBookmarkDays, now));

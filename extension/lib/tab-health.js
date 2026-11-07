@@ -1,9 +1,11 @@
-import { normalizeUrl } from './url-utils.js';
+import { normalizeUrl, dupeKey, duplicateReason } from './url-utils.js';
 
-export function findDuplicateTabs(tabs) {
+// `loose` also treats pages that differ only by tracking parameters as the same page.
+export function findDuplicateTabs(tabs, { loose = false } = {}) {
+  const keyOf = loose ? dupeKey : normalizeUrl;
   const groups = new Map();
   for (const t of tabs) {
-    const key = normalizeUrl(t.url);
+    const key = keyOf(t.url);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
   }
@@ -18,7 +20,7 @@ export function findDuplicateTabs(tabs) {
         itemId: `dupe-close-${t.tabId}`,
         action: 'closeTab',
         status: 'pending',
-        reason: `Duplicate of "${keep.title || keep.url}"`,
+        reason: duplicateReason(keep, t, loose),
         data: { tabId: t.tabId, url: t.url, title: t.title, windowId: t.windowId, index: t.index, pinned: false, bookmarkFirst: false },
       });
     }
