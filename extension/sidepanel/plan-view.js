@@ -4,6 +4,7 @@
 // one only through initPlanView() (bootstrap) and showUndoToast() (undo module).
 import { $, setStatus, flashStatus, send, request, downloadText, fetchPlan, focusTab, currentScopeWindowId, confirmAction } from './dom.js';
 import { getSettings } from '../lib/storage.js';
+import { hasUnsavedRules } from './rules-view.js';
 import { startScanClock, stopScanClock, ensureScanPort } from './scan-clock.js';
 import { showUndoToast } from './undo.js';
 import { ignoreKey } from '../lib/orchestrator.js';
@@ -369,7 +370,10 @@ const DUPLICATES_ONLY = Object.fromEntries(ALL_FEATURES.map((f) => [f, f === 'du
 export async function initPlanView() {
   $('run').addEventListener('click', () => startScan());
   $('cancelRun').addEventListener('click', () => send({ cmd: 'cancel' }));
-  $('applyRulesBtn').addEventListener('click', () => startScan(RULES_ONLY, 'Applying your rules…'));
+  $('applyRulesBtn').addEventListener('click', () => {
+    if (hasUnsavedRules()) { setStatus('Save your rules first: Apply rules uses the saved ones'); return; }
+    startScan(RULES_ONLY, 'Applying your rules…');
+  });
   $('removeDupes').addEventListener('click', () => startScan(DUPLICATES_ONLY, 'Looking for duplicates…'));
   for (const btn of $('runOne').querySelectorAll('button[data-feature]')) {
     btn.addEventListener('click', () => {

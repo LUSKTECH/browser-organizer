@@ -2,11 +2,24 @@
 // service worker, which validates them. Match counts come from one listOpenTabs call.
 import { $, request, setStatus } from './dom.js';
 import { TAB_GROUP_COLORS } from '../lib/colors.js';
-import { RULE_KINDS, matchRule } from '../lib/rules.js';
+import { RULE_KINDS, countMatches } from '../lib/rules.js';
+import { getSettings } from '../lib/storage.js';
 
 const KIND_LABELS = { domain: 'Domain', urlPrefix: 'URL starts with', titleContains: 'Title contains' };
 let rules = [];
 let openTabs = [];
+let ignorePinned = true;
+let loaded = false;
+let dirty = false;
+
+export const hasUnsavedRules = () => dirty;
+
+function setDirty(v) {
+  dirty = v;
+  $('rulesDirty').hidden = !v;
+}
+
+const edited = (fn) => (v) => { fn(v); setDirty(true); };
 
 const newRule = () => ({ id: `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, name: '', match: { kind: 'domain', value: '' }, group: { name: '', color: 'grey' } });
 
@@ -56,7 +69,7 @@ function button(text, label, onClick, disabled = false) {
 }
 
 function countText(rule) {
-  const n = rule.match.value.trim() ? openTabs.filter((t) => matchRule(rule, t)).length : 0;
+  const n = countMatches(rule, openTabs, ignorePinned);
   return `matches ${n} open tab${n === 1 ? '' : 's'}`;
 }
 
@@ -64,6 +77,7 @@ function move(i, d) {
   const j = i + d;
   if (j < 0 || j >= rules.length) return;
   [rules[i], rules[j]] = [rules[j], rules[i]];
+  setDirty(true);
   draw();
 }
 
@@ -76,11 +90,11 @@ function ruleRow(rule, i) {
   count.textContent = countText(rule);
   const refresh = () => { count.textContent = countText(rule); };
   li.append(
-    captioned('Rule name', textInput(`${n} name`, rule.name, 'e.g. Work code', (v) => { rule.name = v; })),
-    captioned('Match by', select(`${n} match type`, RULE_KINDS.map((k) => [k, KIND_LABELS[k]]), rule.match.kind, (v) => { rule.match.kind = v; refresh(); })),
-    captioned('Matches', textInput(`${n} match value`, rule.match.value, 'e.g. github.com', (v) => { rule.match.value = v; refresh(); })),
-    captioned('Put in group', textInput(`${n} group name`, rule.group.name, 'e.g. Dev', (v) => { rule.group.name = v; })),
-    captioned('Group color', select(`${n} group color`, TAB_GROUP_COLORS.map((c) => [c, c]), rule.group.color, (v) => { rule.group.color = v; })),
+    captioned('Rule name', textInput(`${n} name`, rule.name, 'e.g. Work code', edited((v) => { rule.name = v; }))),
+    captioned('Match by', select(`${n} match type`, RULE_KINDS.map((k) => [k, KIND_LABELS[k]]), rule.match.kind, edited((v) => { rule.match.kind = v; refresh(); }))),
+    captioned('Matches', textInput(`${n} match value`, rule.match.value, 'e.g. github.com', edited((v) => { rule.match.value = v; refresh(); }))),
+    captioned('Put in group', textInput(`${n} group name`, rule.group.name, 'e.g. Dev', edited((v) => { rule.group.name = v; }))),
+    captioned('Group color', select(`${n} group color`, TAB_GROUP_COLORS.map((c) => [c, c]), rule.group.color, edited((v) => { rule.group.color = v; }))),
   );
   const btns = document.createElement('div');
   btns.className = 'ruleBtns';
@@ -88,7 +102,7 @@ function ruleRow(rule, i) {
     count,
     button('Up', `Move ${n} up`, () => move(i, -1), i === 0),
     button('Down', `Move ${n} down`, () => move(i, 1), i === rules.length - 1),
-    button('Delete', `Delete ${n}`, () => { rules.splice(i, 1); draw(); }),
+    button('Delete', `Delete ${n}`, () => { rules.splice(i, 1); setDirty(true); draw(); }),
   );
   li.appendChild(btns);
   return li;
@@ -106,10 +120,16 @@ function draw() {
   rules.forEach((r, i) => list.appendChild(ruleRow(r, i)));
 }
 
+// Re-read from storage only the first time or when nothing is unsaved: reopening the section
+// must not throw away edits. Tabs and settings are refreshed either way, for the match counts.
 async function load() {
   try {
-    rules = (await request({ cmd: 'getRules' })).rules;
+    if (!loaded || !dirty) {
+      rules = (await request({ cmd: 'getRules' })).rules;
+      loaded = true;
+    }
     openTabs = (await request({ cmd: 'listOpenTabs' })).tabs || [];
+    ignorePinned = (await getSettings()).ignorePinnedTabs !== false;
   } catch (err) { setStatus(`Could not load rules: ${err.message}`); }
   draw();
 }
@@ -117,6 +137,7 @@ async function load() {
 async function save() {
   try {
     rules = (await request({ cmd: 'setRules', rules })).rules;
+    setDirty(false);
     draw();
     setStatus(`Saved ${rules.length} rule${rules.length === 1 ? '' : 's'}.`);
   } catch (err) { setStatus(`Rules not saved: ${err.message}`); }
@@ -124,6 +145,6 @@ async function save() {
 
 export function initRulesView() {
   $('rulesPanel').addEventListener('toggle', () => { if ($('rulesPanel').open) load(); });
-  $('addRule').addEventListener('click', () => { rules.push(newRule()); draw(); });
+  $('addRule').addEventListener('click', () => { rules.push(newRule()); setDirty(true); draw(); });
   $('saveRules').addEventListener('click', save);
 }

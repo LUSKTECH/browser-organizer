@@ -89,3 +89,24 @@ test('the Grouping rules editor adds and saves a rule, and shows a validation er
   await panel.getByRole('button', { name: 'Save rules' }).click();
   await expect(panel.locator('#status')).toContainText(/rule 1/i);
 });
+
+test('unsaved rule edits survive closing the section, and Apply rules asks to save first', async ({ panel }) => {
+  await send(panel, { cmd: 'setRules', rules: [devRule()] });
+  await panel.reload({ waitUntil: 'domcontentloaded' });
+  await panel.click('#rulesPanel summary');
+  const name = panel.getByLabel('Rule 1 name');
+  await expect(name).toBeVisible();
+  await name.fill('Edited name');
+  await expect(panel.locator('#rulesDirty')).toBeVisible();
+
+  await panel.click('#rulesPanel summary');
+  await panel.click('#rulesPanel summary');
+  await expect(panel.getByLabel('Rule 1 name')).toHaveValue('Edited name');
+  await expect(panel.locator('#rulesDirty')).toBeVisible();
+
+  await panel.click('#applyRulesBtn');
+  await expect(panel.locator('#status')).toContainText('Save your rules first');
+
+  await panel.getByRole('button', { name: 'Save rules' }).click();
+  await expect(panel.locator('#rulesDirty')).toBeHidden();
+});
