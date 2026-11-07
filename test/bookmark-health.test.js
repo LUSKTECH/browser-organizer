@@ -197,3 +197,28 @@ test('dedupeDeletes merges same-bookmark items and combines reasons', () => {
   assert.match(five.reason, /Duplicate/);
   assert.match(five.reason, /404/);
 });
+
+const trackedBookmarks = () => [
+  { id: '1', title: 'Docs', url: 'https://a.com/docs', parentId: '1', index: 0 },
+  { id: '2', title: 'Docs (newsletter)', url: 'https://a.com/docs?utm_source=news&fbclid=1', parentId: '1', index: 1 },
+];
+
+test('findDuplicateBookmarks keeps tracking-parameter copies apart by default', () => {
+  assert.equal(findDuplicateBookmarks(trackedBookmarks()).length, 0);
+  assert.equal(findDuplicateBookmarks(trackedBookmarks(), { loose: false }).length, 0);
+});
+
+test('findDuplicateBookmarks { loose } keeps the first seen and says tracking parameters were ignored', () => {
+  const items = findDuplicateBookmarks(trackedBookmarks(), { loose: true });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].data.bookmarkId, '2');
+  assert.equal(items[0].category, 'duplicate');
+  assert.equal(items[0].reason, 'Duplicate of "Docs" (same page, tracking parameters ignored)');
+});
+
+test('findDuplicateBookmarks { loose } keeps the plain reason for an exact normalized match', () => {
+  const bms = trackedBookmarks();
+  bms[1].url = 'https://A.com/docs/';
+  const [item] = findDuplicateBookmarks(bms, { loose: true });
+  assert.equal(item.reason, 'Duplicate of "Docs"');
+});

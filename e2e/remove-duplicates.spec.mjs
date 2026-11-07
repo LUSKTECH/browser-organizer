@@ -34,3 +34,18 @@ test('Remove duplicates proposes the duplicate tab and bookmark, and applying re
   // The duplicate bookmark is really gone too: exactly one copy remains.
   await expect.poll(() => panel.evaluate(async (u) => (await chrome.bookmarks.search({ url: u })).length, dup)).toBe(1);
 });
+
+test('Remove duplicates also catches a copy that differs only by tracking parameters', async ({ context, server, panel }) => {
+  await (await context.newPage()).goto(`${server}/react/docs?utm_source=newsletter`);
+  await (await context.newPage()).goto(`${server}/react/docs`);
+  await panel.reload({ waitUntil: 'domcontentloaded' });
+
+  await expect(panel.locator('#removeDupes')).toBeEnabled();
+  await panel.click('#removeDupes');
+
+  await expect.poll(async () => (await send(panel, { cmd: 'getPlan' })).items.length, { timeout: 20000 }).toBeGreaterThan(0);
+  const plan = (await send(panel, { cmd: 'getPlan' })).items;
+  const closes = plan.filter((i) => i.action === 'closeTab' && i.data.url.startsWith(`${server}/react/docs`));
+  expect(closes).toHaveLength(1);
+  expect(closes[0].reason).toContain('tracking parameters');
+});

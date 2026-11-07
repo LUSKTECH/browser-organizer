@@ -7,7 +7,8 @@ export const DEFAULTS = {
   protectBookmarkBar: true,            // never move/remove anything in the Bookmarks Bar
   protectedFolders: [],                // folder paths/names the organizer never touches (with their contents)
   ignorePinnedTabs: true,              // leave pinned tabs out of grouping/bookmark suggestions and bulk close (closing one by plan is always refused)
-  removeEmptyFolders: false,           // propose removing folders left empty after organizing
+  dupeIgnoreTrackingParams: true,      // duplicate detection ignores utm_*, fbclid, gclid, ... and query-parameter order
+  removeEmptyFolders: false,          // propose removing folders left empty after organizing
   staleTabDays: 14,                    // tabs idle longer are close candidates
   staleBookmarkDays: 180,             // bookmarks unvisited longer are cleanup candidates
   undoRetentionDays: 7,

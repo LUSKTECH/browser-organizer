@@ -1,4 +1,4 @@
-import { normalizeUrl, isHttpUrl, isPrivateHost } from './url-utils.js';
+import { normalizeUrl, dupeKey, duplicateReason, isHttpUrl, isPrivateHost } from './url-utils.js';
 
 // `opts.category` ('duplicate' | 'stale' | 'dead' | 'other') and `opts.httpStatus`
 // (numeric, dead links only) let the panel group cleanup proposals by reason/status.
@@ -16,13 +16,15 @@ export function deleteItem(b, reason, opts = {}) {
   };
 }
 
-export function findDuplicateBookmarks(bookmarks) {
+// `loose` also treats pages that differ only by tracking parameters as the same page.
+export function findDuplicateBookmarks(bookmarks, { loose = false } = {}) {
+  const keyOf = loose ? dupeKey : normalizeUrl;
   const seen = new Map();
   const items = [];
   for (const b of bookmarks) {
     if (!b.url) continue;
-    const key = normalizeUrl(b.url);
-    if (seen.has(key)) items.push(deleteItem(b, `Duplicate of "${seen.get(key).title || seen.get(key).url}"`, { category: 'duplicate' }));
+    const key = keyOf(b.url);
+    if (seen.has(key)) items.push(deleteItem(b, duplicateReason(seen.get(key), b, loose), { category: 'duplicate' }));
     else seen.set(key, b);
   }
   return items;

@@ -18,6 +18,38 @@ export function normalizeUrl(url) {
   }
 }
 
+const TRACKING_PARAMS = new Set(['fbclid', 'gclid', 'dclid', 'msclkid', 'mc_cid', 'mc_eid', 'igshid', 'yclid', '_hsenc', '_hsmi']);
+
+function isTrackingParam(key) {
+  const k = key.toLowerCase();
+  return k.startsWith('utm_') || TRACKING_PARAMS.has(k);
+}
+
+// Looser key for "same page" duplicate detection: normalizeUrl, minus tracking
+// parameters, with the rest sorted so their order doesn't matter. Deliberately a
+// separate function: normalizeUrl also keys history lookups and ignore keys.
+export function dupeKey(url) {
+  try {
+    const u = new URL(url);
+    const kept = [...u.searchParams].filter(([k]) => !isTrackingParam(k));
+    kept.sort(([a, av], [b, bv]) => (a < b ? -1 : a > b ? 1 : av < bv ? -1 : av > bv ? 1 : 0));
+    u.search = '';
+    for (const [k, v] of kept) u.searchParams.append(k, v);
+    const query = u.search;
+    u.search = '';
+    // Normalize without the query so the trailing-slash rule sees the path, then re-append it.
+    return normalizeUrl(u.toString()) + query;
+  } catch {
+    return url;
+  }
+}
+
+// Reason text for a duplicate proposal; says so when only tracking parameters made the URLs differ.
+export function duplicateReason(keep, dup, loose) {
+  const base = `Duplicate of "${keep.title || keep.url}"`;
+  return loose && normalizeUrl(keep.url) !== normalizeUrl(dup.url) ? `${base} (same page, tracking parameters ignored)` : base;
+}
+
 export function redactUrl(url) {
   try {
     const u = new URL(url);
