@@ -190,3 +190,36 @@ test('remapEntries redirects failed entries to a folder recreated in the same ba
   assert.equal(out[1].reverse.parentId, undefined);
   assert.equal(remapEntries([{ undoId: 'x', reverse: { parentId: 'oldF' } }], new Map())[0].reverse.parentId, 'oldF');
 });
+
+test('reverseEntry snoozeTab removes the snooze entry and reopens the tab', async () => {
+  const calls = [];
+  const chrome = installChromeMock({ tabs: { async create(x) { calls.push(x); } } });
+  await chrome.storage.local.set({ snoozed: [{ id: 's1', url: 'https://a', wakeAt: 1 }, { id: 's2', url: 'https://b', wakeAt: 2 }] });
+  await reverseEntry({ action: 'snoozeTab', reverse: { snoozeId: 's1', url: 'https://a', windowId: 1, index: 3, pinned: false } }, chrome);
+  assert.deepEqual((await chrome.storage.local.get('snoozed')).snoozed.map((e) => e.id), ['s2']);
+  assert.deepEqual(calls, [{ url: 'https://a', windowId: 1, index: 3, pinned: false, active: false }]);
+});
+
+test('reverseEntry snoozeTab does not reopen a tab that already woke (no duplicate)', async () => {
+  const calls = [];
+  const chrome = installChromeMock({ tabs: { async create(x) { calls.push(x); } } });
+  await reverseEntry({ action: 'snoozeTab', reverse: { snoozeId: 'gone', url: 'https://a', windowId: 9, index: 0, pinned: false } }, chrome);
+  assert.deepEqual(calls, []);
+});
+
+test('reverseEntry snoozeTab retries without the window when its window is gone', async () => {
+  const calls = [];
+  const chrome = installChromeMock({ tabs: { async create(x) { calls.push(x); if ('windowId' in x) throw new Error('No window'); } } });
+  await chrome.storage.local.set({ snoozed: [{ id: 's1', url: 'https://a', title: 'a', wakeAt: 9e15, createdAt: 1 }] });
+  await reverseEntry({ action: 'snoozeTab', reverse: { snoozeId: 's1', url: 'https://a', windowId: 9, index: 0, pinned: true } }, chrome);
+  assert.deepEqual(calls, [{ url: 'https://a', windowId: 9, index: 0, pinned: true, active: false }, { url: 'https://a', pinned: true, active: false }]);
+  assert.deepEqual((await chrome.storage.local.get('snoozed')).snoozed, []);
+});
+
+test('reverseEntry snoozeTab puts the snooze back and throws when the tab cannot be reopened', async () => {
+  const chrome = installChromeMock({ tabs: { async create() { throw new Error('no window'); } } });
+  const list = [{ id: 's1', url: 'https://a', wakeAt: 9e15 }, { id: 's2', url: 'https://b', wakeAt: 9e15 }];
+  await chrome.storage.local.set({ snoozed: list });
+  await assert.rejects(reverseEntry({ action: 'snoozeTab', reverse: { snoozeId: 's1', url: 'https://a', windowId: 1, index: 0, pinned: false } }, chrome), /no window/);
+  assert.deepEqual((await chrome.storage.local.get('snoozed')).snoozed, list);
+});

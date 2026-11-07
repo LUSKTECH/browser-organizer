@@ -1,9 +1,10 @@
-// The direct open-tabs list: filter, multi-select, and bulk-close — no AI. Owns
+// The direct open-tabs list: filter, multi-select, bulk-close and snooze — no AI. Owns
 // its own openTabs/tabSelection state; the only outward call is showUndoToast()
 // after a close so the just-closed tabs are one click from being reopened.
 import { $, request, setStatus, currentScopeWindowId } from './dom.js';
 import { filterTabs } from './viewmodel.js';
 import { getSettings } from '../lib/storage.js';
+import { presetTime, wakeAtError } from '../lib/snooze.js';
 import { showUndoToast } from './undo.js';
 
 let openTabs = [];
@@ -81,6 +82,26 @@ export function initTabsView() {
     }
     tabSelection = new Set();
     setStatus(`Closed ${res.closed} tab${res.closed === 1 ? '' : 's'}.`);
+    await renderTabs();
+    await showUndoToast();
+  });
+  $('snoozePreset').addEventListener('change', () => { $('snoozeCustom').hidden = $('snoozePreset').value !== 'custom'; });
+  $('snoozeTabsBtn').addEventListener('click', async () => {
+    const ids = [...tabSelection];
+    if (!ids.length) { setStatus('No tabs selected.'); return; }
+    const kind = $('snoozePreset').value;
+    const wakeAt = kind === 'custom' ? new Date($('snoozeCustom').value).getTime() : presetTime(kind);
+    const badTime = wakeAtError(wakeAt);
+    if (badTime) { setStatus(badTime); return; }
+    let res;
+    try {
+      res = await request({ cmd: 'snoozeTabs', tabIds: ids, wakeAt });
+    } catch (err) {
+      setStatus(`Error: ${err.message}`);
+      return;
+    }
+    tabSelection = new Set();
+    setStatus(`Snoozed ${res.snoozed} tab${res.snoozed === 1 ? '' : 's'} until ${new Date(wakeAt).toLocaleString()}.${res.skipped ? ` Skipped ${res.skipped}.` : ''}${res.privateSkipped ? " Private (incognito) tabs can't be snoozed." : ''}`);
     await renderTabs();
     await showUndoToast();
   });
