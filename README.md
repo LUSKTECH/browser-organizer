@@ -73,7 +73,7 @@ The extension collects tab and bookmark metadata, then passes it to the local No
 ## Safety features
 
 - **Leave pinned tabs alone** (Settings, on by default): pinned tabs are never sent to the AI, never grouped or bulk-closed, and a plan can't close one. A normal tab that duplicates a pinned tab can still be flagged; the pinned copy is the one kept.
-- **Remove duplicates**: one button, no AI needed, finds duplicate open tabs and duplicate bookmarks (same URL ignoring `#fragment`, letter case and a trailing slash) and sends them through the usual review and undo.
+- **Remove duplicates**: one button, no AI needed, finds duplicate open tabs and duplicate bookmarks (same URL ignoring `#fragment`, letter case, a trailing slash and, by default, tracking parameters such as `utm_*` and `fbclid`; a setting turns that off) and sends them through the usual review and undo.
 - **Bookmark backups** (best effort): before a run that deletes or moves bookmarks, a copy of the whole bookmark tree is saved on your device (last 3, kept 30 days). If a backup can't be saved, for example because browser storage is nearly full, you're told and the run still goes ahead; per-run undo still applies. Download one as JSON or as a `bookmarks.html` file any browser can import, or restore it into a new folder; restoring never changes what you have now.
 - **Protected folders and domains**, per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
 
