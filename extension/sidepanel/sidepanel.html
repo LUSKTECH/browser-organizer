@@ -79,10 +79,6 @@
         <input type="search" id="planFilter" aria-label="Filter suggestions" placeholder="Filter suggestions…" />
       </div>
       <div class="planTools-actionsRow">
-        <div class="btnGroup" role="group" aria-label="Selection">
-          <button type="button" id="selectAll">Select all</button>
-          <button type="button" id="selectNone">None</button>
-        </div>
         <div class="btnGroup" role="group" aria-label="Expand or collapse">
           <button type="button" id="expandAll">Expand</button>
           <button type="button" id="collapseAll">Collapse</button>
@@ -100,11 +96,23 @@
 
     <div id="undoToast" role="status" hidden></div>
 
-    <div id="planActions" hidden>
-      <button id="approveSelected" class="apply-primary" data-i18n="applySelected">Apply selected</button>
-      <button id="approveAll" data-i18n="applyAll">Apply all</button>
-      <button id="exportMarkdown" data-i18n="exportMarkdown">Export as Markdown</button>
-      <button id="clearPlan" data-i18n="clearList">Clear list</button>
+    <div id="planActions" role="region" aria-label="Suggestion actions" hidden>
+      <div class="barRow">
+        <span id="planSelCount" class="barCount">Nothing selected</span>
+        <button type="button" id="selectAll" class="barBtn">Select all</button>
+        <button type="button" id="selectNone" class="barBtn">None</button>
+      </div>
+      <div class="barRow">
+        <button id="approveSelected" class="barBtn apply-primary" data-i18n="applySelected" disabled>Apply selected</button>
+        <button id="approveAll" class="barBtn" data-i18n="applyAll">Apply all</button>
+        <details id="planMore" class="barMore">
+          <summary class="barBtn">More</summary>
+          <div class="barMenu">
+            <button id="exportMarkdown" data-i18n="exportMarkdown">Export as Markdown</button>
+            <button id="clearPlan" data-i18n="clearList">Clear list</button>
+          </div>
+        </details>
+      </div>
     </div>
 
     <section class="tools" aria-label="Tools">

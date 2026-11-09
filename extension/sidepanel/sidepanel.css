@@ -437,7 +437,7 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 /* ---------- Undo toast ---------- */
 #undoToast {
   position: sticky;
-  bottom: 10px;
+  bottom: calc(var(--actionbar-h, 0px) + 18px); /* sit above the floating action bar */
   z-index: 30;
   display: flex;
   align-items: center;
@@ -454,15 +454,45 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 #undoToast[hidden] { display: none; }
 #undoToast button { padding: 5px 12px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); font-weight: 600; }
 
-/* ---------- Plan action bar (contextual — only shown when a plan exists) ----------
-   2-col grid: primary Apply spans row 1; Apply all + Export share row 2; Clear list spans row 3.
-   Wraps cleanly at narrow side-panel widths (~360px) with no clipping. */
-#planActions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 12px 0 4px; }
+/* ---------- Floating plan action bar (only shown when a plan exists) ----------
+   position: sticky; bottom: 0 keeps it pinned to the bottom of the visible area while the long
+   list scrolls (page scroll, so it also works in the full-tab options view), and it rests in
+   normal flow after the list at the end, so it never covers the last rows (no spacer needed).
+   Two rows so it fits 320px without overflow: selection row, then actions row. */
+#planActions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10; /* above list rows, below the undo toast (30), header (20) and dialogs */
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 4px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.1);
+}
+@media (prefers-color-scheme: dark) { #planActions { box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.45); } }
 #planActions[hidden] { display: none; }
-#planActions button { font-size: 12px; width: auto; min-width: 0; }
-#planActions .apply-primary { grid-column: 1 / -1; color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; box-shadow: var(--shadow-1); }
-#planActions .apply-primary:hover { background: var(--accent-hover); }
-#planActions #clearPlan { grid-column: 1 / -1; color: var(--text-muted); }
+/* While the More menu is open the bar sits above the undo toast (30) so the toast cannot cover it. :has() needs Chrome 105+. */
+#planActions:has(#planMore[open]) { z-index: 40; }
+#planActions .barRow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#planActions .barCount { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+#planActions .barBtn { min-height: 32px; padding: 4px 8px; font-size: 12px; white-space: nowrap; width: auto; min-width: 0; }
+#planActions .apply-primary { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; color: var(--accent-fg); background: var(--accent); border-color: transparent; font-weight: 600; box-shadow: var(--shadow-1); }
+#planActions .apply-primary:hover:not(:disabled) { background: var(--accent-hover); }
+#planActions .apply-primary:disabled { background: var(--accent); }
+#planActions button:focus-visible, #planActions summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.barMore { position: relative; flex: none; }
+.barMore summary { list-style: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: var(--r); font-weight: 500; user-select: none; transition: background var(--dur) ease; }
+.barMore summary::-webkit-details-marker { display: none; }
+.barMore summary::after { content: "\25B4"; margin-left: 5px; font-size: 10px; }
+.barMore summary:hover { background: var(--surface-hover); }
+.barMenu { position: absolute; right: 0; bottom: calc(100% + 6px); min-width: 170px; display: grid; gap: 2px; padding: 4px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r); box-shadow: var(--shadow-2); }
+.barMenu button { min-height: 32px; text-align: left; border-color: transparent; font-size: 12px; }
+#planActions #clearPlan { color: var(--danger); }
+@media (max-width: 340px) { #planActions .barRow { flex-wrap: wrap; } #planActions .apply-primary { flex-basis: 100%; } #planActions .barRow > #approveAll { flex: 1 1 0; } }
+@media (prefers-reduced-motion: reduce) { .barMore summary { transition: none; } }
 
 /* ---------- Empty state for suggestions ---------- */
 .emptyPlan {
