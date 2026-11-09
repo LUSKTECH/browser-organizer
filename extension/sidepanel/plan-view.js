@@ -426,7 +426,9 @@ export async function initPlanView() {
     await send({ cmd: 'updatePlan', items: [] }); // also clear the stored plan so it doesn't reappear on reload
     renderPlan();
     setStatus('Cleared.');
-    $('run').focus(); // the bar that held focus is hidden now
+    // The bar that held focus is hidden now. Analyze is disabled while no AI is connected, so fall back
+    // to Remove duplicates, which never needs one.
+    ($('run').disabled ? $('removeDupes') : $('run')).focus();
   });
 
   // Plan toolbar: filter, bulk-select, expand/collapse.

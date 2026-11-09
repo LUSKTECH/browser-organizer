@@ -98,11 +98,27 @@ test('More menu: above the toast while open, closes on tab-out, focus returns se
   await panel.keyboard.press('Enter');
   await expect(panel.locator('#planMore summary')).toBeFocused();
 
-  // Clear hides the bar, so focus goes to the Analyze button.
+  // Clear hides the bar, so focus goes to Analyze, or to Remove duplicates while Analyze is
+  // disabled (no AI connected, as on CI).
   await panel.focus('#planMore summary');
   await panel.keyboard.press('Enter');
   await panel.focus('#clearPlan');
   await panel.keyboard.press('Enter');
   await expect(panel.locator('#planActions')).toBeHidden();
-  await expect(panel.locator('#run')).toBeFocused();
+  const expected = (await panel.locator('#run').isDisabled()) ? '#removeDupes' : '#run';
+  await expect(panel.locator(expected)).toBeFocused();
+});
+
+test('after Clear list, focus lands on Remove duplicates when Analyze is disabled', async ({ panel }) => {
+  await seed(panel, 3);
+  await panel.reload({ waitUntil: 'domcontentloaded' });
+  await expect(panel.locator('#plan .item')).toHaveCount(3);
+  // Simulate "no AI connected" (the health check disables Analyze). Wait for the panel's own health
+  // check to finish first, or it re-enables the button afterwards.
+  await expect(panel.locator('#health')).not.toBeEmpty();
+  await panel.evaluate(() => { document.getElementById('run').disabled = true; });
+  await panel.click('#planMore summary');
+  await panel.click('#clearPlan');
+  await expect(panel.locator('#planActions')).toBeHidden();
+  await expect(panel.locator('#removeDupes')).toBeFocused();
 });
