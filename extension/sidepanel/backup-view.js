@@ -60,8 +60,8 @@ async function backupNow() {
   const b = $('backupNow');
   b.disabled = true;
   try {
-    const { count } = await request({ cmd: 'backupNow' });
-    setStatus(`Backup saved (${count} bookmarks).`);
+    const { count, unchanged, ts } = await request({ cmd: 'backupNow' });
+    setStatus(unchanged ? `No changes since the last backup (${new Date(ts).toLocaleString()}).` : `Backup saved (${count} bookmarks).`);
     await renderBackups();
   } catch (err) {
     setStatus(`Could not save a backup: ${err.message}`);

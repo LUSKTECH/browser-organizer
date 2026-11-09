@@ -74,6 +74,13 @@ test('makeSnooze builds the entry shape with a unique id', () => {
   assert.notEqual(a.id, b.id);
 });
 
+test('the notice time comes from the same constant as the tomorrow preset', async () => {
+  const { snoozeNoticeText, presetTime, WAKE_HOUR, wakeTimeText } = await import('../extension/lib/snooze.js');
+  assert.equal(wakeTimeText(), `${WAKE_HOUR}:00`);
+  assert.equal(new Date(presetTime('tomorrow', new Date(2026, 0, 5, 12))).getHours(), WAKE_HOUR);
+  assert.equal(snoozeNoticeText({ snoozed: 1 }, null), `Snoozed until tomorrow ${WAKE_HOUR}:00`);
+});
+
 test('snoozeNoticeText says it was snoozed or why not', async () => {
   const { snoozeNoticeText } = await import('../extension/lib/snooze.js');
   assert.equal(snoozeNoticeText({ snoozed: 1 }, { url: 'https://a.example/' }), 'Snoozed until tomorrow 9:00');

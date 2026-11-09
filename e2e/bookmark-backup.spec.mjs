@@ -82,12 +82,25 @@ test('when storage is nearly full the backup is skipped with a warning and the r
 });
 
 test('Back up now saves a snapshot and the button reports it', async ({ panel }) => {
-  const before = (await send(panel, { cmd: 'listBackups' })).backups.length;
+  await panel.evaluate(() => chrome.storage.local.remove('bookmarkSnapshots'));
   await panel.click('#backupPanel summary');
   await panel.click('#backupNow');
   await expect(panel.locator('#status')).toContainText(/Backup saved \(\d+ bookmarks\)\./);
-  expect((await send(panel, { cmd: 'listBackups' })).backups).toHaveLength(before + 1);
-  await expect(panel.locator('#backupList li')).toHaveCount(before + 1);
+  expect((await send(panel, { cmd: 'listBackups' })).backups).toHaveLength(1);
+  await expect(panel.locator('#backupList li')).toHaveCount(1);
+});
+
+test('Back up now twice in a row adds nothing the second time', async ({ panel }) => {
+  await panel.evaluate(() => chrome.storage.local.remove('bookmarkSnapshots'));
+  await panel.click('#backupPanel summary');
+  await panel.click('#backupNow');
+  await expect(panel.locator('#status')).toContainText(/Backup saved/);
+  const first = (await send(panel, { cmd: 'listBackups' })).backups[0].id;
+  await panel.click('#backupNow');
+  await expect(panel.locator('#status')).toContainText(/No changes since the last backup \(/);
+  const after = (await send(panel, { cmd: 'listBackups' })).backups;
+  expect(after).toHaveLength(1);
+  expect(after[0].id).toBe(first);
 });
 
 test('Back up now shows the storage-full error', async ({ panel }) => {

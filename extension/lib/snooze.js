@@ -6,7 +6,10 @@ import { uniqueId } from './ids.js';
 
 export const SNOOZE_CAP = 200;
 const HOUR = 3600000;
-const WAKE_HOUR = 9;
+export const WAKE_HOUR = 9;
+
+// "9:00" for the preset wake time, shown in notices.
+export const wakeTimeText = () => `${WAKE_HOUR}:00`;
 
 const toDate = (now) => (now instanceof Date ? now : new Date(now));
 
@@ -71,7 +74,7 @@ export function selectSnoozable(tabs, { ignorePinned = true } = {}) {
 // Notification text for snoozing one tab (the keyboard command). `res` is the snoozeTabsNow result,
 // `tab` the tab that was asked for; when nothing was snoozed the tab says why.
 export function snoozeNoticeText(res, tab, { ignorePinned = true } = {}) {
-  if (res && res.snoozed > 0) return 'Snoozed until tomorrow 9:00';
+  if (res && res.snoozed > 0) return `Snoozed until tomorrow ${wakeTimeText()}`;
   if (!tab) return 'No tab to snooze';
   if (tab.incognito === true) return 'Not snoozed: private (incognito) tabs are never snoozed';
   if (!/^https?:/i.test(tab.url || '')) return "Not snoozed: browser pages can't be snoozed";

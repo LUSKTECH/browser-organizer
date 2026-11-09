@@ -98,11 +98,28 @@ export function addToRing(list, snapshot) {
   return [...list, snapshot].slice(-MAX_SNAPSHOTS);
 }
 
+// True when two snapshots hold exactly the same tree (ids, order, titles, urls), ignoring id and time.
+// Fields are compared one by one: storage may hand objects back with their keys in another order.
+export function sameNodes(a, b) {
+  if (!a || !b || a.nodes.length !== b.nodes.length) return false;
+  return a.nodes.every((n, i) => {
+    const m = b.nodes[i];
+    return n.id === m.id && n.parentId === m.parentId && n.index === m.index && n.title === m.title
+      && n.url === m.url && n.dateAdded === m.dateAdded;
+  });
+}
+
 // Saves unless that would leave less than STORAGE_RESERVE_BYTES free: the undo log has to be able to
 // record the run that follows, and a missing undo entry is worse than a missing backup.
-export function saveSnapshot(snapshot, storage = chrome.storage.local) {
+// With `skipIfUnchanged`, a tree identical to the newest stored snapshot is not added (returns null),
+// so repeated manual backups cannot push the automatic pre-run ones out of the ring.
+export function saveSnapshot(snapshot, storage = chrome.storage.local, { skipIfUnchanged = false } = {}) {
   return withLock(LOCK, async () => {
     const before = await readAll(storage);
+    if (skipIfUnchanged && before.length) {
+      const newest = before.reduce((a, b) => (b.ts >= a.ts ? b : a));
+      if (sameNodes(newest, snapshot)) return null;
+    }
     const after = addToRing(before, snapshot);
     if (storage.getBytesInUse && storage.QUOTA_BYTES) {
       const used = await storage.getBytesInUse(null);

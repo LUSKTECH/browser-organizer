@@ -654,18 +654,22 @@ async function handleListBackups() {
   return { ok: true, backups: await listSnapshots() };
 }
 
-// format: 'json' (the snapshot itself) or 'html' (Netscape bookmarks file) for the panel to download.
 // Back up now: the same snapshot and storage checks as the automatic one, but a failure is the answer here.
 async function handleBackupNow() {
   try {
     const snap = buildSnapshot(await chrome.bookmarks.getTree());
-    await saveSnapshot(snap);
+    const id = await saveSnapshot(snap, chrome.storage.local, { skipIfUnchanged: true });
+    if (id === null) {
+      const newest = (await listSnapshots())[0];
+      return { ok: true, count: newest.count, unchanged: true, ts: newest.ts };
+    }
     return { ok: true, count: snap.count };
   } catch (err) {
     return { ok: false, error: errText(err) };
   }
 }
 
+// format: 'json' (the snapshot itself) or 'html' (Netscape bookmarks file) for the panel to download.
 async function handleGetBackup(m) {
   const snap = await getSnapshot(m.id);
   if (!snap) return { ok: false, error: 'Backup not found (it may have expired)' };
