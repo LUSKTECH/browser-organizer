@@ -80,3 +80,28 @@ test('when storage is nearly full the backup is skipped with a warning and the r
     await panel.evaluate(() => chrome.storage.local.remove('filler'));
   }
 });
+
+test('Back up now saves a snapshot and the button reports it', async ({ panel }) => {
+  const before = (await send(panel, { cmd: 'listBackups' })).backups.length;
+  await panel.click('#backupPanel summary');
+  await panel.click('#backupNow');
+  await expect(panel.locator('#status')).toContainText(/Backup saved \(\d+ bookmarks\)\./);
+  expect((await send(panel, { cmd: 'listBackups' })).backups).toHaveLength(before + 1);
+  await expect(panel.locator('#backupList li')).toHaveCount(before + 1);
+});
+
+test('Back up now shows the storage-full error', async ({ panel }) => {
+  await panel.evaluate(async () => {
+    const used = await chrome.storage.local.getBytesInUse(null);
+    await chrome.storage.local.set({ filler: 'x'.repeat(chrome.storage.local.QUOTA_BYTES - used - 400000) });
+  });
+  try {
+    const before = (await send(panel, { cmd: 'listBackups' })).backups.length;
+    await panel.click('#backupPanel summary');
+    await panel.click('#backupNow');
+    await expect(panel.locator('#status')).toContainText(/not enough free browser storage/);
+    expect((await send(panel, { cmd: 'listBackups' })).backups).toHaveLength(before);
+  } finally {
+    await panel.evaluate(() => chrome.storage.local.remove('filler'));
+  }
+});
