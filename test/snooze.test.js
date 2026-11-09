@@ -73,3 +73,14 @@ test('makeSnooze builds the entry shape with a unique id', () => {
   assert.equal(b.title, '');
   assert.notEqual(a.id, b.id);
 });
+
+test('snoozeNoticeText says it was snoozed or why not', async () => {
+  const { snoozeNoticeText } = await import('../extension/lib/snooze.js');
+  assert.equal(snoozeNoticeText({ snoozed: 1 }, { url: 'https://a.example/' }), 'Snoozed until tomorrow 9:00');
+  const none = { snoozed: 0 };
+  assert.match(snoozeNoticeText(none, { url: 'https://a.example/', incognito: true }), /private/);
+  assert.match(snoozeNoticeText(none, { url: 'chrome://extensions' }), /browser pages/);
+  assert.match(snoozeNoticeText(none, { url: 'https://a.example/', pinned: true }), /pinned/);
+  assert.equal(snoozeNoticeText(none, { url: 'https://a.example/', pinned: true }, { ignorePinned: false }), 'Not snoozed');
+  assert.equal(snoozeNoticeText(null, null), 'No tab to snooze');
+});

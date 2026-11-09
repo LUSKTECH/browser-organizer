@@ -68,6 +68,17 @@ export function selectSnoozable(tabs, { ignorePinned = true } = {}) {
   return { targets, skipped: tabs.length - targets.length, privateCount };
 }
 
+// Notification text for snoozing one tab (the keyboard command). `res` is the snoozeTabsNow result,
+// `tab` the tab that was asked for; when nothing was snoozed the tab says why.
+export function snoozeNoticeText(res, tab, { ignorePinned = true } = {}) {
+  if (res && res.snoozed > 0) return 'Snoozed until tomorrow 9:00';
+  if (!tab) return 'No tab to snooze';
+  if (tab.incognito === true) return 'Not snoozed: private (incognito) tabs are never snoozed';
+  if (!/^https?:/i.test(tab.url || '')) return "Not snoozed: browser pages can't be snoozed";
+  if (ignorePinned && tab.pinned) return 'Not snoozed: the tab is pinned';
+  return 'Not snoozed';
+}
+
 const MIN_AHEAD = 60000;
 const MAX_AHEAD = 366 * 24 * HOUR;
 
