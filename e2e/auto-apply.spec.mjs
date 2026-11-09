@@ -17,8 +17,8 @@ test('auto mode applies tab actions automatically but never auto-deletes bookmar
   const dupUrl = `${server}/react/docs`;
   await (await context.newPage()).goto(dupUrl);
   await (await context.newPage()).goto(dupUrl);
-  await createBookmark(panel, { parentId: '1', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
-  await createBookmark(panel, { parentId: '1', title: 'MDN copy', url: 'https://developer.mozilla.org/en-US/docs/Web/' });
+  await createBookmark(panel, { parentId: '2', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
+  await createBookmark(panel, { parentId: '2', title: 'MDN copy', url: 'https://developer.mozilla.org/en-US/docs/Web/' });
   expect(await countTabsWithUrl(panel, dupUrl)).toBe(2);
 
   // A scan in auto mode over duplicate tabs + bookmark cleanup.
