@@ -39,6 +39,7 @@ test('UI: "Clear list" empties the suggestions and the stored plan', async ({ pa
   await panel.click('#runOne button[data-feature="cleanBookmarks"]');
   await expect(panel.locator('#plan')).toContainText(/Delete bookmark/i, { timeout: 15000 });
 
+  await panel.click('#planMore summary'); // Clear list lives in the action bar's More menu
   await panel.click('#clearPlan');
   await expect(panel.locator('#plan')).toBeEmpty();
   expect((await send(panel, { cmd: 'getPlan' })).items).toEqual([]);
