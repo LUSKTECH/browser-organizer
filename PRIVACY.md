@@ -13,8 +13,12 @@ extension operator receives none of this data and operates no server that stores
   bookmarked URLs, and HTTP status of bookmarked URLs (for dead-link checks).
 - **What is sent to the AI provider:** open tab titles and URLs are sent to your selected
   backend to compute groupings, stale-tab suggestions, bookmark recommendations, and typed
-  commands. If you turn on "Sort bookmarks" (off by default), the title, URL, and folder path
-  of each bookmark being sorted are also sent, along with your list of folder names. Before
+  commands; for a typed command, the text you type is sent as well. If you turn on "Sort
+  bookmarks" (off by default), the title, URL, folder path and browser-assigned ID of each
+  bookmark being sorted are also sent, along with your folder names and their IDs (the IDs
+  let the extension map suggestions back to your bookmarks). When you reject the same
+  suggestion twice, a short "don't suggest" note is added to later requests so it stays
+  away; it can contain a cleaned link, a group name or a bookmark ID. Before
   sending, the extension strips query strings and fragments, removes embedded credentials,
   and reduces private or loopback hosts to their origin. Protected folders, the Bookmarks Bar
   (while "Never touch the Bookmarks Bar" is on), and protected domains are never sent. This

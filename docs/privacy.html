@@ -29,9 +29,13 @@
 
   <h2>What is sent to the AI provider</h2>
   <p>Open tab titles and URLs are sent to your selected backend to compute groupings,
-  stale-tab suggestions, bookmark recommendations, and typed commands. If you turn on
-  “Sort bookmarks” (off by default), the title, URL, and folder path of each bookmark being
-  sorted are also sent, along with your list of folder names. Before sending, query strings
+  stale-tab suggestions, bookmark recommendations, and typed commands; for a typed command,
+  the text you type is sent as well. If you turn on “Sort bookmarks” (off by default), the
+  title, URL, folder path and browser-assigned ID of each bookmark being sorted are also sent,
+  along with your folder names and their IDs (the IDs let the extension map suggestions back
+  to your bookmarks). When you reject the same suggestion twice, a short “don’t suggest” note
+  is added to later requests so it stays away; it can contain a cleaned link, a group name or
+  a bookmark ID. Before sending, query strings
   and fragments are stripped, embedded credentials are removed, and private/loopback hosts
   are reduced to their origin. Protected folders, the Bookmarks Bar (while “Never touch the
   Bookmarks Bar” is on), and protected domains are never sent. This happens under your own AI

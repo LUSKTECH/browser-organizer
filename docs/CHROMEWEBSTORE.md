@@ -20,8 +20,9 @@ automatic mode with one-click undo.
 All processing runs through a small helper program on your own computer, which calls your
 own AI CLI (Claude Code, Antigravity, Kiro, Copilot, Codex, or local Ollama), or an
 OpenAI-compatible endpoint you configure. Tab titles and URLs are sent to that provider
-under your own subscription. If you turn on "Sort bookmarks" (off by default), the title,
-cleaned URL and folder of the bookmarks being sorted go to that provider too; browsing
+under your own subscription, along with the text of any command you type. If you turn on
+"Sort bookmarks" (off by default), the title, cleaned URL and folder of the bookmarks being
+sorted, plus your folder names, go to that provider too; browsing
 history never leaves your machine. Nothing is ever sent to our servers (we operate none).
 
 ## Permission justifications
