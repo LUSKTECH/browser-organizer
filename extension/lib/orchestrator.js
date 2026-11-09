@@ -93,13 +93,15 @@ export async function buildPlan(deps) {
   });
   const allTabs = await collectTabs(chromeApi, activity, now, deps.windowId ?? null);
   // "Leave pinned tabs alone" (default on): pinned tabs never reach any phase or the AI.
-  // Protected domains are removed here too, so no phase (rules included) and no prompt sees them.
+  // Protected domains are removed from `tabs`, which feeds every AI phase and prompt. Grouping rules are local
+  // and non-destructive, so they get `unpinned` and may still group protected-domain tabs.
   const notProtected = (t) => !isProtectedHost(t.url, settings.whitelist || []);
-  const tabs = (settings.ignorePinnedTabs === false ? allTabs : allTabs.filter((t) => !t.pinned)).filter(notProtected);
+  const unpinned = settings.ignorePinnedTabs === false ? allTabs : allTabs.filter((t) => !t.pinned);
+  const tabs = unpinned.filter(notProtected);
   const byId = indexById(tabs);
   const items = [];
   const f = { ...settings.enabledFeatures, ...(deps.features || {}) };
-  const rules = decisionRules(settings.decisions || {}).keep.join('; ');
+  const rules = decisionRules(settings.decisions || {}, settings.whitelist || []).keep.join('; ');
   const adapter = settings.adapter || 'claude';
   const dupeOptions = { loose: settings.dupeIgnoreTrackingParams !== false };
 
@@ -114,12 +116,12 @@ export async function buildPlan(deps) {
   step('Applying rules');
   if (shouldCancel()) return finalizePlan(items, settings, folders);
   let activeRules = [];
-  if ((f.applyRules || f.groupTabs) && tabs.length) {
+  if ((f.applyRules || f.groupTabs) && unpinned.length) {
     try {
       activeRules = deps.rules || (chromeApi.storage?.sync ? await getRules(chromeApi) : []);
       if (activeRules.length) {
         const existing = chromeApi.tabGroups?.query ? await chromeApi.tabGroups.query({}) : [];
-        items.push(...planRuleGroups(activeRules, tabs, existing));
+        items.push(...planRuleGroups(activeRules, unpinned, existing));
       }
     } catch (e) { console.warn('[organizer] rules phase failed:', e); activeRules = []; onWarning('Applying rules failed. See the service-worker console for details.'); }
   }
@@ -191,6 +193,10 @@ export async function buildPlan(deps) {
         deletes.push(...deadCandidates.filter((d) => confirmedSet.has(d.data.bookmarkId)));
       }
     }
+    if (deletes.length && !folders.length) { // folder inventory so finalizePlan can keep deletes out of protected folders / the bar
+      const tree = await collectTree(chromeApi);
+      folders = tree.folders; rootIds = tree.rootIds; barId = tree.barId;
+    }
     items.push(...dedupeDeletes(deletes));
    } catch (e) { console.warn('[organizer] bookmark-cleanup phase failed:', e); onWarning('Cleaning bookmarks failed. See the service-worker console for details.'); }
   }
@@ -205,7 +211,7 @@ export async function buildPlan(deps) {
       const mode = settings.organizeMode || 'additive';
       // Bookmarks in protected folders (or the protected bar), and those folders' names, never reach the model.
       const guard = folderGuard({ protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, barId: tree.barId });
-      const candidates = selectOrganizeCandidates(tree.bookmarks, mode, tree.rootIds).filter((b) => !guard.blocked(b.parentId));
+      const candidates = selectOrganizeCandidates(tree.bookmarks, mode, tree.rootIds).filter((b) => !guard.blocked(b.parentId) && !isProtectedHost(b.url, settings.whitelist || []));
       let moveItems = [];
       let kept = []; // moves that survive protections (what the plan will actually contain)
       if (!candidates.length) {
@@ -271,10 +277,12 @@ export async function runCommand(instruction, deps) {
   const { nativeClient, chromeApi = chrome, now = Date.now(), windowId = null, settings = {} } = deps;
   const adapter = settings.adapter || 'claude';
   const activity = (await chromeApi.storage.local.get('tabActivity')).tabActivity || {};
-  const tabs = (await collectTabs(chromeApi, activity, now, windowId)).filter((t) => !isProtectedHost(t.url, settings.whitelist || []));
+  const tabs = (await collectTabs(chromeApi, activity, now, windowId))
+    .filter((t) => settings.ignorePinnedTabs === false || !t.pinned)
+    .filter((t) => !isProtectedHost(t.url, settings.whitelist || []));
   const byId = indexById(tabs);
   const candidateIds = new Set(tabs.map((t) => t.tabId));
-  const rules = decisionRules(settings.decisions || {}).keep.join('; ');
+  const rules = decisionRules(settings.decisions || {}, settings.whitelist || []).keep.join('; ');
   const r = await nativeClient.request({ type: 'command', adapter, payload: { instruction, tabs: projectTabsForHost(tabs), rules } });
   const items = [
     ...mapGroupResult(r.groups, byId),
@@ -306,10 +314,16 @@ export function recordDecision(decisions, item, verdict) {
   return { ...decisions, [key]: { reject: (prev.reject || 0) + 1 } };
 }
 
-export function decisionRules(decisions) {
+export function decisionRules(decisions, whitelist = []) {
   const keep = [];
   for (const [key, v] of Object.entries(decisions)) {
-    if (v.reject >= 2) keep.push(`Do not suggest actions on ${key.split(':').slice(1).join(':')}`);
+    if (v.reject < 2) continue;
+    let target = key.split(':').slice(1).join(':');
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target)) { // a URL target (not a group name or an id)
+      if (isProtectedHost(target, whitelist)) continue; // protected domains never reach a prompt
+      target = safeUrlForModel(target);
+    }
+    keep.push(`Do not suggest actions on ${target}`);
   }
   return { keep };
 }

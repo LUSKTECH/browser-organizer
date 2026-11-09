@@ -10,18 +10,33 @@ function firstOtherRoot(rootIds, barId) {
   return barId;
 }
 
-// Entries may be bare hosts or pasted URLs ("https://github.com/x"); reduce to a hostname.
+// Entries may be bare hosts ("github.com", "localhost:3000", "*.github.com"), hosts with a
+// path, or pasted URLs. Parsed with the URL parser so punycode/IPv6 forms match tab URLs;
+// a leading "*." or "." is dropped (a host entry already covers its subdomains).
+// Port rule: an entry with a port matches only that port (a tab's default port counts as
+// 80/443); an entry without a port matches any port.
 function normalizeHost(w) {
   const t = String(w).trim().toLowerCase();
-  try { return new URL(t).hostname || t; } catch { return t; }
+  if (!t) return null;
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//.test(t) ? t : 'http://' + t);
+    const host = u.hostname.replace(/^(\*\.|\.)/, '');
+    return host ? { host, port: u.port } : null;
+  } catch { return null; }
 }
-function hostOf(url) { try { return new URL(url).hostname.toLowerCase(); } catch { return ''; } }
+const DEFAULT_PORTS = { 'http:': '80', 'https:': '443', 'ftp:': '21', 'ws:': '80', 'wss:': '443' };
+function hostOf(url) {
+  try { const u = new URL(url); return u.hostname ? { host: u.hostname.toLowerCase(), port: u.port || DEFAULT_PORTS[u.protocol] || '' } : null; } catch { return null; }
+}
 
 // Builds a url -> boolean predicate for a whitelist: host equals an entry or is a subdomain of one.
 function hostMatcher(whitelist = []) {
-  const hosts = whitelist.map(normalizeHost).filter(Boolean);
-  if (!hosts.length) return () => false;
-  return (url) => { const h = hostOf(url); return !!h && hosts.some((w) => h === w || h.endsWith('.' + w)); };
+  const entries = whitelist.map(normalizeHost).filter(Boolean);
+  if (!entries.length) return () => false;
+  return (url) => {
+    const h = hostOf(url);
+    return !!h && entries.some((e) => (h.host === e.host || h.host.endsWith('.' + e.host)) && (!e.port || e.port === h.port));
+  };
 }
 
 // True when the url's host is a protected domain (or a subdomain of one). Used to keep
@@ -33,7 +48,7 @@ export function isProtectedHost(url, whitelist = []) {
 // Drops destructive actions (close/discard/delete) targeting a whitelisted host,
 // so users can protect domains ("never touch github.com") outright.
 export function applyWhitelist(items, whitelist = []) {
-  if (!whitelist.map(normalizeHost).filter(Boolean).length) return items;
+  if (!whitelist.some((w) => normalizeHost(w))) return items;
   const PROTECTED = new Set(['closeTab', 'discardTab', 'deleteBookmark']);
   const matches = hostMatcher(whitelist);
   return items.filter((it) => !(PROTECTED.has(it.action) && matches(it.data && it.data.url)));
@@ -81,7 +96,7 @@ export function folderGuard(opts = {}) {
 // organize actions are affected; `folders` is the inventory from collectTree.
 export function applyFolderProtection(items, opts = {}) {
   const { protectBookmarkBar = true, protectedFolders = [], folders = [], rootIds = ROOT_IDS, barId = BAR_ID } = opts;
-  const ORGANIZE = new Set(['moveBookmark', 'removeFolder']);
+  const ORGANIZE = new Set(['moveBookmark', 'removeFolder', 'deleteBookmark']);
   if (!items.some((it) => ORGANIZE.has(it.action))) return items;
   const { byId, pathProtected, inBar, blocked } = folderGuard({ protectBookmarkBar, protectedFolders, folders, barId });
   return items.filter((it) => {
@@ -91,6 +106,8 @@ export function applyFolderProtection(items, opts = {}) {
       if (rootIds.has(d.folderId)) return false;
       return !blocked(d.folderId);
     }
+    // Stale/duplicate/dead-link cleanup never deletes inside a protected folder or the protected bar.
+    if (it.action === 'deleteBookmark') return !blocked(d.parentId);
     // moveBookmark
     if (blocked(d.fromParentId)) return false;
     if (d.toParentId) {
