@@ -77,7 +77,7 @@ The extension collects tab and bookmark metadata, then passes it to the local No
 - **Grouping rules**: your own rules (domain, URL prefix or title text, up to 40) group tabs instantly with no AI. The "Apply rules" button works without a helper, rules run before the AI on a full Analyze, and tabs join an existing same-named group in their window.
 - **Bookmark backups** (best effort): before a run that deletes or moves bookmarks, a copy of the whole bookmark tree is saved on your device (last 3, kept 30 days). If a backup can't be saved, for example because browser storage is nearly full, you're told and the run still goes ahead; per-run undo still applies. Download one as JSON or as a `bookmarks.html` file any browser can import, or restore it into a new folder; restoring never changes what you have now.
 - **Snooze tabs**: close the ticked tabs now and have them reopen later (in 3 hours, tomorrow 9:00, next Monday 9:00, or a time you pick) as background tabs; pinned tabs are skipped while "Leave pinned tabs alone" is on, private (incognito) tabs are never snoozed, undo reopens one at once, and the Snoozed list has Wake now and Delete. A snoozed page comes back as a plain link, so logins and form contents aren't restored.
-- **Protected folders and domains**, per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
+- **Protected folders and domains** (also never sent to the AI; protected folders and the Bookmarks Bar are never cleaned up, and grouping rules can still group tabs on a protected domain), per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
 
 ## Development
 

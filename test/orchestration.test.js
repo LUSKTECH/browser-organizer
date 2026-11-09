@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { partitionForApply, applyItems, buildPlan, sliceForScan, projectTabsForHost, ignoreKey, applyIgnoreList, recordDecision, decisionRules } from '../extension/lib/orchestrator.js';
 
 import { dedupeTabActions, finalizePlan, runCommand, selectOrganizeCandidates, projectBookmarksForHost, findEmptyFolders } from '../extension/lib/orchestrator.js';
-import { applyWhitelist, applyFolderProtection } from '../extension/lib/protections.js';
-import { applyItem } from '../extension/lib/executor.js';
+import { applyWhitelist, applyFolderProtection, isProtectedHost } from '../extension/lib/protections.js';
+import { applyItem, ProtectedTargetError } from '../extension/lib/executor.js';
 
 // A chrome.storage.local that holds nothing and ignores writes (buildPlan only needs it to exist).
 const emptyLocalStorage = () => ({ async get(k) { return typeof k === 'string' ? { [k]: undefined } : {}; }, async set() {} });
@@ -476,7 +476,7 @@ function dupeChrome() {
     { id: 3, url: 'https://other.example/z', title: 'Other', windowId: 1, index: 2, pinned: false, groupId: -1 },
   ];
   const bm = (id, url) => ({ id, parentId: '2', url, title: url, dateAdded: Date.now() });
-  const tree = [{ id: '0', children: [{ id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p'), bm('b3', 'https://b.example/q')] }] }];
+  const tree = [{ id: '0', children: [{ id: '1', title: 'Bookmarks bar', children: [] }, { id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p'), bm('b3', 'https://b.example/q')] }] }];
   return {
     storage: { local: emptyLocalStorage() },
     tabs: { async query() { return tabs; } },
@@ -577,7 +577,7 @@ test('rules do not run when neither applyRules nor groupTabs is on', async () =>
 async function trackingDupePlan(settingsPatch) {
   const tab = (id, url) => ({ id, url, title: `Docs ${id}`, windowId: 1, index: id, pinned: false, groupId: -1 });
   const bm = (id, url) => ({ id, parentId: '2', url, title: url, dateAdded: Date.now() });
-  const tree = [{ id: '0', children: [{ id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p?utm_source=x')] }] }];
+  const tree = [{ id: '0', children: [{ id: '1', title: 'Bookmarks bar', children: [] }, { id: '2', title: 'Other bookmarks', children: [bm('b1', 'https://a.example/p'), bm('b2', 'https://a.example/p?utm_source=x')] }] }];
   const chromeApi = {
     storage: { local: emptyLocalStorage() },
     tabs: { async query() { return [tab(1, 'https://a.example/docs'), tab(2, 'https://a.example/docs?utm_source=x')]; } },
@@ -601,3 +601,178 @@ test('buildPlan with dupeIgnoreTrackingParams: false keeps ?utm_source copies ap
   assert.equal(items.length, 0);
 });
 
+
+// ---- Protected items are never sent to the AI ----
+
+function protectedTabsChrome() {
+  const tabs = [
+    { id: 1, url: 'https://github.com/a', title: 'Repo secret', windowId: 1, index: 0, pinned: false, groupId: -1 },
+    { id: 2, url: 'https://gist.github.com/b', title: 'Gist secret', windowId: 1, index: 1, pinned: false, groupId: -1 },
+    { id: 3, url: 'https://news.example/c', title: 'News', windowId: 1, index: 2, pinned: false, groupId: -1 },
+  ];
+  return {
+    storage: { local: emptyLocalStorage() },
+    tabs: { async query() { return tabs; } },
+    bookmarks: { async getTree() { return []; } },
+    history: { async getVisits() { return []; } },
+  };
+}
+
+test('isProtectedHost matches the host and subdomains, normalising entries like applyWhitelist', () => {
+  assert.equal(isProtectedHost('https://github.com/a', ['github.com']), true);
+  assert.equal(isProtectedHost('https://gist.github.com/a', [' https://GitHub.com/x ']), true);
+  assert.equal(isProtectedHost('https://notgithub.com/a', ['github.com']), false);
+  assert.equal(isProtectedHost('not a url', ['github.com']), false);
+  assert.equal(isProtectedHost('https://github.com', []), false);
+});
+
+test('buildPlan never sends protected-domain tabs (or subdomains) to the group, stale or important prompts', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); return { groups: [], important: [], stale: [] }; } };
+  const settings = { adapter: 'claude', whitelist: ['github.com'], enabledFeatures: { groupTabs: true, staleTabs: true, importantBookmarks: true, cleanBookmarks: false, dupeTabs: false }, staleTabDays: 0, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  await buildPlan({ settings, nativeClient, chromeApi: protectedTabsChrome(), now: 1 });
+  assert.deepEqual(requests.map((r) => r.task).sort(), ['group', 'important', 'stale']);
+  for (const r of requests) {
+    assert.deepEqual(r.payload.tabs.map((t) => t.tabId), [3], `${r.task} sees only the unprotected tab`);
+    assert.ok(!JSON.stringify(r.payload).includes('secret'));
+  }
+});
+
+test('runCommand never sends protected-domain tabs to the model', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); return { groups: [], close: [], important: [] }; } };
+  await runCommand('tidy', { nativeClient, chromeApi: protectedTabsChrome(), settings: { adapter: 'claude', whitelist: ['github.com'] } });
+  assert.deepEqual(requests[0].payload.tabs.map((t) => t.tabId), [3]);
+});
+
+function bookmarkTreeChrome() {
+  const bm = (id, parentId, title) => ({ id, parentId, title, url: `https://${title}.example/`, index: 0 });
+  return {
+    storage: { local: emptyLocalStorage() },
+    tabs: { async query() { return []; } },
+    history: { async getVisits() { return []; } },
+    bookmarks: { async getTree() { return [{ id: '0', children: [
+      { id: '1', title: 'Bookmarks bar', parentId: '0', index: 0, children: [bm('20', '1', 'barmark'), { id: '30', title: 'BarSub', parentId: '1', index: 1, children: [bm('21', '30', 'barsubmark')] }] },
+      { id: '2', title: 'Other bookmarks', parentId: '0', index: 1, children: [
+        { id: '10', title: 'Vault', parentId: '2', index: 0, children: [bm('22', '10', 'vaultmark')] },
+        { id: '11', title: 'Reading', parentId: '2', index: 1, children: [bm('23', '11', 'readmark')] },
+        bm('24', '2', 'loosemark'),
+      ] },
+    ] }]; } },
+  };
+}
+
+async function organizePayload(settingsPatch) {
+  let payload = null;
+  const nativeClient = { request: async (m) => { if (m.task === 'organize-bookmarks') payload = m.payload; return { moves: [] }; } };
+  const settings = { adapter: 'claude', enabledFeatures: { organizeBookmarks: true }, organizeMode: 'full', protectedFolders: ['Vault'], staleTabDays: 14, staleBookmarkDays: 180, deadLinkBatchSize: 200, ...settingsPatch };
+  await buildPlan({ settings, nativeClient, chromeApi: bookmarkTreeChrome(), now: 1 });
+  return payload;
+}
+
+test('organize payload omits bookmarks in protected folders and the bar, and those folders from the folder list', async () => {
+  const p = await organizePayload({});
+  assert.deepEqual(p.bookmarks.map((b) => b.id).sort(), ['23', '24']);
+  assert.ok(!/barmark|barsubmark|vaultmark|Vault|BarSub|Bookmarks bar/.test(JSON.stringify(p)), 'no protected names in the payload');
+  assert.ok(p.folders.some((f) => f.path.endsWith('Reading')), 'unprotected folders are still offered');
+});
+
+test('organize payload includes the bar when protectBookmarkBar is false (protected folders stay out)', async () => {
+  const p = await organizePayload({ protectBookmarkBar: false });
+  assert.deepEqual(p.bookmarks.map((b) => b.id).sort(), ['20', '21', '23', '24']);
+  assert.ok(p.folders.some((f) => f.path.includes('BarSub')));
+  assert.ok(!JSON.stringify(p).includes('Vault'));
+});
+
+// ---- Review follow-ups: protected items vs bookmarks, notes, rules, pinned and deleteBookmark ----
+
+test('Sort bookmarks payload omits candidate bookmarks on a protected domain', async () => {
+  const p = await organizePayload({ whitelist: ['loosemark.example'] });
+  assert.deepEqual(p.bookmarks.map((b) => b.id), ['23']);
+  assert.ok(!JSON.stringify(p).includes('loosemark'));
+});
+
+test('decisionRules skips notes about protected domains and coarsens private URLs; group names and ids are unchanged', () => {
+  const rej = { reject: 2 };
+  const decisions = {
+    'closeTab:https://github.com/secret/repo': rej,
+    'closeTab:https://gist.github.com/x': rej,
+    'closeTab:https://news.example/a': rej,
+    'closeTab:http://localhost:3000/admin/token123': rej,
+    'groupTabs:group:Work stuff': rej,
+    'deleteBookmark:42': rej,
+  };
+  const { keep } = decisionRules(decisions, ['github.com']);
+  assert.deepEqual(keep, [
+    'Do not suggest actions on https://news.example/a',
+    'Do not suggest actions on http://localhost:3000',
+    'Do not suggest actions on group:Work stuff',
+    'Do not suggest actions on 42',
+  ]);
+});
+
+test('buildPlan puts no protected-domain note into any prompt', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); return { groups: [], important: [], stale: [] }; } };
+  const decisions = { 'closeTab:https://github.com/secret/repo': { reject: 2 } };
+  const settings = { adapter: 'claude', decisions, whitelist: ['github.com'], enabledFeatures: { groupTabs: true, staleTabs: false, importantBookmarks: false, cleanBookmarks: false, dupeTabs: false }, staleTabDays: 0, staleBookmarkDays: 180, deadLinkBatchSize: 200 };
+  await buildPlan({ settings, nativeClient, chromeApi: protectedTabsChrome(), now: 1 });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].payload.rules, '');
+});
+
+test('grouping rules still group protected-domain tabs, but those tabs never reach an AI payload', async () => {
+  const requests = [];
+  const nativeClient = { request: async (msg) => { requests.push(msg); return { groups: [] }; } };
+  const items = await buildPlan({ settings: { ...rulesSettings, whitelist: ['github.com'] }, nativeClient, chromeApi: rulesChrome(), now: 1, rules: devRule });
+  const ruleItem = items.find((i) => i.itemId === 'rule-dev-w1');
+  assert.deepEqual(ruleItem.data.tabIds, [1, 2]);
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].payload.tabs.map((t) => t.tabId).sort(), [3, 4]);
+});
+
+test('runCommand leaves pinned tabs out of the prompt unless ignorePinnedTabs is false', async () => {
+  const chromeApi = {
+    storage: { local: emptyLocalStorage() },
+    tabs: { async query() { return [
+      { id: 1, url: 'https://a.example/', title: 'P', windowId: 1, index: 0, pinned: true },
+      { id: 2, url: 'https://b.example/', title: 'N', windowId: 1, index: 1, pinned: false },
+    ]; } },
+  };
+  const ids = async (settings) => {
+    let sent = null;
+    await runCommand('tidy', { nativeClient: { request: async (m) => { sent = m.payload.tabs.map((t) => t.tabId); return { groups: [], close: [], important: [] }; } }, chromeApi, settings });
+    return sent;
+  };
+  assert.deepEqual(await ids({ adapter: 'claude' }), [2]);
+  assert.deepEqual(await ids({ adapter: 'claude', ignorePinnedTabs: true }), [2]);
+  assert.deepEqual(await ids({ adapter: 'claude', ignorePinnedTabs: false }), [1, 2]);
+});
+
+test('applyFolderProtection drops deleteBookmark inside a protected folder or the protected bar, keeps others', () => {
+  const folders = [
+    { id: '1', parentId: '0', path: ['Bookmarks bar'] },
+    { id: '2', parentId: '0', path: ['Other bookmarks'] },
+    { id: '10', parentId: '2', path: ['Other bookmarks', 'Work'] },
+    { id: '11', parentId: '2', path: ['Other bookmarks', 'Loose'] },
+  ];
+  const del = (parentId) => ({ action: 'deleteBookmark', data: { bookmarkId: 'b' + parentId, parentId, url: 'https://x.example' } });
+  const out = applyFolderProtection([del('10'), del('1'), del('11'), del('2')], { protectBookmarkBar: true, protectedFolders: ['Work'], folders });
+  assert.deepEqual(out.map((i) => i.data.parentId), ['11', '2']);
+  const noBar = applyFolderProtection([del('1')], { protectBookmarkBar: false, protectedFolders: [], folders });
+  assert.equal(noBar.length, 1);
+});
+
+test('applyItem refuses deleteBookmark at apply time when its live parent is now protected', async () => {
+  const removed = [];
+  const chrome = { bookmarks: {
+    async get(id) { return [{ id, url: 'https://x.example', parentId: '20', index: 0 }]; },
+    async remove(id) { removed.push(id); },
+  } };
+  const folders = [{ id: '20', parentId: '2', path: ['Other Bookmarks', 'Keep'] }];
+  const item = { action: 'deleteBookmark', data: { bookmarkId: '9', parentId: '2', index: 0, title: 't', url: 'https://x.example' } }; // plan-time parent was unprotected
+  await assert.rejects(() => applyItem(item, { chrome, settings: { protectBookmarkBar: true, protectedFolders: ['Keep'] }, folders }), ProtectedTargetError);
+  assert.deepEqual(removed, []);
+  await applyItem(item, { chrome, settings: { protectBookmarkBar: true, protectedFolders: [] }, folders }); // unprotected: deletes
+  assert.deepEqual(removed, ['9']);
+});

@@ -12,7 +12,7 @@ export class StaleTabError extends Error {}
 // flows through the same applyItems try/catch -> failed bucket.
 export class ProtectedTargetError extends Error {}
 
-// Re-checks a moveBookmark/removeFolder item against LIVE settings and folder
+// Re-checks a moveBookmark/removeFolder/deleteBookmark item against LIVE settings and folder
 // structure (deps.settings/folders/rootIds/barId, fetched fresh by the caller
 // at apply time) — a stale plan item that was fine when built can violate a
 // protection the user added since. Skipped when deps.settings isn't provided.
@@ -130,6 +130,8 @@ async function applyItemInner(item, c, deps = {}) {
       assertNotWhitelisted(item, deps);
       const live = await c.bookmarks.get(bookmarkId).then((r) => r && r[0]).catch(() => null);
       if (!live || live.url !== url) throw new StaleTabError(`Bookmark ${bookmarkId} no longer matches ${url}`);
+      // Folder protection is judged against where the bookmark is now, like moveBookmark.
+      if (isProtectedNow({ ...item, data: { ...item.data, parentId: live.parentId ?? parentId } }, deps)) throw new ProtectedTargetError(`Delete of bookmark ${bookmarkId} is now blocked by folder protections`);
       await c.bookmarks.remove(bookmarkId);
       return { undoId: undoId(), ts: Date.now(), action: 'deleteBookmark', reverse: { parentId: live.parentId ?? parentId, index: live.index ?? index, title: live.title ?? title, url: live.url } };
     }
