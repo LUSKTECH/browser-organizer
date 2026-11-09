@@ -10,7 +10,7 @@ import { redactUrl, isPrivateHost } from './url-utils.js';
 import { withLock } from './mutex.js';
 import { planRuleGroups, firstMatch } from './rules.js';
 import { getRules } from './storage.js';
-import { applyWhitelist, applyFolderProtection } from './protections.js';
+import { applyWhitelist, applyFolderProtection, isProtectedHost, folderGuard } from './protections.js';
 
 // High-impact/destructive actions are never auto-applied — they always wait for
 // explicit review, even in auto mode.
@@ -93,7 +93,9 @@ export async function buildPlan(deps) {
   });
   const allTabs = await collectTabs(chromeApi, activity, now, deps.windowId ?? null);
   // "Leave pinned tabs alone" (default on): pinned tabs never reach any phase or the AI.
-  const tabs = settings.ignorePinnedTabs === false ? allTabs : allTabs.filter((t) => !t.pinned);
+  // Protected domains are removed here too, so no phase (rules included) and no prompt sees them.
+  const notProtected = (t) => !isProtectedHost(t.url, settings.whitelist || []);
+  const tabs = (settings.ignorePinnedTabs === false ? allTabs : allTabs.filter((t) => !t.pinned)).filter(notProtected);
   const byId = indexById(tabs);
   const items = [];
   const f = { ...settings.enabledFeatures, ...(deps.features || {}) };
@@ -201,7 +203,9 @@ export async function buildPlan(deps) {
       folders = tree.folders; // captured for finalize protection (bar/whitelist)
       rootIds = tree.rootIds; barId = tree.barId; // real roots (Edge != Chrome ids)
       const mode = settings.organizeMode || 'additive';
-      const candidates = selectOrganizeCandidates(tree.bookmarks, mode, tree.rootIds);
+      // Bookmarks in protected folders (or the protected bar), and those folders' names, never reach the model.
+      const guard = folderGuard({ protectBookmarkBar: settings.protectBookmarkBar !== false, protectedFolders: settings.protectedFolders || [], folders, barId: tree.barId });
+      const candidates = selectOrganizeCandidates(tree.bookmarks, mode, tree.rootIds).filter((b) => !guard.blocked(b.parentId));
       let moveItems = [];
       let kept = []; // moves that survive protections (what the plan will actually contain)
       if (!candidates.length) {
@@ -210,7 +214,7 @@ export async function buildPlan(deps) {
       } else {
         const byId = new Map(candidates.map((b) => [b.id, b]));
         const folderPathById = new Map(folders.map((fo) => [fo.id, (fo.path || []).join('/')]));
-        const folderInv = folders.map((fo) => ({ id: fo.id, path: folderPathById.get(fo.id) }));
+        const folderInv = folders.filter((fo) => !guard.blocked(fo.id)).map((fo) => ({ id: fo.id, path: folderPathById.get(fo.id) }));
         const r = await nativeClient.request({ type: 'organize', task: 'organize-bookmarks', adapter, payload: { mode, folders: folderInv, bookmarks: projectBookmarksForHost(candidates), rules } });
         const rawMoves = Array.isArray(r && r.moves) ? r.moves : [];
         moveItems = mapOrganizeResult(rawMoves, byId, mode, tree.otherId, folderPathById);
@@ -267,7 +271,7 @@ export async function runCommand(instruction, deps) {
   const { nativeClient, chromeApi = chrome, now = Date.now(), windowId = null, settings = {} } = deps;
   const adapter = settings.adapter || 'claude';
   const activity = (await chromeApi.storage.local.get('tabActivity')).tabActivity || {};
-  const tabs = await collectTabs(chromeApi, activity, now, windowId);
+  const tabs = (await collectTabs(chromeApi, activity, now, windowId)).filter((t) => !isProtectedHost(t.url, settings.whitelist || []));
   const byId = indexById(tabs);
   const candidateIds = new Set(tabs.map((t) => t.tabId));
   const rules = decisionRules(settings.decisions || {}).keep.join('; ');

@@ -84,7 +84,7 @@ test('buildPlan surfaces a failure warning (not silent "tidy") when the host rej
   const chromeApi = {
     storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: stored[k] } : { ...stored }; }, async set(o) { Object.assign(stored, o); } } },
     tabs: { async query() { return []; } },
-    bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '2', title: 'Other Bookmarks', parentId: '0', index: 0, children: [{ id: '9', title: 'Loose', url: 'https://x.com', parentId: '2', index: 0 }] }] }]; } },
+    bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '1', title: 'Bookmarks bar', parentId: '0', index: 0, children: [] }, { id: '2', title: 'Other Bookmarks', parentId: '0', index: 1, children: [{ id: '9', title: 'Loose', url: 'https://x.com', parentId: '2', index: 0 }] }] }]; } },
     history: { async getVisits() { return []; } },
   };
   // An old host doesn't know the task and rejects it. The out-of-date-host case
@@ -103,7 +103,7 @@ function organizeChromeApi() {
   return {
     storage: { local: { async get(k) { return typeof k === 'string' ? { [k]: stored[k] } : { ...stored }; }, async set(o) { Object.assign(stored, o); } } },
     tabs: { async query() { return []; } },
-    bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '2', title: 'Other Bookmarks', parentId: '0', index: 0, children: [{ id: '9', title: 'Loose', url: 'https://x.com', parentId: '2', index: 0 }] }] }]; } },
+    bookmarks: { async getTree() { return [{ id: '0', children: [{ id: '1', title: 'Bookmarks bar', parentId: '0', index: 0, children: [] }, { id: '2', title: 'Other Bookmarks', parentId: '0', index: 1, children: [{ id: '9', title: 'Loose', url: 'https://x.com', parentId: '2', index: 0 }] }] }]; } },
     history: { async getVisits() { return []; } },
   };
 }
