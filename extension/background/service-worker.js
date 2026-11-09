@@ -10,7 +10,7 @@ import { parseOmnibox } from '../lib/omnibox.js';
 import { digestText } from '../lib/plan-summary.js';
 import { withLock } from '../lib/mutex.js';
 import { uniqueId } from '../lib/ids.js';
-import { makeSnooze, nextWake, addSnoozes, wakeAtError, wakeEntries, reconcileSnoozes, selectSnoozable, cleanSnoozed } from '../lib/snooze.js';
+import { makeSnooze, nextWake, addSnoozes, wakeAtError, wakeEntries, reconcileSnoozes, selectSnoozable, cleanSnoozed, presetTime, snoozeNoticeText } from '../lib/snooze.js';
 import { getSecret } from '../lib/secret-store.js';
 import { PROBE_ADAPTERS, TEST_PROMPT, normalizeState } from '../lib/onboarding.js';
 import { needsBackup, buildSnapshot, saveSnapshot, listSnapshots, getSnapshot, pruneSnapshots, restoreSnapshot, toNetscapeHtml, snapshotLabel } from '../lib/bookmark-backup.js';
@@ -119,6 +119,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     const win = await chrome.windows.getLastFocused();
     await chrome.sidePanel.open({ windowId: win.id });
   }
+  if (command === 'snooze-tab') await notify((await snoozeActiveTab()).message);
 });
 
 chrome.omnibox.onInputEntered.addListener(async (text) => {
@@ -457,6 +458,21 @@ async function handleSnoozeTabs(m) {
   return withLock('snoozeRequest', () => snoozeTabsNow(m));
 }
 
+// Snoozes the active tab of the last-focused window until tomorrow 9:00 through the same path as
+// the panel (validation, incognito/pinned skipping, keepWindowsOpen, undo). Never throws.
+async function snoozeActiveTab() {
+  try {
+    const win = await chrome.windows.getLastFocused();
+    const [tab] = await chrome.tabs.query({ active: true, windowId: win.id });
+    if (!tab) return { ok: true, snoozed: 0, message: snoozeNoticeText(null, null) };
+    const res = await handleSnoozeTabs({ tabIds: [tab.id], wakeAt: presetTime('tomorrow') });
+    const ignorePinned = (await getSettings()).ignorePinnedTabs !== false;
+    return { ok: true, snoozed: res.snoozed, message: snoozeNoticeText(res, tab, { ignorePinned }) };
+  } catch (err) {
+    return { ok: false, snoozed: 0, message: `Not snoozed: ${errText(err)}`, error: errText(err) };
+  }
+}
+
 // Reads the list, dropping (and persisting the removal of) malformed entries. Caller holds the lock.
 async function readCleanSnoozed() {
   const raw = await getSnoozed();
@@ -638,6 +654,21 @@ async function handleListBackups() {
   return { ok: true, backups: await listSnapshots() };
 }
 
+// Back up now: the same snapshot and storage checks as the automatic one, but a failure is the answer here.
+async function handleBackupNow() {
+  try {
+    const snap = buildSnapshot(await chrome.bookmarks.getTree());
+    const id = await saveSnapshot(snap, chrome.storage.local, { skipIfUnchanged: true });
+    if (id === null) {
+      const newest = (await listSnapshots())[0];
+      return { ok: true, count: newest.count, unchanged: true, ts: newest.ts };
+    }
+    return { ok: true, count: snap.count };
+  } catch (err) {
+    return { ok: false, error: errText(err) };
+  }
+}
+
 // format: 'json' (the snapshot itself) or 'html' (Netscape bookmarks file) for the panel to download.
 async function handleGetBackup(m) {
   const snap = await getSnapshot(m.id);
@@ -666,6 +697,7 @@ const HANDLERS = {
   getRules: handleGetRules,
   setRules: handleSetRules,
   listBackups: handleListBackups,
+  backupNow: handleBackupNow,
   getBackup: handleGetBackup,
   restoreBackup: handleRestoreBackup,
   probe: handleProbe,
@@ -678,6 +710,7 @@ const HANDLERS = {
   focusTab: handleFocusTab,
   closeTabs: handleCloseTabs,
   snoozeTabs: handleSnoozeTabs,
+  snoozeActiveTab,
   listSnoozed: handleListSnoozed,
   wakeSnoozed: handleWakeSnoozed,
   deleteSnoozed: handleDeleteSnoozed,

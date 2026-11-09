@@ -56,7 +56,22 @@ export async function renderBackups() {
   }
 }
 
+async function backupNow() {
+  const b = $('backupNow');
+  b.disabled = true;
+  try {
+    const { count, unchanged, ts } = await request({ cmd: 'backupNow' });
+    setStatus(unchanged ? `No changes since the last backup (${new Date(ts).toLocaleString()}).` : `Backup saved (${count} bookmarks).`);
+    await renderBackups();
+  } catch (err) {
+    setStatus(`Could not save a backup: ${err.message}`);
+  } finally {
+    b.disabled = false;
+  }
+}
+
 export function initBackupView() {
+  $('backupNow').addEventListener('click', backupNow);
   $('backupPanel').addEventListener('toggle', () => { if ($('backupPanel').open) renderBackups(); });
   // A backup taken by an apply (or removed by the daily prune) while the section is open shows up without reopening it.
   chrome.storage.onChanged.addListener((changes, area) => {
