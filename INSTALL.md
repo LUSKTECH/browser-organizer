@@ -139,7 +139,7 @@ address bar, or enable scheduled auto-mode in Settings.
 ## Privacy & safety
 - Tab titles and URLs (query strings/fragments stripped, private hosts coarsened, embedded
   credentials removed) are sent **only** to the AI provider you configured, under your own
-  subscription/key. Bookmarks and history never leave your machine.
+  subscription/key. Browsing history never leaves your machine. Bookmarks are sent only if you turn on "Sort bookmarks" (off by default).
 - The helper only ever runs the fixed backend you selected. The command, arguments and environment are resolved on your machine. The only per-request input is the OpenAI-compatible key, base URL and model you enter in Settings. See [`docs/security-model.md`](docs/security-model.md).
 
 ## Troubleshooting
