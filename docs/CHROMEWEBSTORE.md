@@ -20,8 +20,9 @@ automatic mode with one-click undo.
 All processing runs through a small helper program on your own computer, which calls your
 own AI CLI (Claude Code, Antigravity, Kiro, Copilot, Codex, or local Ollama), or an
 OpenAI-compatible endpoint you configure. Tab titles and URLs are sent to that provider
-under your own subscription; bookmarks and history never leave your machine. Nothing is
-ever sent to our servers (we operate none).
+under your own subscription. If you turn on "Sort bookmarks" (off by default), the title,
+cleaned URL and folder of the bookmarks being sorted go to that provider too; browsing
+history never leaves your machine. Nothing is ever sent to our servers (we operate none).
 
 ## Permission justifications
 - **tabs**: Read tab titles and URLs to suggest groupings and identify forgotten tabs.
@@ -48,10 +49,14 @@ Privacy policy URL: **https://lusk.dev/browser-organizer/privacy** (source: `doc
 Contact email: **hello@lusk.dev**. Enter both in the store's privacy/contact fields.
 Tab titles and URLs (query strings/fragments stripped, private/loopback hosts coarsened to
 origin, embedded credentials removed) are sent to your AI provider under your own
-subscription, via your local helper. Bookmarks and history are never sent anywhere. No data
-ever reaches the extension developer's servers; we operate none.
+subscription, via your local helper. If "Sort bookmarks" is on (off by default), the title,
+cleaned URL and folder path of each bookmark being sorted, and your folder names, are sent
+the same way; protected folders, the Bookmarks Bar (while protected) and protected domains
+are never sent. Browsing history is never sent anywhere. No data ever reaches the extension developer's servers; we operate none.
 
-**Data-safety form note:** settings (feature toggles, protected folders/domains, chosen AI
+**Data-safety form note (publisher decision):** if "Sort bookmarks" stays available, bookmark titles and URLs sent to a user-chosen AI provider may need declaring in the dashboard's data-use answers. Whether and how to declare it is the publisher's call.
+
+Other data: settings (feature toggles, protected folders/domains, chosen AI
 backend) are stored via `chrome.storage.sync`, which only actually leaves the device when the
 user has Chrome Sync turned on and hasn't excluded Extensions from what syncs (otherwise it
 behaves like local storage). Check whatever box the dashboard's data-use questionnaire uses
@@ -77,7 +82,7 @@ package, the helper is installed once, separately, by the user:
 
 Key safety facts:
 - **No developer servers exist.** Tab titles/URLs go only to the *user's own* AI provider via
-  the *user's own* subscription; bookmarks/history stay on-device.
+  the *user's own* subscription; history stays on-device, and bookmarks are sent only by the optional, off-by-default "Sort bookmarks".
 - `nativeMessaging` is used **solely** to talk to that local helper. The helper runs only a
   fixed set of known CLIs (or an HTTPS OpenAI-compatible endpoint). The command, arguments and environment are resolved on your machine. The only
   per-request input is the OpenAI-compatible key, base URL and model entered in Settings. See

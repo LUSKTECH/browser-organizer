@@ -2,7 +2,7 @@
 
 A Chrome and Edge extension that cleans up your tabs and bookmarks with an AI backend you bring yourself. Point it at a local AI CLI you've already signed into, or at any OpenAI-compatible API key. It groups open tabs by topic, flags the ones you forgot were open, files the pages worth keeping into bookmark folders, and clears out stale, dead, and duplicate bookmarks. Nothing happens until you approve it.
 
-Your bookmarks and history stay on your machine. The only data that ever leaves is tab titles and URLs, and only to the provider you picked.
+Your browsing history stays on your machine. Tab titles and URLs go to the AI provider you picked. Bookmarks go there only if you turn on "Sort bookmarks" (off by default), and then only the ones being sorted: title, a cleaned URL and folder, plus your folder names. Protected folders, the Bookmarks Bar (while "Never touch the Bookmarks Bar" is on) and protected domains are never sent.
 
 ## Screenshots
 
@@ -68,7 +68,7 @@ One adapter covers OpenAI, OpenRouter, Groq, Together, and local servers like LM
 
 ## How it works
 
-The extension collects tab and bookmark metadata, then passes it to the local Node host over Chrome Native Messaging. The host runs whichever backend you selected, gets a set of suggestions back, and returns them. The only network traffic is your chosen provider's normal subscription or API call; no server of ours sits in the path. Destructive actions wait for your approval, and in auto mode they're logged so one click undoes them.
+The extension collects tab and bookmark metadata, then passes the parts a feature needs to the local Node host over Chrome Native Messaging. The host runs whichever backend you selected, gets a set of suggestions back, and returns them. The only network traffic is your chosen provider's normal subscription or API call; no server of ours sits in the path. Destructive actions wait for your approval, and in auto mode they're logged so one click undoes them.
 
 ## Safety features
 

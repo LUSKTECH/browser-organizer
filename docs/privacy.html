@@ -14,7 +14,7 @@
 </head>
 <body>
   <h1>Privacy Policy — Browser Organizer</h1>
-  <p class="muted">Last updated: 2026-09-23</p>
+  <p class="muted">Last updated: 2026-11-08</p>
 
   <p>Browser Organizer runs a helper program on your own computer, which invokes your
   locally-installed AI CLI (Claude Code, Antigravity, Kiro, Copilot, Codex, or local Ollama)
@@ -29,14 +29,20 @@
 
   <h2>What is sent to the AI provider</h2>
   <p>Open tab titles and URLs are sent to your selected backend to compute groupings,
-  stale-tab suggestions, and bookmark recommendations. Before sending, query strings and
-  fragments are stripped, embedded credentials are removed, and private/loopback hosts are
-  reduced to their origin. This happens under your own AI subscription/key and is subject to
-  that provider’s policy.</p>
+  stale-tab suggestions, bookmark recommendations, and typed commands. If you turn on
+  “Sort bookmarks” (off by default), the title, URL, and folder path of each bookmark being
+  sorted are also sent, along with your list of folder names. Before sending, query strings
+  and fragments are stripped, embedded credentials are removed, and private/loopback hosts
+  are reduced to their origin. Protected folders, the Bookmarks Bar (while “Never touch the
+  Bookmarks Bar” is on), and protected domains are never sent. This happens under your own AI
+  subscription/key and is subject to that provider’s policy.</p>
 
   <h2>What stays local</h2>
-  <p>Bookmarks, browsing history, and dead-link HTTP checks are processed entirely on your
-  machine and are never sent anywhere.</p>
+  <p>Browsing history (only visit times are read, on your machine), dead-link checks (plain
+  HTTP requests from your browser to the bookmarked sites themselves), grouping rules,
+  duplicate removal, snoozing, and bookmark backups are processed entirely on your machine.
+  None of that is sent to an AI provider. Bookmarks are sent only by “Sort bookmarks”, as
+  described above.</p>
 
   <h2>What we store</h2>
   <p>Your settings (which features are on, your protected folders/domains, and your chosen AI
