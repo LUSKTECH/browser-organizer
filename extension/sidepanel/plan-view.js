@@ -179,6 +179,9 @@ export function renderPlan(animate = false) {
   container.textContent = '';
   let enterIdx = 0; // staggers the entrance animation for fresh results only
   const shown = filterPlan(plan, planFilter);
+  // The selection only ever covers rows that are in the plan and visible under the filter.
+  const visibleIds = new Set(allItemIds(shown));
+  selection = new Set([...selection].filter((id) => visibleIds.has(id)));
   const counts = summarize(shown);
   const summary = $('summary');
   summary.hidden = plan.length === 0;
@@ -407,7 +410,9 @@ export async function initPlanView() {
   const more = $('planMore');
   more.addEventListener('keydown', (e) => { if (e.key === 'Escape' && more.open) { e.stopPropagation(); closeMoreMenu(true); } });
   document.addEventListener('click', (e) => { if (!more.contains(e.target)) closeMoreMenu(); });
-  more.querySelector('.barMenu').addEventListener('click', () => closeMoreMenu());
+  more.querySelector('.barMenu').addEventListener('click', () => closeMoreMenu(true));
+  // Tabbing out of the open menu closes it.
+  more.addEventListener('focusout', (e) => { if (more.open && e.relatedTarget && !more.contains(e.relatedTarget)) closeMoreMenu(); });
   // Keep the undo toast above the bar: publish the bar's height as a CSS variable.
   if (typeof window.ResizeObserver === 'function') {
     new window.ResizeObserver(() => document.documentElement.style.setProperty('--actionbar-h', `${$('planActions').offsetHeight}px`)).observe($('planActions'));
@@ -421,6 +426,7 @@ export async function initPlanView() {
     await send({ cmd: 'updatePlan', items: [] }); // also clear the stored plan so it doesn't reappear on reload
     renderPlan();
     setStatus('Cleared.');
+    $('run').focus(); // the bar that held focus is hidden now
   });
 
   // Plan toolbar: filter, bulk-select, expand/collapse.

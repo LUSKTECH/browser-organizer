@@ -98,7 +98,7 @@
 
     <div id="planActions" role="region" aria-label="Suggestion actions" hidden>
       <div class="barRow">
-        <span id="planSelCount" class="barCount" role="status" aria-live="polite">Nothing selected</span>
+        <span id="planSelCount" class="barCount">Nothing selected</span>
         <button type="button" id="selectAll" class="barBtn">Select all</button>
         <button type="button" id="selectNone" class="barBtn">None</button>
       </div>
@@ -106,10 +106,10 @@
         <button id="approveSelected" class="barBtn apply-primary" data-i18n="applySelected" disabled>Apply selected</button>
         <button id="approveAll" class="barBtn" data-i18n="applyAll">Apply all</button>
         <details id="planMore" class="barMore">
-          <summary class="barBtn" aria-haspopup="menu">More</summary>
-          <div class="barMenu" role="menu" aria-label="More actions">
-            <button id="exportMarkdown" role="menuitem" data-i18n="exportMarkdown">Export as Markdown</button>
-            <button id="clearPlan" role="menuitem" data-i18n="clearList">Clear list</button>
+          <summary class="barBtn">More</summary>
+          <div class="barMenu">
+            <button id="exportMarkdown" data-i18n="exportMarkdown">Export as Markdown</button>
+            <button id="clearPlan" data-i18n="clearList">Clear list</button>
           </div>
         </details>
       </div>

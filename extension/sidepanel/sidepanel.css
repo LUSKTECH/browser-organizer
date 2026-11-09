@@ -474,6 +474,8 @@ select.groupColor { flex: none; font-size: 11px; padding: 3px 6px; }
 }
 @media (prefers-color-scheme: dark) { #planActions { box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.45); } }
 #planActions[hidden] { display: none; }
+/* While the More menu is open the bar sits above the undo toast (30) so the toast cannot cover it. :has() needs Chrome 105+. */
+#planActions:has(#planMore[open]) { z-index: 40; }
 #planActions .barRow { display: flex; align-items: center; gap: 6px; min-width: 0; }
 #planActions .barCount { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--text-muted); }
 #planActions .barBtn { min-height: 32px; padding: 4px 8px; font-size: 12px; white-space: nowrap; width: auto; min-width: 0; }
