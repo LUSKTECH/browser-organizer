@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-26
+**Rules, snooze, backups, smarter cleanup, a floating action bar, and tighter privacy.** Update the host to 0.3.0 too: it carries the Windows install fix (PowerShell and cmd.exe pass `chrome,edge` differently).
+
+- **Floating action bar.** With a long suggestion list, the actions no longer sit below it: a bar pinned to the bottom of the panel shows how many items are selected, Select all / None, Apply selected, Apply all and a More menu (Export, Clear list). The selection only ever covers rows you can see.
 - **Snooze the current tab from the keyboard.** New "Snooze this tab until tomorrow 9:00" command with no default key; assign one at chrome://extensions/shortcuts. A notification says it was snoozed, or why not (private tab, pinned tab, browser page). No new permissions.
 - **Back up now.** The "Bookmark backups" section has a "Back up now" button that saves a snapshot of your bookmarks on demand (same last-3 limit and storage check as the automatic ones).
 - **"Don't suggest" notes stay out of AI requests for bookmark deletions and folder removals.** Those suggestions are worked out locally, so a note about them only leaked the bookmark's URL; they keep working locally through the ignore list.
