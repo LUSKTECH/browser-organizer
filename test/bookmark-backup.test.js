@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { installChromeMock } from './helpers/chrome-mock.js';
 import {
-  needsBackup, buildSnapshot, toTree, toNetscapeHtml, addToRing, saveSnapshot, listSnapshots, getSnapshot,
+  needsBackup, buildSnapshot, toTree, toNetscapeHtml, addToRing, sameNodes, saveSnapshot, listSnapshots, getSnapshot,
   pruneSnapshots, restoreSnapshot, stamp, MAX_SNAPSHOTS, MAX_SNAPSHOT_BYTES,
 } from '../extension/lib/bookmark-backup.js';
 
@@ -134,4 +134,26 @@ test('stamp pads the year to four digits', () => {
   assert.equal(stamp(new Date(2026, 0, 5, 9, 7).getTime()), '2026-01-05 09:07');
   const old = new Date(2000, 0, 1, 0, 0); old.setFullYear(100);
   assert.match(stamp(old.getTime()), /^0100-01-01 00:00$/);
+});
+
+test('sameNodes compares trees, not ids or times', () => {
+  const tree = (title) => [{ id: '0', children: [{ id: '1', title: 'Bar', children: [{ id: '5', title, url: 'https://a.example/' }] }] }];
+  const a = buildSnapshot(tree('A'), 1);
+  assert.equal(sameNodes(a, buildSnapshot(tree('A'), 99)), true);
+  assert.equal(sameNodes(a, buildSnapshot(tree('B'), 1)), false);
+  assert.equal(sameNodes(a, undefined), false);
+  const reordered = { ...a, nodes: a.nodes.map((n) => Object.fromEntries(Object.entries(n).sort(([x], [y]) => x.localeCompare(y)))) };
+  assert.equal(sameNodes(reordered, buildSnapshot(tree('A'), 5)), true);
+});
+
+test('saveSnapshot with skipIfUnchanged leaves the ring alone for an identical tree', async () => {
+  const mem = {};
+  const storage = { get: async (k) => ({ [k]: mem[k] }), set: async (o) => Object.assign(mem, o) };
+  const tree = [{ id: '0', children: [{ id: '1', title: 'Bar', children: [{ id: '5', title: 'A', url: 'https://a.example/' }] }] }];
+  const first = await saveSnapshot(buildSnapshot(tree, 1), storage, { skipIfUnchanged: true });
+  assert.ok(first);
+  assert.equal(await saveSnapshot(buildSnapshot(tree, 2), storage, { skipIfUnchanged: true }), null);
+  assert.equal(mem.bookmarkSnapshots.length, 1);
+  assert.ok(await saveSnapshot(buildSnapshot(tree, 3), storage));
+  assert.equal(mem.bookmarkSnapshots.length, 2);
 });
