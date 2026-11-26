@@ -314,10 +314,16 @@ export function recordDecision(decisions, item, verdict) {
   return { ...decisions, [key]: { reject: (prev.reject || 0) + 1 } };
 }
 
+// Bookmark deletions (duplicates, stale and dead links) and empty-folder removals are worked out
+// locally, never suggested by the AI, so a "don't suggest" note about them is useless in a prompt
+// and would only leak the bookmark's URL. They still work locally through the ignore list.
+const LOCAL_ONLY_ACTIONS = new Set(['deleteBookmark', 'removeFolder']);
+
 export function decisionRules(decisions, whitelist = []) {
   const keep = [];
   for (const [key, v] of Object.entries(decisions)) {
     if (v.reject < 2) continue;
+    if (LOCAL_ONLY_ACTIONS.has(key.split(':')[0])) continue;
     let target = key.split(':').slice(1).join(':');
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target)) { // a URL target (not a group name or an id)
       if (isProtectedHost(target, whitelist)) continue; // protected domains never reach a prompt
