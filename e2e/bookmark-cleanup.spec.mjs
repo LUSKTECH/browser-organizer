@@ -5,8 +5,8 @@ test.describe.configure({ mode: 'serial' });
 
 test('detects a duplicate bookmark, deletes it on apply, and restores it on undo', async ({ panel }) => {
   // Two bookmarks that normalize to the same url (trailing slash differs).
-  const b1 = await createBookmark(panel, { parentId: '1', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
-  const b2 = await createBookmark(panel, { parentId: '1', title: 'MDN copy', url: 'https://developer.mozilla.org/en-US/docs/Web/' });
+  const b1 = await createBookmark(panel, { parentId: '2', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
+  const b2 = await createBookmark(panel, { parentId: '2', title: 'MDN copy', url: 'https://developer.mozilla.org/en-US/docs/Web/' });
   expect(b1.id).toBeTruthy();
   expect(b2.id).toBeTruthy();
 

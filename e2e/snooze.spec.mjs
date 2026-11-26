@@ -145,3 +145,20 @@ test('listSnoozed drops a null entry instead of failing', async ({ panel }) => {
   expect(list.map((e) => e.id)).toEqual(['ok']);
   await panel.evaluate(() => chrome.storage.local.set({ snoozed: [] }));
 });
+
+test('snoozeActiveTab snoozes the active tab until tomorrow 9:00', async ({ context, server, panel }) => {
+  const page = await context.newPage();
+  await page.goto(`${server}/news/sports`);
+  await page.bringToFront();
+  await expect.poll(() => panel.evaluate(async () => (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.url)).toContain('/news/sports');
+  const res = await send(panel, { cmd: 'snoozeActiveTab' });
+  expect(res).toMatchObject({ ok: true, snoozed: 1, message: 'Snoozed until tomorrow 9:00' });
+  const list = await listSnoozed(panel);
+  expect(list).toHaveLength(1);
+  expect(list[0].url).toContain('/news/sports');
+  const d = new Date(list[0].wakeAt);
+  expect([d.getHours(), d.getMinutes()]).toEqual([9, 0]);
+  expect(list[0].wakeAt - Date.now()).toBeGreaterThan(0);
+  expect(list[0].wakeAt - Date.now()).toBeLessThanOrEqual(33 * 3600000);
+  expect(await countTabsWithUrl(panel, `${server}/news/sports`)).toBe(0);
+});

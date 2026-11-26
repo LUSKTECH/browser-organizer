@@ -48,5 +48,7 @@
 - **Untrusted input.** Tab titles/URLs are treated as data, not instructions, in
   prompts, and model-returned tab ids are constrained to the exact candidates sent.
 - **Data sent to the AI provider.** Tab titles and URLs (query strings/fragments
-  stripped) are sent to your CLI's provider under your subscription. Bookmarks and
-  history are processed locally and are not sent.
+  stripped) are sent to your CLI's provider under your subscription. If "Sort bookmarks"
+  is on (off by default), the title, cleaned URL and folder path of each bookmark being
+  sorted and your folder names are sent too; protected folders, the Bookmarks Bar (while
+  protected) and protected domains are not. History is processed locally and is not sent.

@@ -16,8 +16,8 @@ const skipCleanBookmarksInCI = () =>
 
 test('UI: "Clean bookmarks" surfaces a duplicate, "Apply all" deletes it, toast "Undo" restores it', async ({ panel }) => {
   skipCleanBookmarksInCI();
-  await createBookmark(panel, { parentId: '1', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
-  await createBookmark(panel, { parentId: '1', title: 'MDN copy', url: DUP_URL });
+  await createBookmark(panel, { parentId: '2', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
+  await createBookmark(panel, { parentId: '2', title: 'MDN copy', url: DUP_URL });
 
   await panel.click('#runOne button[data-feature="cleanBookmarks"]');
   await expect(panel.locator('#plan')).toContainText(/Delete bookmark/i, { timeout: 15000 });
@@ -33,8 +33,8 @@ test('UI: "Clean bookmarks" surfaces a duplicate, "Apply all" deletes it, toast 
 
 test('UI: "Clear list" empties the suggestions and the stored plan', async ({ panel }) => {
   skipCleanBookmarksInCI();
-  await createBookmark(panel, { parentId: '1', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
-  await createBookmark(panel, { parentId: '1', title: 'MDN copy', url: DUP_URL });
+  await createBookmark(panel, { parentId: '2', title: 'MDN', url: 'https://developer.mozilla.org/en-US/docs/Web' });
+  await createBookmark(panel, { parentId: '2', title: 'MDN copy', url: DUP_URL });
 
   await panel.click('#runOne button[data-feature="cleanBookmarks"]');
   await expect(panel.locator('#plan')).toContainText(/Delete bookmark/i, { timeout: 15000 });
