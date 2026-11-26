@@ -700,7 +700,7 @@ test('decisionRules skips notes about protected domains and coarsens private URL
     'closeTab:https://news.example/a': rej,
     'closeTab:http://localhost:3000/admin/token123': rej,
     'groupTabs:group:Work stuff': rej,
-    'deleteBookmark:42': rej,
+    'moveBookmark:42': rej,
   };
   const { keep } = decisionRules(decisions, ['github.com']);
   assert.deepEqual(keep, [
@@ -775,4 +775,18 @@ test('applyItem refuses deleteBookmark at apply time when its live parent is now
   assert.deepEqual(removed, []);
   await applyItem(item, { chrome, settings: { protectBookmarkBar: true, protectedFolders: [] }, folders }); // unprotected: deletes
   assert.deepEqual(removed, ['9']);
+});
+
+test('decisionRules never sends notes about bookmark deletions or folder removals (they are local-only)', () => {
+  const decisions = {
+    'deleteBookmark:https://a.example/p': { reject: 2 },
+    'removeFolder:42': { reject: 3 },
+    'closeTab:https://b.example/q': { reject: 2 },
+    'groupTabs:group:Work': { reject: 2 },
+  };
+  const { keep } = decisionRules(decisions, []);
+  assert.ok(!keep.some((r) => r.includes('a.example')), keep.join(' | '));
+  assert.ok(!keep.some((r) => r.includes('42')), keep.join(' | '));
+  assert.ok(keep.some((r) => r.includes('b.example')));
+  assert.ok(keep.some((r) => r.includes('Work')));
 });

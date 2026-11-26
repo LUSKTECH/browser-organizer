@@ -18,16 +18,19 @@ extension operator receives none of this data and operates no server that stores
   bookmark being sorted are also sent, along with your folder names and their IDs (the IDs
   let the extension map suggestions back to your bookmarks). When you reject the same
   suggestion twice, a short "don't suggest" note is added to later requests so it stays
-  away; it can contain a cleaned link, a group name or a bookmark ID. Before
+  away; it can contain a cleaned link, a group name or a bookmark ID (never for bookmark
+  deletions or folder removals, which aren't AI suggestions). Before
   sending, the extension strips query strings and fragments, removes embedded credentials,
   and reduces private or loopback hosts to their origin. Protected folders, the Bookmarks Bar
-  (while "Never touch the Bookmarks Bar" is on), and protected domains are never sent. This
+  (while "Never touch the Bookmarks Bar" is on), and protected domains are never sent, except
+  for whatever you type into a command yourself, which is sent as written. This
   happens under your own AI subscription/key and is subject to that provider's policy.
 - **What stays local:** browsing history (only visit times are read, on your machine),
   dead-link checks (plain HTTP requests from your browser to the bookmarked sites themselves),
   grouping rules, duplicate removal, snoozing, and bookmark backups are processed entirely on
   your machine. None of that is sent to an AI provider. Bookmarks are sent only by "Sort
-  bookmarks", as described above.
+  bookmarks" (and, as a bookmark ID, in a "don't suggest" note about a sorting suggestion you
+  rejected twice), as described above.
 - **What we store:** your settings (which features are on, your protected folders/domains,
   and your chosen AI backend) are saved using Chrome's built-in synced storage. If you have
   Chrome Sync turned on and haven't excluded extensions from what syncs (Chrome lets you
