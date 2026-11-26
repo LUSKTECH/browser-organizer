@@ -2,7 +2,7 @@
 
 A Chrome and Edge extension that cleans up your tabs and bookmarks with an AI backend you bring yourself. Point it at a local AI CLI you've already signed into, or at any OpenAI-compatible API key. It groups open tabs by topic, flags the ones you forgot were open, files the pages worth keeping into bookmark folders, and clears out stale, dead, and duplicate bookmarks. Nothing happens until you approve it.
 
-Your bookmarks and history stay on your machine. The only data that ever leaves is tab titles and URLs, and only to the provider you picked.
+Your browsing history stays on your machine. Tab titles and URLs go to the AI provider you picked. Bookmarks go there only if you turn on "Sort bookmarks" (off by default), and then only the ones being sorted: title, a cleaned URL and folder, plus your folder names. Protected folders, the Bookmarks Bar (while "Never touch the Bookmarks Bar" is on) and protected domains are never sent.
 
 ## Screenshots
 
@@ -68,16 +68,16 @@ One adapter covers OpenAI, OpenRouter, Groq, Together, and local servers like LM
 
 ## How it works
 
-The extension collects tab and bookmark metadata, then passes it to the local Node host over Chrome Native Messaging. The host runs whichever backend you selected, gets a set of suggestions back, and returns them. The only network traffic is your chosen provider's normal subscription or API call; no server of ours sits in the path. Destructive actions wait for your approval, and in auto mode they're logged so one click undoes them.
+The extension collects tab and bookmark metadata, then passes the parts a feature needs to the local Node host over Chrome Native Messaging. The host runs whichever backend you selected, gets a set of suggestions back, and returns them. The only network traffic is your chosen provider's normal subscription or API call; no server of ours sits in the path. Destructive actions wait for your approval, and in auto mode they're logged so one click undoes them.
 
 ## Safety features
 
 - **Leave pinned tabs alone** (Settings, on by default): pinned tabs are never sent to the AI, never grouped or bulk-closed, and a plan can't close one. A normal tab that duplicates a pinned tab can still be flagged; the pinned copy is the one kept.
 - **Remove duplicates**: one button, no AI needed, finds duplicate open tabs and duplicate bookmarks (same URL ignoring `#fragment`, letter case, a trailing slash and, by default, tracking parameters such as `utm_*` and `fbclid`; a setting turns that off) and sends them through the usual review and undo.
 - **Grouping rules**: your own rules (domain, URL prefix or title text, up to 40) group tabs instantly with no AI. The "Apply rules" button works without a helper, rules run before the AI on a full Analyze, and tabs join an existing same-named group in their window.
-- **Bookmark backups** (best effort): before a run that deletes or moves bookmarks, a copy of the whole bookmark tree is saved on your device (last 3, kept 30 days). If a backup can't be saved, for example because browser storage is nearly full, you're told and the run still goes ahead; per-run undo still applies. Download one as JSON or as a `bookmarks.html` file any browser can import, or restore it into a new folder; restoring never changes what you have now.
-- **Snooze tabs**: close the ticked tabs now and have them reopen later (in 3 hours, tomorrow 9:00, next Monday 9:00, or a time you pick) as background tabs; pinned tabs are skipped while "Leave pinned tabs alone" is on, private (incognito) tabs are never snoozed, undo reopens one at once, and the Snoozed list has Wake now and Delete. A snoozed page comes back as a plain link, so logins and form contents aren't restored.
-- **Protected folders and domains**, per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
+- **Bookmark backups** (best effort): before a run that deletes or moves bookmarks, a copy of the whole bookmark tree is saved on your device (last 3, kept 30 days). If a backup can't be saved, for example because browser storage is nearly full, you're told and the run still goes ahead; per-run undo still applies. Download one as JSON or as a `bookmarks.html` file any browser can import, or restore it into a new folder; restoring never changes what you have now. "Back up now" in the same section takes one by hand.
+- **Snooze tabs**: close the ticked tabs now and have them reopen later (in 3 hours, tomorrow 9:00, next Monday 9:00, or a time you pick) as background tabs; pinned tabs are skipped while "Leave pinned tabs alone" is on, private (incognito) tabs are never snoozed, undo reopens one at once, and the Snoozed list has Wake now and Delete. A snoozed page comes back as a plain link, so logins and form contents aren't restored. To snooze the current tab until tomorrow 9:00 from the keyboard, assign a shortcut to "Snooze this tab until tomorrow 9:00" at chrome://extensions/shortcuts.
+- **Protected folders and domains** (also never sent to the AI; protected folders and the Bookmarks Bar are never cleaned up, and grouping rules can still group tabs on a protected domain), per-run **undo**, and a **first-run setup wizard** (reopen it from Settings).
 
 ## Development
 
