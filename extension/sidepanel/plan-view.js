@@ -159,9 +159,19 @@ function renderGroupItem(item) {
   return li;
 }
 
+let planBusy = false;
+
+// Single source of truth for everything that depends on the selection size:
+// the Apply button's label/disabled state and the floating bar's live count.
 function updateApplySelectedLabel() {
+  const n = selection.size;
   const btn = $('approveSelected');
-  if (btn) btn.textContent = selection.size ? `Apply selected (${selection.size})` : 'Apply selected';
+  if (btn) {
+    btn.textContent = n ? `Apply selected (${n})` : 'Apply selected';
+    btn.disabled = planBusy || n === 0;
+  }
+  const count = $('planSelCount');
+  if (count) count.textContent = n ? `${n} selected` : 'Nothing selected';
 }
 
 export function renderPlan(animate = false) {
@@ -169,6 +179,9 @@ export function renderPlan(animate = false) {
   container.textContent = '';
   let enterIdx = 0; // staggers the entrance animation for fresh results only
   const shown = filterPlan(plan, planFilter);
+  // The selection only ever covers rows that are in the plan and visible under the filter.
+  const visibleIds = new Set(allItemIds(shown));
+  selection = new Set([...selection].filter((id) => visibleIds.has(id)));
   const counts = summarize(shown);
   const summary = $('summary');
   summary.hidden = plan.length === 0;
@@ -327,10 +340,20 @@ function confirmBulk(items) {
 // Disabled for the duration of an in-flight apply so a fast double-click can't
 // fire it twice and gives the same busy feedback the scan button already has.
 function setPlanActionsBusy(busy) {
-  for (const id of ['approveSelected', 'approveAll', 'exportMarkdown', 'clearPlan']) {
+  planBusy = busy;
+  for (const id of ['approveAll', 'exportMarkdown', 'clearPlan', 'selectAll', 'selectNone']) {
     const el = $(id);
     if (el) el.disabled = busy;
   }
+  updateApplySelectedLabel();
+  if (busy) closeMoreMenu();
+}
+
+function closeMoreMenu(returnFocus = false) {
+  const more = $('planMore');
+  if (!more || !more.open) return;
+  more.open = false;
+  if (returnFocus) more.querySelector('summary').focus();
 }
 
 async function applyItems(itemIds) {
@@ -383,6 +406,18 @@ export async function initPlanView() {
     });
   }
 
+  // "More" menu: Esc closes it (focus back on the trigger), as does a click elsewhere or choosing an item.
+  const more = $('planMore');
+  more.addEventListener('keydown', (e) => { if (e.key === 'Escape' && more.open) { e.stopPropagation(); closeMoreMenu(true); } });
+  document.addEventListener('click', (e) => { if (!more.contains(e.target)) closeMoreMenu(); });
+  more.querySelector('.barMenu').addEventListener('click', () => closeMoreMenu(true));
+  // Tabbing out of the open menu closes it.
+  more.addEventListener('focusout', (e) => { if (more.open && e.relatedTarget && !more.contains(e.relatedTarget)) closeMoreMenu(); });
+  // Keep the undo toast above the bar: publish the bar's height as a CSS variable.
+  if (typeof window.ResizeObserver === 'function') {
+    new window.ResizeObserver(() => document.documentElement.style.setProperty('--actionbar-h', `${$('planActions').offsetHeight}px`)).observe($('planActions'));
+  }
+
   $('clearPlan').addEventListener('click', async () => {
     plan = [];
     selection = new Set();
@@ -391,6 +426,9 @@ export async function initPlanView() {
     await send({ cmd: 'updatePlan', items: [] }); // also clear the stored plan so it doesn't reappear on reload
     renderPlan();
     setStatus('Cleared.');
+    // The bar that held focus is hidden now. Analyze is disabled while no AI is connected, so fall back
+    // to Remove duplicates, which never needs one.
+    ($('run').disabled ? $('removeDupes') : $('run')).focus();
   });
 
   // Plan toolbar: filter, bulk-select, expand/collapse.
